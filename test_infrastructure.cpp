@@ -18,7 +18,7 @@
  *   ./test_infra
  * 
  * Expected Output:
- *   All tests should pass with ✓ marks
+ *   All tests should pass with  marks
  */
 
 #include "SYMBOLS/symbol.h"
@@ -35,7 +35,7 @@
  *   1. Epsilon symbol is created automatically
  *   2. Surface symbols can be created and compared
  *   3. Lexical symbols can be created
- *   4. Symbol uniqueness is enforced (same repr → same Symbol*)
+ *   4. Symbol uniqueness is enforced (same repr -> same Symbol*)
  * 
  * Coverage:
  *   - SymbolTable constructor
@@ -149,7 +149,7 @@ void test_fsa() {
  *   R(FST) = {("a", "b")}  (maps "a" to "b")
  * 
  * Tests:
- *   - FST transduces "a" → "b"
+ *   - FST transduces "a" -> "b"
  *   - Result has correct structure
  *   - Output matches expected symbol
  * 
@@ -207,7 +207,7 @@ void test_fst() {
  *   This demonstrates insertion in finite-state morphology.
  * 
  * Tests:
- *   - FST transduces "a" → "ab"
+ *   - FST transduces "a" -> "ab"
  *   - Output contains both 'a' and 'b' in correct order
  *   - Epsilon transition doesn't consume input
  * 

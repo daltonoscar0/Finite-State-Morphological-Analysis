@@ -17,15 +17,15 @@
  *
  * The morphological analyzer (Phase 2) handles word-level analysis:
  *   - Trie-based lexicon FSA for O(n) stem lookup
- *   - Rule FSTs encode morphological alternations (y→i, sibilant +es, etc.)
+ *   - Rule FSTs encode morphological alternations (y->i, sibilant +es, etc.)
  *   - Produces: stem +POS +FEATURE... notation
  *
  * Compilation:
  *   make analyzer
  *
  * Usage:
- *   ./analyzer                    # Interactive mode — type text, see analyses
- *   ./analyzer cats dogs flies    # Batch mode — analyze specific words
+ *   ./analyzer                    # Interactive mode, type text, see analyses
+ *   ./analyzer cats dogs flies    # Batch mode, analyze specific words
  */
 
 #include "PIPELINE/text_pipeline.h"        // Scalpel bridge (no Tokenizer name clash)
@@ -55,16 +55,16 @@ void print_banner() {
 /**
  * analyze_text: Run a raw text string through the full two-phase pipeline
  *
- * Phase 1 — Scalpel tokenizer + sentence segmenter:
+ * Phase 1, Scalpel tokenizer + sentence segmenter:
  *   Converts text to sentence-grouped WORD token lists.
  *
- * Phase 2 — Morphological analyzer:
+ * Phase 2, Morphological analyzer:
  *   For each WORD token, produces stem + POS + feature analyses.
  *
  * Output format:
  *   [Sentence 1]
- *   cats → cat +N +PL
- *   flies →
+ *   cats -> cat +N +PL
+ *   flies ->
  *     fly +N +PL
  *     fly +V +3SG
  *
@@ -96,26 +96,26 @@ void analyze_text(const std::string& text, Analyzer& analyzer) {
 // ── Interactive mode ───────────────────────────────────────────────────────
 
 /**
- * interactive_mode: REPL — read a line of text, analyze, repeat
+ * interactive_mode: REPL, read a line of text, analyze, repeat
  *
  * Each line is treated as a complete input text: Scalpel tokenizes it
  * and identifies sentence boundaries, then the morphological analyzer
  * processes each WORD token.
  *
  * Commands:
- *   :quit / :q / :exit  — Exit
- *   :help / :h          — Show commands
- *   :stats              — Lexicon statistics
- *   <any other text>    — Analyze with Scalpel + morphology
+ *   :quit / :q / :exit, Exit
+ *   :help / :h, Show commands
+ *   :stats, Lexicon statistics
+ *   <any other text>, Analyze with Scalpel + morphology
  *
  * Example session:
  *   > The cats and dogs walked.
  *   [Sentence 1]
- *   The → (no analysis)
- *   cats → cat +N +PL
- *   and → (no analysis)
- *   dogs → dog +N +PL
- *   walked → walk +V +PAST
+ *   The -> (no analysis)
+ *   cats -> cat +N +PL
+ *   and -> (no analysis)
+ *   dogs -> dog +N +PL
+ *   walked -> walk +V +PAST
  */
 void interactive_mode(Analyzer& analyzer, const LexiconFSA& lexicon) {
     print_banner();
@@ -163,13 +163,13 @@ void interactive_mode(Analyzer& analyzer, const LexiconFSA& lexicon) {
  * batch_mode: Analyze words supplied as command-line arguments
  *
  * Each argument is treated as a single word and analyzed directly
- * (no Scalpel tokenization needed — input is already word-level).
+ * (no Scalpel tokenization needed, input is already word-level).
  *
  * Example:
  *   ./analyzer cats dogs flies
- *   cats → cat +N +PL
- *   dogs → dog +N +PL
- *   flies →
+ *   cats -> cat +N +PL
+ *   dogs -> dog +N +PL
+ *   flies ->
  *     fly +N +PL
  *     fly +V +3SG
  */

@@ -115,13 +115,13 @@ public:
      * 
      * Example:
      *   Transition with input_='a'
-     *     matches(Symbol('a')) → true
-     *     matches(Symbol('b')) → false
-     *     matches(Symbol::epsilon()) → false (not an epsilon transition)
+     *     matches(Symbol('a')) -> true
+     *     matches(Symbol('b')) -> false
+     *     matches(Symbol::epsilon()) -> false (not an epsilon transition)
      *   
      *   Transition with input_=epsilon
-     *     matches(Symbol('a')) → true (epsilon always matches)
-     *     matches(Symbol('b')) → true
+     *     matches(Symbol('a')) -> true (epsilon always matches)
+     *     matches(Symbol('b')) -> true
      */
     virtual bool matches(std::shared_ptr<Symbol> symbol) const {
         if (input_->is_epsilon()) {
@@ -135,7 +135,7 @@ public:
 };
 
 /**
- * FSTTransition: Transducer transition with input→output mapping
+ * FSTTransition: Transducer transition with input->output mapping
  * 
  * Purpose:
  *   FSTs (Finite-State Transducers) map input strings to output strings.
@@ -240,8 +240,8 @@ public:
      * 
      * Example:
      *   FSTTransition with (+PL:s)
-     *     matches_pair(Symbol("+PL"), Symbol("s")) → true
-     *     matches_pair(Symbol("+PL"), Symbol("es")) → false
+     *     matches_pair(Symbol("+PL"), Symbol("s")) -> true
+     *     matches_pair(Symbol("+PL"), Symbol("es")) -> false
      */
     bool matches_pair(std::shared_ptr<Symbol> in, std::shared_ptr<Symbol> out) const {
         return *input_ == *in && *output_ == *out;

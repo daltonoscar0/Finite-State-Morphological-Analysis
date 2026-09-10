@@ -43,7 +43,7 @@ private:
     
     // Outgoing transitions from this state
     // Raw pointers because Automaton owns the actual Transition objects
-    // This prevents shared_ptr cycles: Automaton→State, Automaton→Transition, State→Transition
+    // This prevents shared_ptr cycles: Automaton->State, Automaton->Transition, State->Transition
     std::vector<Transition*> outgoing_;
     
 public:
@@ -205,7 +205,7 @@ public:
      * 
      * Use case:
      *   Some morphological rules emit features only at the end:
-     *   walk + [walk_state] → [final_state with output "+V +PAST"]
+     *   walk + [walk_state] -> [final_state with output "+V +PAST"]
      * 
      * @param output  Vector of symbols to emit upon reaching this state
      */

@@ -38,7 +38,7 @@
  * 
  * Space Efficiency:
  *   Shared prefixes are stored once:
- *     "cat", "cats", "caterpillar" → "cat" prefix shared
+ *     "cat", "cats", "caterpillar" -> "cat" prefix shared
  *   
  *   For a lexicon of 100,000 words:
  *     - Naive storage: ~100K separate entries
@@ -58,11 +58,11 @@
  * 
  * Role in Morphological Analysis:
  *   During analysis of "cities":
- *     1. Try stem "c" → not in lexicon
- *     2. Try stem "ci" → not in lexicon
- *     3. Try stem "cit" → not in lexicon
- *     4. Try stem "citi" → not in lexicon (but check i→y)
- *     5. Try stem "city" → FOUND (via y→i reversal)
+ *     1. Try stem "c" -> not in lexicon
+ *     2. Try stem "ci" -> not in lexicon
+ *     3. Try stem "cit" -> not in lexicon
+ *     4. Try stem "citi" -> not in lexicon (but check i->y)
+ *     5. Try stem "city" -> FOUND (via y->i reversal)
  *   
  *   The trie makes these lookups efficient O(m) instead of O(n)
  *   where n = lexicon size.
@@ -79,12 +79,12 @@
  * 
  * Design:
  *   We can't modify the base State class (would bloat all states).
- *   Instead, we maintain a parallel map: State* → LexiconState metadata.
+ *   Instead, we maintain a parallel map: State* -> LexiconState metadata.
  *   Only terminal states have entries in this map.
  * 
  * Example:
  *   State 42 (final) in the trie spells "cat"
- *   state_annotations_[State42] → LexiconState with lexeme "cat +N [REG]"
+ *   state_annotations_[State42] -> LexiconState with lexeme "cat +N [REG]"
  */
 struct LexiconState {
     State* state;
@@ -197,18 +197,18 @@ public:
      *   1. Start at root
      *   2. For each character c in stem:
      *      a. Follow transition labeled c
-     *      b. If no such transition, stem not in lexicon → return null
+     *      b. If no such transition, stem not in lexicon -> return null
      *   3. If we reach a final state, return its lexeme
      *   4. Otherwise (reached non-terminal state), return null
      * 
      * Example:
      *   lookup("cat"):
      *     root --c--> state1 --a--> state2 --t--> state3
-     *     state3 is final → return lexeme("cat")
+     *     state3 is final -> return lexeme("cat")
      *   
      *   lookup("ca"):
      *     root --c--> state1 --a--> state2
-     *     state2 is NOT final → return null
+     *     state2 is NOT final -> return null
      *   
      *   lookup("dog") [not in trie]:
      *     root --d--> ??? (no transition)

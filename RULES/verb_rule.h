@@ -7,7 +7,7 @@
  * Verb inflection rules
  */
 
-// Regular +PAST: walk→walked (REG verbs)
+// Regular +PAST: walk->walked (REG verbs)
 class RegularPastRule : public MorphRule {
 public:
     RegularPastRule() : MorphRule("RegularPast", "+PAST → ed (regular verbs)") {
@@ -18,7 +18,7 @@ public:
     }
 };
 
-// Regular +PRES_PART: walk→walking (REG, Y_FINAL, SIBILANT)
+// Regular +PRES_PART: walk->walking (REG, Y_FINAL, SIBILANT)
 class RegularPresPartRule : public MorphRule {
 public:
     RegularPresPartRule() : MorphRule("RegularPresPart", "+PRES_PART → ing (regular verbs)") {
@@ -29,7 +29,7 @@ public:
     }
 };
 
-// Regular +3SG: walk→walks (REG verbs)
+// Regular +3SG: walk->walks (REG verbs)
 class Regular3SGRule : public MorphRule {
 public:
     Regular3SGRule() : MorphRule("Regular3SG", "+3SG → s (regular verbs)") {
@@ -40,7 +40,7 @@ public:
     }
 };
 
-// Sibilant +3SG: push→pushes (SIBILANT verbs)
+// Sibilant +3SG: push->pushes (SIBILANT verbs)
 class Sibilant3SGRule : public MorphRule {
 public:
     Sibilant3SGRule() : MorphRule("Sibilant3SG", "+3SG → es (sibilant verbs)") {
@@ -51,7 +51,7 @@ public:
     }
 };
 
-// Y_FINAL +3SG: carry→carries  (y:i → +3SG:e → ε:s)
+// Y_FINAL +3SG: carry->carries  (y:i -> +3SG:e -> ε:s)
 class YFinal3SGRule : public MorphRule {
 public:
     YFinal3SGRule() : MorphRule("YFinal3SG", "y→i, +3SG → es (y-final verbs)") {
@@ -79,7 +79,7 @@ public:
     }
 };
 
-// Y_FINAL +PAST: carry→carried  (y:i → +PAST:e → ε:d)
+// Y_FINAL +PAST: carry->carried  (y:i -> +PAST:e -> ε:d)
 class YFinalPastRule : public MorphRule {
 public:
     YFinalPastRule() : MorphRule("YFinalPast", "y→i, +PAST → ed (y-final verbs)") {
@@ -107,7 +107,7 @@ public:
     }
 };
 
-// DOUBLE_CONS +PAST: stop→stopped
+// DOUBLE_CONS +PAST: stop->stopped
 class DoubleConsPastRule : public MorphRule {
 public:
     DoubleConsPastRule() : MorphRule("DoubleConsPast", "+PAST → ed (double-cons verbs)") {
@@ -118,7 +118,7 @@ public:
     }
 };
 
-// DOUBLE_CONS +PRES_PART: stop→stopping
+// DOUBLE_CONS +PRES_PART: stop->stopping
 class DoubleConsPresPartRule : public MorphRule {
 public:
     DoubleConsPresPartRule() : MorphRule("DoubleConsPresPart", "+PRES_PART → ing (double-cons verbs)") {
@@ -129,7 +129,7 @@ public:
     }
 };
 
-// SILENT_E +PAST: hope→hoped
+// SILENT_E +PAST: hope->hoped
 class SilentEPastRule : public MorphRule {
 public:
     SilentEPastRule() : MorphRule("SilentEPast", "+PAST → ed (silent-e verbs)") {
@@ -140,7 +140,7 @@ public:
     }
 };
 
-// SILENT_E +PRES_PART: hope→hoping
+// SILENT_E +PRES_PART: hope->hoping
 class SilentEPresPartRule : public MorphRule {
 public:
     SilentEPresPartRule() : MorphRule("SilentEPresPart", "+PRES_PART → ing (silent-e verbs)") {

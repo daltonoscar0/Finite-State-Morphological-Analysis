@@ -46,8 +46,8 @@
  *     Symbol s2(5, SURFACE, "a")  // Same symbol (ID 5)
  *     Symbol s3(7, SURFACE, "a")  // Different symbol (ID 7)
  *     
- *     s1 == s2  → true  (same ID)
- *     s1 == s3  → false (different ID)
+ *     s1 == s2  -> true  (same ID)
+ *     s1 == s3  -> false (different ID)
  * 
  * Design Pattern:
  *   This follows the "flyweight pattern" - symbols are created once
@@ -197,14 +197,14 @@ class SymbolTable {
 private:
     // Bidirectional maps for symbol lookup
     
-    // Map: string representation → Symbol
+    // Map: string representation -> Symbol
     // Key: "a", "+PL", "ε", etc.
-    // Enables lookup by name: lookup("a") → Symbol
+    // Enables lookup by name: lookup("a") -> Symbol
     std::unordered_map<std::string, std::shared_ptr<Symbol>> repr_to_symbol_;
     
-    // Map: unique ID → Symbol
+    // Map: unique ID -> Symbol
     // Key: 0, 1, 2, 3, ...
-    // Enables lookup by ID: lookup(5) → Symbol
+    // Enables lookup by ID: lookup(5) -> Symbol
     std::unordered_map<int, std::shared_ptr<Symbol>> id_to_symbol_;
     
     // Next available symbol ID (monotonically increasing)
@@ -249,10 +249,10 @@ public:
      * Example:
      *   auto s1 = table.get_or_create("a", SURFACE);  // Creates, ID=1
      *   auto s2 = table.get_or_create("a", SURFACE);  // Returns existing, ID=1
-     *   s1 == s2  → true (same Symbol object)
+     *   s1 == s2  -> true (same Symbol object)
      *   
      *   auto s3 = table.get_or_create("a", LEXICAL);  // Creates new, ID=2
-     *   s1 == s3  → false (different types, different symbols)
+     *   s1 == s3  -> false (different types, different symbols)
      */
     std::shared_ptr<Symbol> get_or_create(const std::string& repr, SymbolType type);
     

@@ -18,8 +18,8 @@
  * 
  * Post-condition:
  *   - epsilon_ points to Symbol(0, EPSILON, "ε")
- *   - repr_to_symbol_["ε"] → epsilon symbol
- *   - id_to_symbol_[0] → epsilon symbol
+ *   - repr_to_symbol_["ε"] -> epsilon symbol
+ *   - id_to_symbol_[0] -> epsilon symbol
  *   - next_id_ == 1
  *   - System ready to create additional symbols
  * 
@@ -50,7 +50,7 @@ SymbolTable::SymbolTable() : next_id_(0) {
  *   3. If not found:
  *      a. Create new Symbol with unique ID (next_id_)
  *      b. Increment next_id_ for next symbol
- *      c. Register in both maps (repr→symbol, id→symbol)
+ *      c. Register in both maps (repr->symbol, id->symbol)
  *      d. Return new Symbol
  * 
  * Complexity:
@@ -58,7 +58,7 @@ SymbolTable::SymbolTable() : next_id_(0) {
  * 
  * Example Trace:
  *   First call: get_or_create("a", SURFACE)
- *     - repr_to_symbol_.find("a") → not found
+ *     - repr_to_symbol_.find("a") -> not found
  *     - Create Symbol(1, SURFACE, "a")
  *     - repr_to_symbol_["a"] = Symbol(1, ...)
  *     - id_to_symbol_[1] = Symbol(1, ...)
@@ -66,7 +66,7 @@ SymbolTable::SymbolTable() : next_id_(0) {
  *     - Return Symbol(1, ...)
  *   
  *   Second call: get_or_create("a", SURFACE)
- *     - repr_to_symbol_.find("a") → found!
+ *     - repr_to_symbol_.find("a") -> found!
  *     - Return existing Symbol(1, ...)  (same object)
  * 
  * @param repr  String representation (e.g., "a", "+PL", "ε")

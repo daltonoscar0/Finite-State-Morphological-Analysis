@@ -14,7 +14,7 @@
 #include <cctype>
 
 // Scalpel FSM tokenizer and sentence segmenter
-// Path: morphology/PIPELINE/ → ../../Scalpel/
+// Path: morphology/PIPELINE/ -> ../../Scalpel/
 #include "../../Scalpel/tokenizer.h"
 #include "../../Scalpel/sentence_segmenter.h"
 
@@ -22,11 +22,11 @@
  * segment_into_sentences: Convert raw text to sentence-grouped word lists
  *
  * Steps:
- *   1. Tokenize  — Scalpel FSM walks the text character-by-character,
+ *   1. Tokenize, Scalpel FSM walks the text character-by-character,
  *                  emitting typed Token objects (WORD, PUNCT, ABBREVIATION…)
- *   2. Segment   — SentenceSegmenter groups the token stream into sentences
+ *   2. Segment, SentenceSegmenter groups the token stream into sentences
  *                  using punctuation and SENTENCE_END markers
- *   3. Filter    — Only TokenType::WORD tokens are forwarded; numbers,
+ *   3. Filter, Only TokenType::WORD tokens are forwarded; numbers,
  *                  punctuation, abbreviations, etc. are dropped so the
  *                  morphological analyzer only sees alphabetic words
  *
@@ -37,7 +37,7 @@
 std::vector<std::vector<std::string>> segment_into_sentences(const std::string& text) {
     // ── Phase 1: Tokenize ────────────────────────────────────────────────
     // Scalpel's Tokenizer is an FSM; it runs in a single linear pass with
-    // O(1) lookahead — no regex engine, no heap allocation per character.
+    // O(1) lookahead, no regex engine, no heap allocation per character.
     Tokenizer scalpel_tokenizer;
     std::vector<Token> tokens = scalpel_tokenizer.tokenize(text);
 

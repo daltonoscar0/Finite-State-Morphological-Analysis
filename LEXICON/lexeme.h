@@ -17,7 +17,7 @@
  *   - "fly" (noun, y-final): the insect, flies
  *   - "fly" (verb, y-final): the bird flies
  *   
- *   Same stem class, different POS → different inflectional paradigms
+ *   Same stem class, different POS -> different inflectional paradigms
  * 
  * Role in Morphology:
  *   POS determines which inflectional categories are available:
@@ -46,8 +46,8 @@ enum class PartOfSpeech {
  *   N = Noun, V = Verb, ADJ = Adjective, ADV = Adverb
  * 
  * These abbreviations appear in morphological glosses:
- *   "cats" → cat +N +PL
- *   "walked" → walk +V +PAST
+ *   "cats" -> cat +N +PL
+ *   "walked" -> walk +V +PAST
  * 
  * @param pos  Part of speech to convert
  * @return     Standard abbreviation string
@@ -88,10 +88,10 @@ inline std::string pos_to_string(PartOfSpeech pos) {
  * 
  * Regular vs. Irregular:
  *   Regular lexemes: Inflection computed by rules
- *     walk + +PAST → walked (rule: +PAST → ed)
+ *     walk + +PAST -> walked (rule: +PAST -> ed)
  *   
  *   Irregular lexemes: Forms stored in irregular_forms_ map
- *     go + +PAST → went (stored: {PAST: "went"})
+ *     go + +PAST -> went (stored: {PAST: "went"})
  * 
  * Design Rationale:
  *   - Keeps irregular forms WITH the lexeme (lexical storage)
@@ -114,20 +114,20 @@ public:
      * Feature: Grammatical features that may have irregular forms
      * 
      * These are the inflectional categories where irregularity occurs:
-     *   PLURAL: Irregular plural nouns (mouse→mice)
-     *   PAST: Irregular past tense (go→went)
-     *   PAST_PART: Irregular past participle (go→gone)
+     *   PLURAL: Irregular plural nouns (mouse->mice)
+     *   PAST: Irregular past tense (go->went)
+     *   PAST_PART: Irregular past participle (go->gone)
      *   PRES_PART: Irregular present participle (rare in English)
-     *   THIRD_SG: Irregular 3rd person singular (be→is, have→has)
+     *   THIRD_SG: Irregular 3rd person singular (be->is, have->has)
      * 
      * Note: Regular forms are NOT stored here; they're computed by rules.
      */
     enum class Feature {
-        PLURAL,         // Noun plural: mouse→mice
-        PAST,           // Verb past tense: go→went
-        PAST_PART,      // Verb past participle: go→gone
+        PLURAL,         // Noun plural: mouse->mice
+        PAST,           // Verb past tense: go->went
+        PAST_PART,      // Verb past participle: go->gone
         PRES_PART,      // Verb present participle: (rare irregulars)
-        THIRD_SG,       // Verb 3sg present: be→is, have→has
+        THIRD_SG,       // Verb 3sg present: be->is, have->has
         COMP,           // Comparative: bigger, happier
         SUP             // Superlative: biggest, happiest
     };
@@ -138,7 +138,7 @@ private:
     StemClass stem_class_;                  // Morphological behavior class
     float weight_ = 1.0f;                   // Ambiguity ranking weight
 
-    // Map: Feature → Irregular surface form
+    // Map: Feature -> Irregular surface form
     std::unordered_map<Feature, std::string> irregular_forms_;
 
 public:
@@ -232,10 +232,10 @@ public:
      *   2. AND it has no stored irregular forms
      * 
      * Examples:
-     *   "cat" (REG, no irregular forms) → regular
-     *   "city" (Y_FINAL, no irregular forms) → regular (orthographic variant)
-     *   "mouse" (IRR_MOUSE, has {PLURAL: "mice"}) → irregular
-     *   "go" (IRR_GO, has {PAST: "went"}) → irregular
+     *   "cat" (REG, no irregular forms) -> regular
+     *   "city" (Y_FINAL, no irregular forms) -> regular (orthographic variant)
+     *   "mouse" (IRR_MOUSE, has {PLURAL: "mice"}) -> irregular
+     *   "go" (IRR_GO, has {PAST: "went"}) -> irregular
      * 
      * @return true if fully regular, false if any irregularity
      */
@@ -278,7 +278,7 @@ public:
  * feature_to_tag: Convert Feature enum to morphological tag
  * 
  * Used in morphological glosses:
- *   mouse +N +PL → "PL" comes from feature_to_tag(Feature::PLURAL)
+ *   mouse +N +PL -> "PL" comes from feature_to_tag(Feature::PLURAL)
  * 
  * Standard morphological notation:
  *   +PL = plural

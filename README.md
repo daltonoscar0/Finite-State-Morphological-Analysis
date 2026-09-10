@@ -4,21 +4,21 @@ A finite-state morphological analyzer for English. Given raw text or individual 
 
 ## Features
 
-- **Inflectional morphology** — noun plurals, verb conjugations (past, present participle, 3rd person singular), adjective comparatives/superlatives
-- **Orthographic alternations** — y→i (city→cities), consonant doubling (stop→stopped), silent e deletion (hope→hoping), epenthetic vowel (kiss→kisses)
-- **Irregular forms** — suppletion (go→went), umlaut plurals (mouse→mice), zero-marking (sheep→sheep), and more
-- **Derivational morphology** — suffixes (-ness, -ly, -er, -tion, -ment) and prefixes (un-, re-, dis-, pre-, etc.)
-- **Ambiguity handling** — returns all valid analyses with weight-based ranking (e.g. `flies → fly +N +PL | fly +V +3SG`)
-- **Text pipeline** — sentence segmentation and tokenization via Scalpel, then morphological analysis per token
+- **Inflectional morphology**, noun plurals, verb conjugations (past, present participle, 3rd person singular), adjective comparatives/superlatives
+- **Orthographic alternations**, y->i (city->cities), consonant doubling (stop->stopped), silent e deletion (hope->hoping), epenthetic vowel (kiss->kisses)
+- **Irregular forms**, suppletion (go->went), umlaut plurals (mouse->mice), zero-marking (sheep->sheep), and more
+- **Derivational morphology**, suffixes (-ness, -ly, -er, -tion, -ment) and prefixes (un-, re-, dis-, pre-, etc.)
+- **Ambiguity handling**, returns all valid analyses with weight-based ranking (e.g. `flies -> fly +N +PL | fly +V +3SG`)
+- **Text pipeline**, sentence segmentation and tokenization via Scalpel, then morphological analysis per token
 
 ## Architecture
 
 The analyzer is built on finite-state automata:
 
-- **LexiconFSA** — a trie storing ~1825 lexemes for O(n) stem lookup
-- **MorphRule FSTs** — finite-state transducers encoding inflectional rules per stem class (regular, y-final, sibilant, silent-e, double-consonant, irregular)
-- **DerivationRule** — handles derivational suffixes and prefixes
-- **Scalpel** — an external FSM-based tokenizer for text segmentation (sentence splitting, word/number/punctuation classification)
+- **LexiconFSA**, a trie storing ~1825 lexemes for O(n) stem lookup
+- **MorphRule FSTs**, finite-state transducers encoding inflectional rules per stem class (regular, y-final, sibilant, silent-e, double-consonant, irregular)
+- **DerivationRule**, handles derivational suffixes and prefixes
+- **Scalpel**, an external FSM-based tokenizer for text segmentation (sentence splitting, word/number/punctuation classification)
 
 Analysis proceeds in two phases: text segmentation (Scalpel), then morphological analysis (stem lookup, suffix/prefix stripping, orthographic reversal, irregular form matching, deduplication).
 

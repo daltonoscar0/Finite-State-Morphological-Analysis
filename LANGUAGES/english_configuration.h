@@ -27,7 +27,7 @@ public:
     static void load_lexicon(LexiconFSA& lexicon) {
 
         // ══════════════════════════════════════════════════════════════
-        // NOUNS — REG  (+s plural)
+        // NOUNS, REG  (+s plural)
         // ══════════════════════════════════════════════════════════════
 
         // Animals
@@ -172,7 +172,7 @@ public:
         }
 
         // ══════════════════════════════════════════════════════════════
-        // NOUNS — Y_FINAL  (y → ies plural)
+        // NOUNS, Y_FINAL  (y -> ies plural)
         // ══════════════════════════════════════════════════════════════
         for (auto s : {"ability","academy","agony","allegory","allergy",
                        "ambiguity","analogy","anatomy","anomaly","anxiety",
@@ -207,7 +207,7 @@ public:
         }
 
         // ══════════════════════════════════════════════════════════════
-        // NOUNS — SIBILANT  (+es plural: kisses, churches, foxes)
+        // NOUNS, SIBILANT  (+es plural: kisses, churches, foxes)
         // ══════════════════════════════════════════════════════════════
 
         // -ss / -s
@@ -243,7 +243,7 @@ public:
         }
 
         // ══════════════════════════════════════════════════════════════
-        // NOUNS — IRREGULAR
+        // NOUNS, IRREGULAR
         // ══════════════════════════════════════════════════════════════
 
         // IRR_MOUSE (vowel-change plurals)
@@ -294,7 +294,7 @@ public:
         }
 
         // ══════════════════════════════════════════════════════════════
-        // VERBS — REG  (direct concatenation: walk+s, walk+ed, walk+ing)
+        // VERBS, REG  (direct concatenation: walk+s, walk+ed, walk+ing)
         // ══════════════════════════════════════════════════════════════
         for (auto s : {"accept","act","add","affect","answer","appear",
                        "assist","attach","attend","avoid","benefit","borrow",
@@ -335,7 +335,7 @@ public:
         }
 
         // ══════════════════════════════════════════════════════════════
-        // VERBS — Y_FINAL  (y → ies for 3SG; y → ied for PAST)
+        // VERBS, Y_FINAL  (y -> ies for 3SG; y -> ied for PAST)
         // ══════════════════════════════════════════════════════════════
         for (auto s : {"amplify","apply","carry","certify","clarify","classify",
                        "comply","copy","cry","deny","deploy","diversify",
@@ -348,7 +348,7 @@ public:
         }
 
         // ══════════════════════════════════════════════════════════════
-        // VERBS — SIBILANT  (3SG +es: pushes, watches)
+        // VERBS, SIBILANT  (3SG +es: pushes, watches)
         // ══════════════════════════════════════════════════════════════
         for (auto s : {"address","assess","attach","bleach","brush","buzz",
                        "catch","clash","coach","crash","crush","detach",
@@ -362,7 +362,7 @@ public:
         }
 
         // ══════════════════════════════════════════════════════════════
-        // VERBS — DOUBLE_CONS  (stop→stopped, hop→hopping)
+        // VERBS, DOUBLE_CONS  (stop->stopped, hop->hopping)
         // ══════════════════════════════════════════════════════════════
         for (auto s : {"beg","clap","drop","drum","fan","fit","flag","grab",
                        "grip","hop","hug","jog","knit","log","map","nap",
@@ -374,7 +374,7 @@ public:
         }
 
         // ══════════════════════════════════════════════════════════════
-        // VERBS — SILENT_E  (hope→hoping, make→making)
+        // VERBS, SILENT_E  (hope->hoping, make->making)
         // ══════════════════════════════════════════════════════════════
         for (auto s : {"achieve","argue","bake","blame","breathe","celebrate",
                        "change","chase","close","combine","come","complete",
@@ -396,10 +396,10 @@ public:
         }
 
         // ══════════════════════════════════════════════════════════════
-        // VERBS — IRREGULAR
+        // VERBS, IRREGULAR
         // ══════════════════════════════════════════════════════════════
 
-        // IRR_GO (suppletive: go → went/gone)
+        // IRR_GO (suppletive: go -> went/gone)
         auto go = std::make_shared<Lexeme>("go", PartOfSpeech::VERB, StemClass::IRR_GO);
         go->add_irregular_form(Lexeme::Feature::PAST, "went");
         go->add_irregular_form(Lexeme::Feature::PAST_PART, "gone");
@@ -494,7 +494,7 @@ public:
         }
 
         // ══════════════════════════════════════════════════════════════
-        // ADJECTIVES — REG
+        // ADJECTIVES, REG
         // ══════════════════════════════════════════════════════════════
         for (auto s : {"abstract","accurate","active","actual","acute",
                        "afraid","alert","alive","ancient","annual","apparent",
@@ -525,7 +525,7 @@ public:
         }
 
         // ══════════════════════════════════════════════════════════════
-        // ADJECTIVES — Y_FINAL  (happy→happier/happiest)
+        // ADJECTIVES, Y_FINAL  (happy->happier/happiest)
         // ══════════════════════════════════════════════════════════════
         for (auto s : {"angry","busy","chilly","cloudy","cozy","crazy",
                        "creepy","dirty","dizzy","dusty","early","easy",
@@ -543,7 +543,7 @@ public:
         }
 
         // ══════════════════════════════════════════════════════════════
-        // ADJECTIVES — DOUBLE_CONS  (big→bigger/biggest)
+        // ADJECTIVES, DOUBLE_CONS  (big->bigger/biggest)
         // ══════════════════════════════════════════════════════════════
         for (auto s : {"big","dim","fat","fit","flat","grim","hot","mad",
                        "red","sad","slim","tan","thin","wet"}) {
@@ -551,7 +551,7 @@ public:
         }
 
         // ══════════════════════════════════════════════════════════════
-        // ADJECTIVES — SILENT_E  (nice→nicer/nicest)
+        // ADJECTIVES, SILENT_E  (nice->nicer/nicest)
         // ══════════════════════════════════════════════════════════════
         for (auto s : {"brave","close","cute","fine","free","gentle","late",
                        "loose","nice","pale","pure","rare","rude","safe",
@@ -561,7 +561,7 @@ public:
         }
 
         // ══════════════════════════════════════════════════════════════
-        // ADJECTIVES — IRREGULAR (good/bad/far)
+        // ADJECTIVES, IRREGULAR (good/bad/far)
         // ══════════════════════════════════════════════════════════════
         auto good = std::make_shared<Lexeme>("good", PartOfSpeech::ADJECTIVE, StemClass::IRR_GO);
         good->add_irregular_form(Lexeme::Feature::COMP, "better");
@@ -579,7 +579,7 @@ public:
         lexicon.insert_lexeme(far_adj);
 
         // ══════════════════════════════════════════════════════════════
-        // ADVERBS — REG
+        // ADVERBS, REG
         // ══════════════════════════════════════════════════════════════
         for (auto s : {"abroad","accordingly","actually","again","ahead",
                        "almost","already","also","although","always","anywhere",
