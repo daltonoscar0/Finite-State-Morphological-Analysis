@@ -76,6 +76,35 @@ public:
         }
     }
 
+    /**
+     * is_irregular_form: Did an analysis come from a stored irregular form?
+     *
+     * The irregular pre-pass in analyze() produces analyses straight out of
+     * each lexeme's irregular_forms_ map (went -> go +V +PAST), which share no
+     * predictable surface material with the lemma. The surface segmentation
+     * output needs to tell those apart from rule-derived analyses so it can
+     * keep them as a single piece. This is a read-only query; it does not
+     * affect analysis.
+     *
+     * @param surface_lower  The lowercased surface word
+     * @param stem           Lemma of the analysis in question
+     * @param features       Feature tags of the analysis in question
+     * @return               true if the irregular index holds this pairing
+     */
+    bool is_irregular_form(const std::string& surface_lower,
+                           const std::string& stem,
+                           const std::vector<std::string>& features) const {
+        if (features.size() != 1) return false;
+        auto it = irregular_index_.find(surface_lower);
+        if (it == irregular_index_.end()) return false;
+        for (const auto& [lex, feat] : it->second) {
+            if (lex->stem() == stem && feature_to_tag(feat) == features[0]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // English prefixes for prefix stripping
     static const std::vector<std::string>& english_prefixes() {
         static const std::vector<std::string> prefixes = {
