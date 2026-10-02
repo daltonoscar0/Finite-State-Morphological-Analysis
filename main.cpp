@@ -26,15 +26,19 @@
  * Usage:
  *   ./analyzer                    # Interactive mode, type text, see analyses
  *   ./analyzer cats dogs flies    # Batch mode, analyze specific words
+ *   ./analyzer --segment-jsonl    # Surface-piece mode, one word per stdin line
  */
 
 #include "PIPELINE/text_pipeline.h"        // Scalpel bridge (no Tokenizer name clash)
 #include "SYMBOLS/symbol.h"
 #include "LEXICON/lexicon_fsa.h"
 #include "ANALYSIS/analyzer.h"
+#include "ANALYSIS/segment_driver.h"
 #include "OUTPUT/pretty_print.h"
+#include "OUTPUT/jsonl_print.h"
 #include "LANGUAGES/english_configuration.h"
 
+#include <cstdlib>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -180,25 +184,106 @@ void batch_mode(Analyzer& analyzer, const std::vector<std::string>& words) {
     }
 }
 
+// ── Surface segmentation mode ──────────────────────────────────────────────
+
+/**
+ * segment_jsonl_mode: Emit one JSON record per stdin line
+ *
+ * Reads one word per line and writes exactly one JSON object per input line,
+ * in order, flushing after each one so that a long-lived parent process can
+ * drive this line by line without deadlocking on a buffered pipe.
+ *
+ * A blank line produces a record with an empty word and no pieces.
+ *
+ * A trailing carriage return is stripped so that CRLF input does not leave a
+ * control character inside the word.
+ *
+ * @param segmenter  Word to ranked surface segmentations
+ * @param nbest      How many analyses to report; >1 adds "alternatives"
+ */
+void segment_jsonl_mode(const WordSegmenter& segmenter, int nbest) {
+    std::string line;
+    while (std::getline(std::cin, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+
+        auto ranked = segmenter.segment_word(line);
+
+        std::vector<Segmentation> alternatives(ranked.begin() + 1, ranked.end());
+        if (static_cast<int>(alternatives.size()) > nbest - 1) {
+            alternatives.resize(nbest - 1);
+        }
+
+        JsonlPrinter::write(std::cout, ranked[0], alternatives, nbest);
+        std::cout << std::endl;  // newline plus flush, one record per line
+    }
+}
+
 // ── Entry point ────────────────────────────────────────────────────────────
 
+void print_usage() {
+    std::cerr
+        << "Usage:\n"
+        << "  analyzer                     Interactive mode\n"
+        << "  analyzer WORD...             Analyze the given words\n"
+        << "  analyzer --segment-jsonl     Surface pieces, one word per stdin line\n"
+        << "  analyzer --nbest K           Report K analyses per word (default 1)\n";
+}
+
 int main(int argc, char* argv[]) {
+    bool segment_jsonl = false;
+    int  nbest = 1;
+    std::vector<std::string> words;
+
+    for (int i = 1; i < argc; i++) {
+        const std::string arg = argv[i];
+
+        if (arg == "--segment-jsonl") {
+            segment_jsonl = true;
+        } else if (arg == "--nbest") {
+            if (i + 1 >= argc) {
+                std::cerr << "error: --nbest needs a value" << std::endl;
+                return 2;
+            }
+            nbest = std::atoi(argv[++i]);
+        } else if (arg.rfind("--nbest=", 0) == 0) {
+            nbest = std::atoi(arg.c_str() + 8);
+        } else if (arg.rfind("--", 0) == 0) {
+            std::cerr << "error: unknown option " << arg << std::endl;
+            print_usage();
+            return 2;
+        } else {
+            words.push_back(arg);
+        }
+    }
+
+    if (nbest < 1) nbest = 1;
+
     // Initialization order matters: SymbolTable must outlive everything else
     SymbolTable symbols;
     LexiconFSA lexicon(&symbols);
     Analyzer   analyzer(&symbols, &lexicon);
 
-    std::cout << "Loading English lexicon and rules..." << std::endl;
-    EnglishConfig::initialize(symbols, lexicon, analyzer);
-    std::cout << "Loaded " << lexicon.num_lexemes() << " lexemes.\n" << std::endl;
+    // In segmentation mode stdout carries nothing but JSON records, so the
+    // startup notices go to stderr instead.
+    std::ostream& log = segment_jsonl ? std::cerr : std::cout;
 
-    if (argc == 1) {
+    log << "Loading English lexicon and rules..." << std::endl;
+    EnglishConfig::initialize(symbols, lexicon, analyzer);
+    log << "Loaded " << lexicon.num_lexemes() << " lexemes.\n" << std::endl;
+
+    if (segment_jsonl) {
+        if (!words.empty()) {
+            std::cerr << "note: --segment-jsonl reads stdin, ignoring "
+                      << words.size() << " command-line word(s)" << std::endl;
+        }
+        WordSegmenter segmenter(&analyzer, &lexicon);
+        segment_jsonl_mode(segmenter, nbest);
+        return 0;
+    }
+
+    if (words.empty()) {
         interactive_mode(analyzer, lexicon);
     } else {
-        std::vector<std::string> words;
-        for (int i = 1; i < argc; i++) {
-            words.push_back(argv[i]);
-        }
         batch_mode(analyzer, words);
     }
 
