@@ -1,7 +1,7 @@
 /**
  * test_segmentation.cpp: Tests for surface-piece segmentation output
  *
- * Three groups:
+ * Four groups:
  *
  *   1. A table of hand-written expected segmentations, one row per case in the
  *      documented convention (regular suffixation, each orthographic
@@ -17,6 +17,9 @@
  *   3. A fuzz-style group: empty strings, mixed case, digits, punctuation,
  *      very long strings, non-ASCII, and invalid UTF-8.
  *
+ *   4. Text mode: whole inputs, newlines included, checked to rebuild exactly
+ *      from ws_before plus the pieces.
+ *
  * The invariants are re-derived here from the output rather than delegated to
  * Segmentation::check(), so a bug inside check() cannot hide a bug in the
  * segmenter. check() is then asserted to agree.
@@ -26,6 +29,7 @@
 #include "LEXICON/lexicon_fsa.h"
 #include "ANALYSIS/analyzer.h"
 #include "ANALYSIS/segment_driver.h"
+#include "ANALYSIS/text_segmenter.h"
 #include "OUTPUT/jsonl_print.h"
 #include "LANGUAGES/english_configuration.h"
 #include "RULES/derivation_rule.h"
@@ -645,6 +649,101 @@ static void test_nbest_records(const WordSegmenter& ws) {
     std::cout << "  ✓ ranking is deterministic across calls" << std::endl;
 }
 
+// ── Group 4: text mode reconstruction ────────────────────────────────────────
+
+/**
+ * test_text_mode: ws_before plus the pieces must rebuild the input exactly
+ *
+ * This is the one invariant text mode adds. It is harder than it looks because
+ * Scalpel does not emit a token for every character (a stray apostrophe in
+ * "'single'" is dropped) and because whitespace at the end of a line has no
+ * following token to attach to.
+ */
+static void test_text_mode(const WordSegmenter& ws) {
+    std::cout << "\nTest: text mode rebuilds its input" << std::endl;
+
+    LineSegmenter lines(&ws, 1);
+
+    // Each case is a whole input, newlines included, exactly as it would
+    // arrive on stdin.
+    const std::vector<std::string> inputs = {
+        "The cats walked quickly.\n",
+        "hello, world (yes) [ok] {fine} \"quoted\" 'single'\n",
+        "  leading and   multiple   spaces  \n",
+        "abc def",                       // no final newline
+        "cats dogs\r\nmice\r\n",         // CRLF
+        "a\tb\tc\n",
+        "cats\n\n\ndogs\n",              // blank lines
+        "   \n\t\n",                     // whitespace only
+        "",                              // empty input
+        "naïve café 42\n",
+        "Dr. Smith paid $3.50 for 12 apples!\n",
+        "don't re-write it, isn't that right?\n",
+        "cats   ",                       // whitespace at end of input
+        "...!!!???\n",
+        std::string(500, 'a') + " " + std::string(500, 'b') + "\n",
+    };
+
+    const std::set<std::string> kinds = {
+        "WORD", "PUNCT", "NUMBER", "ABBREVIATION", "CONTRACTION", "HYPHENATED"
+    };
+
+    size_t records = 0;
+    for (const auto& input : inputs) {
+        // Split the input into lines the way the CLI does, tracking whether
+        // each line was newline-terminated.
+        std::string rebuilt;
+        std::string pending;
+        size_t pos = 0;
+
+        while (pos < input.size()) {
+            const size_t nl = input.find('\n', pos);
+            const bool terminated = nl != std::string::npos;
+            const std::string line = terminated ? input.substr(pos, nl - pos)
+                                                : input.substr(pos);
+
+            for (const auto& record : lines.segment_line(line, pending)) {
+                records++;
+                verify(record.seg, "text:" + line);
+                if (kinds.count(record.kind) == 0) {
+                    std::cerr << "FAIL: unknown kind " << record.kind
+                              << std::endl;
+                    assert(false);
+                }
+                rebuilt += record.ws_before;
+                for (const auto& piece : record.seg.pieces) rebuilt += piece.text;
+            }
+
+            if (terminated) {
+                pending += "\n";
+                pos = nl + 1;
+            } else {
+                pos = input.size();
+            }
+        }
+
+        if (!pending.empty()) {
+            const TokenRecord tail = lines.trailing_record(pending);
+            records++;
+            verify(tail.seg, "text-tail");
+            rebuilt += tail.ws_before;
+            for (const auto& piece : tail.seg.pieces) rebuilt += piece.text;
+        }
+
+        if (rebuilt != input) {
+            std::cerr << "FAIL: text mode did not rebuild its input\n"
+                      << "  input   [" << input << "]\n"
+                      << "  rebuilt [" << rebuilt << "]" << std::endl;
+            assert(false);
+        }
+    }
+
+    std::cout << "  inputs rebuilt exactly: " << inputs.size() << std::endl;
+    std::cout << "  records verified:       " << records << std::endl;
+    std::cout << "  ✓ ws_before plus pieces reproduces every input"
+              << std::endl;
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 int main() {
@@ -659,6 +758,7 @@ int main() {
     test_json_escaping();
     test_nbest_records(ws);
     test_fuzz(ws);
+    test_text_mode(ws);
     test_property_over_lexicon(env, ws);
 
     std::cout << "\n=== All segmentation tests passed! ===" << std::endl;

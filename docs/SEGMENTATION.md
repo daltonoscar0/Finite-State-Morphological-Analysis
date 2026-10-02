@@ -188,6 +188,50 @@ oxen      lemma ox       oxen        gate "irregular"
 better    lemma good     better      gate "irregular"
 ```
 
+## Text mode
+
+`--segment-text` reads raw text lines instead of one word per line. Each line
+goes to Scalpel's tokenizer, and one record is emitted per token with the same
+fields plus two more:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `kind` | string | Scalpel's token class: `WORD`, `PUNCT`, `NUMBER`, `ABBREVIATION`, `CONTRACTION`, `HYPHENATED` |
+| `ws_before` | string | The exact whitespace that preceded the token |
+
+Only `WORD` tokens are analyzed. Everything else is emitted as its raw surface
+string with source `passthrough`, not as a wrapped tag.
+
+```bash
+echo "The cats walked quickly." | ./analyzer --segment-text
+```
+
+```json
+{"word": "The", "pieces": ["The"], ..., "source": "fallback", "gate": "no_analysis", "kind": "WORD", "ws_before": ""}
+{"word": "cats", "pieces": ["cat", "s"], ..., "source": "fst", "gate": "decomposed", "kind": "WORD", "ws_before": " "}
+{"word": ".", "pieces": ["."], ..., "source": "passthrough", "gate": "passthrough", "kind": "PUNCT", "ws_before": ""}
+```
+
+### Reconstruction
+
+Concatenating `ws_before` followed by the pieces, over a line's records,
+reproduces the line exactly. The records tile the input: every byte of it sits
+in exactly one record, either inside a piece or inside a `ws_before`.
+
+Two details make that work:
+
+Whitespace at the end of a line has no following token to attach to, so it is
+carried forward, along with the line terminator, into the `ws_before` of the
+next token, which is usually on the next line. Concatenating every record in
+the stream therefore reproduces the whole input, not just each line. Whatever
+whitespace is still pending at end of input becomes one final record with an
+empty word and no pieces.
+
+Scalpel does not always emit a token for every character. In
+`hello 'single'` it drops the opening apostrophe. Any uncovered span that is
+not whitespace is recovered as its own `PUNCT` record, so no input character is
+lost.
+
 ## The Python client
 
 `tools/fst_tokenizer.py` starts one `analyzer --segment-jsonl` process and
@@ -388,7 +432,24 @@ Judgment calls made while implementing this, and why.
     would otherwise pass the header files to the compiler. This is the pattern
     the existing `test_lex` target already used.
 
-14. **The repository was not clean when this work started.** `git status`
+14. **In text mode, whitespace with no following token gets its own record,
+    with an empty word and `kind` of `PUNCT`.** Trailing whitespace at end of
+    input has to appear somewhere for the input to be reproducible, and
+    `ws_before` is the only field that can hold it. `PUNCT` is the closest fit
+    among the token classes the format allows, though no Scalpel token is
+    involved. The same record shape is used for a span Scalpel skipped,
+    where the word is the skipped text rather than empty.
+
+15. **Text mode uses only Scalpel's tokenizer, not its sentence segmenter.**
+    The record format has no sentence field, and sentence grouping would not
+    change any piece.
+
+16. **`test_seg` links the Scalpel bridge.** The text-mode reconstruction
+    invariant is the subtlest part of this work, so it is tested rather than
+    only exercised by hand, which means the test binary needs
+    `tokenize_line`. The other three test binaries are unchanged.
+
+17. **The repository was not clean when this work started.** `git status`
     listed four tracked build binaries as modified or deleted (`analyzer`,
     `test_analyzer`, `test_infra`, `test_lex`) and no source file. Since those
     are build outputs that `make` regenerates and that must never be staged,

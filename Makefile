@@ -15,6 +15,8 @@ MORPH_SRC = SYMBOLS/symbol.cpp \
 # otherwise hand these .h files to the compiler.
 SEG_HDR = ANALYSIS/segmentation.h \
           ANALYSIS/segment_driver.h \
+          ANALYSIS/text_segmenter.h \
+          PIPELINE/text_pipeline.h \
           OUTPUT/jsonl_print.h
 
 .PHONY: all clean test
@@ -38,8 +40,10 @@ test_analyzer: test_analyzer.cpp SYMBOLS/symbol.cpp
 	$(CXX) $(CXXFLAGS) -o $@ test_analyzer.cpp SYMBOLS/symbol.cpp
 
 # ── Surface segmentation tests ───────────────────────────────────────────────
-test_seg: test_segmentation.cpp SYMBOLS/symbol.cpp $(SEG_HDR)
-	$(CXX) $(CXXFLAGS) -o $@ test_segmentation.cpp SYMBOLS/symbol.cpp
+# Links the Scalpel bridge as well, because the text-mode tests exercise
+# tokenize_line.
+test_seg: test_segmentation.cpp $(MORPH_SRC) $(SCALPEL_SRC) $(SEG_HDR)
+	$(CXX) $(CXXFLAGS) -o $@ test_segmentation.cpp $(MORPH_SRC) $(SCALPEL_SRC)
 
 # ── Run every test binary ────────────────────────────────────────────────────
 # Fails on the first non-zero exit status.

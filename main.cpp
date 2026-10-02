@@ -27,6 +27,7 @@
  *   ./analyzer                    # Interactive mode, type text, see analyses
  *   ./analyzer cats dogs flies    # Batch mode, analyze specific words
  *   ./analyzer --segment-jsonl    # Surface-piece mode, one word per stdin line
+ *   ./analyzer --segment-text     # Surface-piece mode, raw text lines
  */
 
 #include "PIPELINE/text_pipeline.h"        // Scalpel bridge (no Tokenizer name clash)
@@ -34,6 +35,7 @@
 #include "LEXICON/lexicon_fsa.h"
 #include "ANALYSIS/analyzer.h"
 #include "ANALYSIS/segment_driver.h"
+#include "ANALYSIS/text_segmenter.h"
 #include "OUTPUT/pretty_print.h"
 #include "OUTPUT/jsonl_print.h"
 #include "LANGUAGES/english_configuration.h"
@@ -218,6 +220,48 @@ void segment_jsonl_mode(const WordSegmenter& segmenter, int nbest) {
     }
 }
 
+/**
+ * segment_text_mode: Emit one JSON record per token of raw text
+ *
+ * Reads raw text lines, tokenizes each with Scalpel, and writes one record per
+ * token with the same fields as word mode plus `kind` and `ws_before`.
+ *
+ * Concatenating ws_before + the pieces over a line's records reproduces the
+ * line exactly. Whitespace at the end of a line, and the line terminator
+ * itself, are carried into the ws_before of the next token, so concatenating
+ * every record in the stream reproduces the whole input. Whatever is still
+ * pending at end of input becomes one final record with an empty word.
+ *
+ * @param lines  Line to token records
+ * @param nbest  How many analyses to report per word token
+ */
+void segment_text_mode(const LineSegmenter& lines, int nbest) {
+    std::string line;
+    std::string pending;
+
+    while (std::getline(std::cin, line)) {
+        // getline sets eofbit only when it stopped at end of input rather
+        // than at a newline, which is how an unterminated last line is told
+        // apart from a terminated one.
+        const bool terminated = !std::cin.eof();
+
+        for (const auto& record : lines.segment_line(line, pending)) {
+            JsonlPrinter::write_token(std::cout, record.seg, record.alternatives,
+                                      nbest, record.kind, record.ws_before);
+            std::cout << std::endl;
+        }
+
+        if (terminated) pending += "\n";
+    }
+
+    if (!pending.empty()) {
+        const TokenRecord record = lines.trailing_record(pending);
+        JsonlPrinter::write_token(std::cout, record.seg, record.alternatives,
+                                  nbest, record.kind, record.ws_before);
+        std::cout << std::endl;
+    }
+}
+
 // ── Entry point ────────────────────────────────────────────────────────────
 
 void print_usage() {
@@ -226,11 +270,13 @@ void print_usage() {
         << "  analyzer                     Interactive mode\n"
         << "  analyzer WORD...             Analyze the given words\n"
         << "  analyzer --segment-jsonl     Surface pieces, one word per stdin line\n"
+        << "  analyzer --segment-text      Surface pieces, raw text lines via Scalpel\n"
         << "  analyzer --nbest K           Report K analyses per word (default 1)\n";
 }
 
 int main(int argc, char* argv[]) {
     bool segment_jsonl = false;
+    bool segment_text  = false;
     int  nbest = 1;
     std::vector<std::string> words;
 
@@ -239,6 +285,8 @@ int main(int argc, char* argv[]) {
 
         if (arg == "--segment-jsonl") {
             segment_jsonl = true;
+        } else if (arg == "--segment-text") {
+            segment_text = true;
         } else if (arg == "--nbest") {
             if (i + 1 >= argc) {
                 std::cerr << "error: --nbest needs a value" << std::endl;
@@ -258,6 +306,13 @@ int main(int argc, char* argv[]) {
 
     if (nbest < 1) nbest = 1;
 
+    if (segment_jsonl && segment_text) {
+        std::cerr << "error: --segment-jsonl and --segment-text are exclusive"
+                  << std::endl;
+        return 2;
+    }
+    const bool segmenting = segment_jsonl || segment_text;
+
     // Initialization order matters: SymbolTable must outlive everything else
     SymbolTable symbols;
     LexiconFSA lexicon(&symbols);
@@ -265,19 +320,24 @@ int main(int argc, char* argv[]) {
 
     // In segmentation mode stdout carries nothing but JSON records, so the
     // startup notices go to stderr instead.
-    std::ostream& log = segment_jsonl ? std::cerr : std::cout;
+    std::ostream& log = segmenting ? std::cerr : std::cout;
 
     log << "Loading English lexicon and rules..." << std::endl;
     EnglishConfig::initialize(symbols, lexicon, analyzer);
     log << "Loaded " << lexicon.num_lexemes() << " lexemes.\n" << std::endl;
 
-    if (segment_jsonl) {
+    if (segmenting) {
         if (!words.empty()) {
-            std::cerr << "note: --segment-jsonl reads stdin, ignoring "
+            std::cerr << "note: segmentation mode reads stdin, ignoring "
                       << words.size() << " command-line word(s)" << std::endl;
         }
         WordSegmenter segmenter(&analyzer, &lexicon);
-        segment_jsonl_mode(segmenter, nbest);
+        if (segment_jsonl) {
+            segment_jsonl_mode(segmenter, nbest);
+        } else {
+            LineSegmenter lines(&segmenter, nbest);
+            segment_text_mode(lines, nbest);
+        }
         return 0;
     }
 
