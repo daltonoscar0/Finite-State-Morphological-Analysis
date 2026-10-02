@@ -495,13 +495,17 @@ public:
     /**
      * is_passthrough_input: Should this input skip morphological analysis?
      *
-     * The rule is deliberately simple and documented: an input containing no
-     * ASCII letter cannot carry English morphology, so it is passed through.
-     * An input with at least one letter is analyzed, and reported as fallback
-     * if nothing is found.
+     * The rule is deliberately simple: an input containing no ASCII letter
+     * cannot carry English morphology, so it is passed through. An input with
+     * at least one letter is analyzed, and reported as fallback if nothing is
+     * found.
+     *
+     * Input that is not well-formed UTF-8 is never passed through, even when
+     * it has no letters in it. It is not punctuation or a number, it is
+     * damaged text, and the format reports it as a fallback record.
      */
     static bool is_passthrough_input(const std::string& word) {
-        return !has_letter(word);
+        return !has_letter(word) && utf8::is_valid(word);
     }
 
     /**

@@ -584,6 +584,35 @@ static void test_fuzz(const WordSegmenter& ws) {
     std::cout << "  source fallback:   " << fallback << std::endl;
     std::cout << "  source fst:        " << fst << std::endl;
     std::cout << "  ✓ all invariants hold" << std::endl;
+
+    // Input that is not well-formed UTF-8 is a fallback record, never a
+    // passthrough one, even when it contains no letters at all.
+    const std::vector<std::string> broken = {
+        "\xff", "\xfe\xff", "caf\xe9", "\xc3", "\xed\xa0\x80", "\xc0\xaf",
+        "\xf4\x90\x80\x80"
+    };
+    for (const auto& input : broken) {
+        const Segmentation seg = ws.segment_word(input)[0];
+        if (seg.source != seg_source::FALLBACK) {
+            std::cerr << "FAIL: invalid UTF-8 reported as " << seg.source
+                      << ", expected fallback" << std::endl;
+            assert(false);
+        }
+    }
+    std::cout << "  ✓ " << broken.size()
+              << " invalid UTF-8 inputs report source fallback" << std::endl;
+
+    // Letterless but well-formed input stays passthrough
+    for (const char* input : {"", "42", "...", " ", "\t"}) {
+        const Segmentation seg = ws.segment_word(input)[0];
+        if (seg.source != seg_source::PASSTHROUGH) {
+            std::cerr << "FAIL: " << input << " reported as " << seg.source
+                      << ", expected passthrough" << std::endl;
+            assert(false);
+        }
+    }
+    std::cout << "  ✓ letterless valid input reports source passthrough"
+              << std::endl;
 }
 
 /** test_json_escaping: The writer's escaping, checked directly */

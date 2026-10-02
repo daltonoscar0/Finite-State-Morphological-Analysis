@@ -343,6 +343,10 @@ Judgment calls made while implementing this, and why.
    defensibly go either way; it is treated as a word the analyzer failed on,
    because it contains one.
 
+   Input that is not well-formed UTF-8 is the one exception: it is always
+   `fallback`, never `passthrough`, even with no letters in it. It is not
+   punctuation or a number, it is damaged text.
+
 2. **Irregular and suppletive forms are always a single piece, even when a
    boundary is orthographically visible.** `children` could be `child|ren` and
    `oxen` could be `ox|en`, but `went` and `mice` cannot be split at all, and
