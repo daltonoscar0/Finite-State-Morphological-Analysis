@@ -358,15 +358,39 @@ private:
         return piece_label::SUFFIX_INFL;
     }
 
-    /** stem_class_of: Stem class for a lemma, or UNKNOWN when not in lexicon */
-    StemClass stem_class_of(const std::string& lemma, PartOfSpeech pos) const {
-        if (!lexicon_) return StemClass::UNKNOWN;
-        auto lexemes = lexicon_->lookup_all(lemma);
-        for (const auto& lex : lexemes) {
-            if (lex->pos() == pos) return lex->stem_class();
+    /**
+     * has_stem_class: Does any lexeme for this lemma carry `sc`?
+     *
+     * A stem can appear in the lexicon more than once, including under
+     * different stem classes: "box" is listed both as a regular noun and as a
+     * sibilant one. Asking whether ANY entry carries the class, rather than
+     * reading the class off the first entry found, keeps alternation detection
+     * independent of insertion order.
+     */
+    bool has_stem_class(const std::string& lemma, StemClass sc) const {
+        if (!lexicon_) return false;
+        for (const auto& lex : lexicon_->lookup_all(lemma)) {
+            if (lex->stem_class() == sc) return true;
         }
-        if (!lexemes.empty()) return lexemes.front()->stem_class();
-        return StemClass::UNKNOWN;
+        return false;
+    }
+
+    /**
+     * ends_in_sibilant: Does the lemma end in a sibilant grapheme?
+     *
+     * The orthographic trigger for the epenthetic e before -s: kiss, buzz,
+     * box, church, dish. Used alongside the SIBILANT stem class so that a
+     * lemma classified only as regular is still recognized.
+     */
+    static bool ends_in_sibilant(const std::string& lemma) {
+        if (lemma.empty()) return false;
+        const char last = lemma.back();
+        if (last == 's' || last == 'z' || last == 'x' || last == 'j') return true;
+        if (lemma.size() >= 2) {
+            const std::string tail = lemma.substr(lemma.size() - 2);
+            if (tail == "ch" || tail == "sh") return true;
+        }
+        return false;
     }
 
     /**
@@ -376,7 +400,7 @@ private:
      * lowercased lemma, and `lcp` the shared prefix length between them.
      */
     std::string detect_alt(const std::string& region, const std::string& lemma,
-                           size_t lcp, const Analysis& a) const {
+                           size_t lcp) const {
         if (lcp >= region.size()) return seg_alt::NONE;  // no suffix piece
 
         // city -> cities: the lemma's final y surfaces as i
@@ -397,7 +421,8 @@ private:
             // kiss -> kisses: an epenthetic e appears before the -s
             const std::string rest = region.substr(lcp);
             if (rest.size() >= 2 && rest[0] == 'e' && rest[1] == 's' &&
-                stem_class_of(lemma, a.pos()) == StemClass::SIBILANT) {
+                (ends_in_sibilant(lemma) ||
+                 has_stem_class(lemma, StemClass::SIBILANT))) {
                 return seg_alt::EPENTHESIS;
             }
         }
@@ -538,7 +563,7 @@ public:
             seg.pieces.emplace_back(word.substr(stem_end), suffix_label(a));
         }
 
-        seg.alt  = detect_alt(region, lemma, lcp, a);
+        seg.alt  = detect_alt(region, lemma, lcp);
         seg.gate = seg.pieces.size() >= 2 ? seg_gate::DECOMPOSED
                                           : seg_gate::LEXICON_STEM;
         fill_offsets(seg);
