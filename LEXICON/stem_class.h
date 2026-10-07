@@ -12,17 +12,17 @@
  * 
  * Why Stem Classes Matter:
  *   Different stems undergo different morphological processes:
- *     - "cat" + plural → "cats" (regular suffixation)
- *     - "city" + plural → "cities" (y→i alternation)
- *     - "mouse" + plural → "mice" (irregular umlaut)
+ *     - "cat" + plural -> "cats" (regular suffixation)
+ *     - "city" + plural -> "cities" (y->i alternation)
+ *     - "mouse" + plural -> "mice" (irregular umlaut)
  * 
  *   Without stem classes, we'd need:
  *     1. Separate rules for each word (doesn't scale)
  *     2. Or complex conditional logic in rules (not finite-state)
  * 
  *   With stem classes, we capture generalizations:
- *     - Y_FINAL class → apply y→i rule before +PL
- *     - IRR_MOUSE class → use lexically stored form
+ *     - Y_FINAL class -> apply y->i rule before +PL
+ *     - IRR_MOUSE class -> use lexically stored form
  * 
  * Design Rationale:
  *   - Stem classes are NOT part-of-speech (though often correlated)
@@ -30,12 +30,12 @@
  *     * "walk" is REG whether noun or verb
  *   
  *   - They encode phonological/orthographic properties
- *     * Y_FINAL: phonotactic constraint on /i/ → /aj/ before plural
+ *     * Y_FINAL: phonotactic constraint on /i/ -> /aj/ before plural
  *     * SIBILANT: phonological requirement for epenthetic vowel
  *   
  *   - They enable rule selection and blocking
- *     * REG class → apply regular rules
- *     * IRR_* classes → block regular rules, use lexicon
+ *     * REG class -> apply regular rules
+ *     * IRR_* classes -> block regular rules, use lexicon
  * 
  * Linguistic Background:
  *   This approach follows the "lexical phonology" framework:
@@ -59,65 +59,65 @@ enum class StemClass {
     // Require special orthographic adjustments
     
     Y_FINAL,        // Stems ending in consonant+y
-                    // Examples: city→cities, fly→flies, carry→carries
-                    // Rule: y→i before suffixes beginning with vowel
+                    // Examples: city->cities, fly->flies, carry->carries
+                    // Rule: y->i before suffixes beginning with vowel
     
     SIBILANT,       // Stems ending in sibilants: /s/, /z/, /ʃ/, /ʒ/, /tʃ/, /dʒ/
-                    // Examples: kiss→kisses, buzz→buzzes, church→churches
+                    // Examples: kiss->kisses, buzz->buzzes, church->churches
                     // Rule: Require epenthetic -e- before -s (phonotactic constraint)
     
     DOUBLE_CONS,    // Stems with short vowel + single consonant
-                    // Examples: stop→stopped, hop→hopping
+                    // Examples: stop->stopped, hop->hopping
                     // Rule: Double final consonant before vowel-initial suffix
                     // (Prevents syllable structure change)
     
     SILENT_E,       // Stems ending in silent 'e'
-                    // Examples: hope→hoping, make→making
+                    // Examples: hope->hoping, make->making
                     // Rule: Delete 'e' before vowel-initial suffix
     
     // ========== Irregular Noun Classes (English) ==========
     // Suppletive or ablaut plurals that don't follow productive rules
     
     IRR_MOUSE,      // Umlaut plurals (vowel change)
-                    // Examples: mouse→mice, louse→lice
+                    // Examples: mouse->mice, louse->lice
                     // Historical: Germanic i-mutation (fronting)
     
     IRR_CHILD,      // -ren plurals (archaic)
-                    // Examples: child→children, ox→oxen (overlaps with IRR_OX)
+                    // Examples: child->children, ox->oxen (overlaps with IRR_OX)
                     // Historical: Old English weak declension
     
     IRR_SHEEP,      // Zero-marked plurals (no overt suffix)
-                    // Examples: sheep→sheep, deer→deer, fish→fish
+                    // Examples: sheep->sheep, deer->deer, fish->fish
                     // Often: mass nouns or animals
     
     IRR_OX,         // -en plurals
-                    // Examples: ox→oxen, brother→brethren (archaic)
+                    // Examples: ox->oxen, brother->brethren (archaic)
     
     // ========== Irregular Verb Classes (English) ==========
     // Suppletive or ablaut past tenses
     
     IRR_GO,         // Fully suppletive (unrelated stems)
-                    // go→went (historical: 'wend' supplanted 'go' in past)
+                    // go->went (historical: 'wend' supplanted 'go' in past)
     
     IRR_BE,         // Multiple suppletive forms
-                    // be→am/is/are/was/were
+                    // be->am/is/are/was/were
                     // Most irregular verb in English
     
     IRR_HAVE,       // Minor irregularities
-                    // have→has (not *haves), had (not *haved)
+                    // have->has (not *haves), had (not *haved)
     
     IRR_DO,         // Vowel change + consonant alternation
-                    // do→does /dʌ/→/dʌz/ (not *dos)
+                    // do->does /dʌ/->/dʌz/ (not *dos)
     
-    IRR_SING,       // Ablaut class: /ɪ/→/æ/→/ʌ/
-                    // sing→sang→sung
+    IRR_SING,       // Ablaut class: /ɪ/->/æ/->/ʌ/
+                    // sing->sang->sung
                     // Also: ring, spring, drink
     
-    IRR_RING,       // Ablaut class: /ɪ/→/æ/→/ʌ/ (same as SING)
+    IRR_RING,       // Ablaut class: /ɪ/->/æ/->/ʌ/ (same as SING)
                     // Separated for potential future distinction
     
-    IRR_SWIM,       // Ablaut class: /ɪ/→/æ/→/ʌ/
-                    // swim→swam→swum
+    IRR_SWIM,       // Ablaut class: /ɪ/->/æ/->/ʌ/
+                    // swim->swam->swum
     
     // ========== Extensibility ==========
     UNKNOWN         // Default for unclassified stems
@@ -207,7 +207,7 @@ inline bool is_regular(StemClass sc) {
  * requires_special_orthography: Check if stem needs orthographic adjustments
  * 
  * Some regular stems require orthographic rules before affixation:
- *   - Y_FINAL: y→i
+ *   - Y_FINAL: y->i
  *   - SIBILANT: insert epenthetic 'e'
  *   - DOUBLE_CONS: double final consonant
  *   - SILENT_E: delete final 'e'

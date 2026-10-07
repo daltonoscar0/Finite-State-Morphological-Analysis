@@ -12,9 +12,10 @@
 
 #include "text_pipeline.h"
 #include <cctype>
+#include <string>
 
 // Scalpel FSM tokenizer and sentence segmenter
-// Path: morphology/PIPELINE/ → ../../Scalpel/
+// Path: morphology/PIPELINE/ -> ../../Scalpel/
 #include "../../Scalpel/tokenizer.h"
 #include "../../Scalpel/sentence_segmenter.h"
 
@@ -22,11 +23,11 @@
  * segment_into_sentences: Convert raw text to sentence-grouped word lists
  *
  * Steps:
- *   1. Tokenize  — Scalpel FSM walks the text character-by-character,
+ *   1. Tokenize, Scalpel FSM walks the text character-by-character,
  *                  emitting typed Token objects (WORD, PUNCT, ABBREVIATION…)
- *   2. Segment   — SentenceSegmenter groups the token stream into sentences
+ *   2. Segment, SentenceSegmenter groups the token stream into sentences
  *                  using punctuation and SENTENCE_END markers
- *   3. Filter    — Only TokenType::WORD tokens are forwarded; numbers,
+ *   3. Filter, Only TokenType::WORD tokens are forwarded; numbers,
  *                  punctuation, abbreviations, etc. are dropped so the
  *                  morphological analyzer only sees alphabetic words
  *
@@ -37,7 +38,7 @@
 std::vector<std::vector<std::string>> segment_into_sentences(const std::string& text) {
     // ── Phase 1: Tokenize ────────────────────────────────────────────────
     // Scalpel's Tokenizer is an FSM; it runs in a single linear pass with
-    // O(1) lookahead — no regex engine, no heap allocation per character.
+    // O(1) lookahead, no regex engine, no heap allocation per character.
     Tokenizer scalpel_tokenizer;
     std::vector<Token> tokens = scalpel_tokenizer.tokenize(text);
 
@@ -80,4 +81,75 @@ std::vector<std::vector<std::string>> segment_into_sentences(const std::string& 
     }
 
     return result;
+}
+
+// ── Located tokens, for surface segmentation text mode ──────────────────────
+
+/**
+ * token_kind_name: Scalpel's TokenType as the string the output format uses
+ *
+ * SENTENCE_END is a marker the sentence segmenter consumes rather than a class
+ * of surface text; if the tokenizer ever emits one it is reported as PUNCT,
+ * which is what it is made of.
+ */
+static std::string token_kind_name(TokenType type) {
+    switch (type) {
+        case TokenType::WORD:          return "WORD";
+        case TokenType::NUMBER:        return "NUMBER";
+        case TokenType::PUNCT:         return "PUNCT";
+        case TokenType::ABBREVIATION:  return "ABBREVIATION";
+        case TokenType::CONTRACTION:   return "CONTRACTION";
+        case TokenType::HYPHENATED:    return "HYPHENATED";
+        case TokenType::SENTENCE_END:  return "PUNCT";
+        default:                       return "PUNCT";
+    }
+}
+
+std::vector<TextToken> tokenize_line(const std::string& line) {
+    Tokenizer scalpel_tokenizer;
+    std::vector<Token> tokens = scalpel_tokenizer.tokenize(line);
+
+    std::vector<TextToken> located;
+    located.reserve(tokens.size());
+
+    // Tokens are consumed strictly left to right. `cursor` is the first byte
+    // not yet covered, which keeps repeated tokens ("a a") from both matching
+    // the same occurrence.
+    size_t cursor = 0;
+
+    for (const auto& token : tokens) {
+        if (token.text.empty()) continue;
+
+        size_t at = std::string::npos;
+
+        // Prefer Scalpel's own offset, but only once it is confirmed to point
+        // at this token's text. Fall back to a forward search otherwise.
+        if (token.start_index >= 0) {
+            const size_t claimed = static_cast<size_t>(token.start_index);
+            if (claimed >= cursor &&
+                claimed + token.text.size() <= line.size() &&
+                line.compare(claimed, token.text.size(), token.text) == 0) {
+                at = claimed;
+            }
+        }
+        if (at == std::string::npos) {
+            at = line.find(token.text, cursor);
+        }
+        if (at == std::string::npos) {
+            // The token's text is not in the line at or after the cursor, so
+            // there is no honest position to report. Dropping it leaves the
+            // span in the gap, where the caller recovers it verbatim.
+            continue;
+        }
+
+        TextToken out;
+        out.text  = token.text;
+        out.kind  = token_kind_name(token.type);
+        out.start = at;
+        located.push_back(out);
+
+        cursor = at + token.text.size();
+    }
+
+    return located;
 }

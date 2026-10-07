@@ -39,8 +39,8 @@
  * 
  * Use Cases in Morphology:
  *   1. Morphological Rules:
- *      +PL:s           (plural feature → 's' suffix)
- *      y:i / _+PL      (y→i before plural)
+ *      +PL:s           (plural feature -> 's' suffix)
+ *      y:i / _+PL      (y->i before plural)
  *   
  *   2. Orthographic Alternations:
  *      e:ε / _+ing     (delete 'e' before -ing)
@@ -130,8 +130,8 @@ public:
      *   1. Start with configuration (q₀, position=0)
      *   2. Explore all reachable configurations:
      *      - Try each transition from current state
-     *      - Epsilon input → don't advance position
-     *      - Matching input → advance position
+     *      - Epsilon input -> don't advance position
+     *      - Matching input -> advance position
      *   3. Accept if we reach (q_final, position=|input|)
      * 
      * Nondeterminism Handling:
@@ -191,7 +191,7 @@ public:
     /**
      * TransductionResult: Output of a single transduction path
      * 
-     * Represents one possible input→output mapping through the FST.
+     * Represents one possible input->output mapping through the FST.
      * 
      * Fields:
      *   - output: Sequence of output symbols produced
@@ -213,7 +213,7 @@ public:
      * Algorithm (BFS with output accumulation):
      *   1. Start with configuration (q₀, pos=0, output=[])
      *   2. For each configuration (q, pos, out):
-     *      a. If pos==|input| and q is final → add out to results
+     *      a. If pos==|input| and q is final -> add out to results
      *      b. For each transition from q:
      *         - Check if input side matches
      *         - Accumulate output symbol (if non-epsilon)

@@ -11,7 +11,7 @@
  * Purpose:
  *   Represents the input word as a deterministic finite-state automaton.
  *   This FSA forms one component in the tri-partite composition:
- *     Surface FSA ⊗ Rule FSTs ⊗ Lexicon FSA → Analysis
+ *     Surface FSA ⊗ Rule FSTs ⊗ Lexicon FSA -> Analysis
  * 
  * Structure:
  *   For input "cats", the SurfaceFSA looks like:
@@ -66,7 +66,7 @@ public:
      * 
      * Example:
      *   symbols_seq = [Symbol('c'), Symbol('a'), Symbol('t')]
-     *   Creates: (q0)-c→(q1)-a→(q2)-t→(q3:final)
+     *   Creates: (q0)-c->(q1)-a->(q2)-t->(q3:final)
      */
     void build_from_symbols(const std::vector<std::shared_ptr<Symbol>>& symbols_seq) {
         if (symbols_seq.empty()) {
@@ -87,7 +87,7 @@ public:
         set_start_state(states[0]);
         
         // Create transitions linking consecutive states
-        // Transition i connects states[i] → states[i+1] via symbols_seq[i]
+        // Transition i connects states[i] -> states[i+1] via symbols_seq[i]
         for (size_t i = 0; i < symbols_seq.size(); i++) {
             create_transition(states[i], states[i + 1], symbols_seq[i]);
         }

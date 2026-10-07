@@ -65,7 +65,7 @@ void test_regular_nouns(Env& env) {
     check(env.analyzer.analyze("cats"), "cat +N +PL", "cats");
     check(env.analyzer.analyze("dogs"), "dog +N +PL", "dogs");
     check(env.analyzer.analyze("books"), "book +N +PL", "books");
-    check(env.analyzer.analyze("trees"), "tree +N +PL", "trees"); // wait — tree is in lexicon?
+    check(env.analyzer.analyze("trees"), "tree +N +PL", "trees"); // wait, tree is in lexicon?
 }
 
 void test_sibilant_nouns(Env& env) {
@@ -175,14 +175,14 @@ void test_prefix_analysis(Env& env) {
 
 void test_derivational_morphology(Env& env) {
     std::cout << "\nTest: Derivational morphology" << std::endl;
-    // -ness: ADJ → NOUN
+    // -ness: ADJ -> NOUN
     auto r1 = env.analyzer.analyze("darkness");
     check(r1, "dark +ADJ [-ness ->N]", "darkness");
     auto r2 = env.analyzer.analyze("happiness");
     check(r2, "happy +ADJ [-ness ->N]", "happiness");
     auto r3 = env.analyzer.analyze("kindness");
     check(r3, "kind +ADJ [-ness ->N]", "kindness");
-    // -ly: ADJ → ADV (using adjectives we know are in the lexicon)
+    // -ly: ADJ -> ADV (using adjectives we know are in the lexicon)
     auto r4 = env.analyzer.analyze("clearly");
     // "clear" is in REG adjective list
     check(r4, "clear +ADJ [-ly ->ADV]", "clearly");
@@ -207,7 +207,7 @@ void test_weight_ranking(Env& env) {
     std::cout << "\nTest: Ambiguity ranking (weight)" << std::endl;
     auto r = env.analyzer.analyze("flies");
     assert(!r.empty());
-    // All should be weight 1.0 (default) — just check they're in some order
+    // All should be weight 1.0 (default), just check they're in some order
     std::cout << "  ✓ flies has " << r.size() << " ranked analyses" << std::endl;
 }
 

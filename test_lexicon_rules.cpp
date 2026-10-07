@@ -33,11 +33,11 @@ bool has_analysis(const std::vector<Analysis>& analyses, const std::string& expe
  *   For lexemes "cat", "dog", "city", "fly":
  *   
  *   (root)
- *     ├── c → a → t [cat]
+ *     ├── c -> a -> t [cat]
  *     │        └── r (hypothetical "car")
- *     ├── d → o → g [dog]
- *     ├── c → i → t → y [city]
- *     └── f → l → y [fly]
+ *     ├── d -> o -> g [dog]
+ *     ├── c -> i -> t -> y [city]
+ *     └── f -> l -> y [fly]
  * 
  * Coverage:
  *   - LexiconFSA.insert_lexeme()
@@ -90,15 +90,15 @@ void test_lexicon() {
  * test_plural_rules: Verify morphological rule FSTs
  * 
  * Tests all four plural rules:
- *   1. RegularPluralRule: +PL → s
- *   2. SibilantPluralRule: +PL → es
- *   3. YPluralRule: y +PL → ies
+ *   1. RegularPluralRule: +PL -> s
+ *   2. SibilantPluralRule: +PL -> es
+ *   3. YPluralRule: y +PL -> ies
  *   4. (IrregularPluralRule tested separately)
  * 
  * For each rule, we test:
  *   - FST construction (build_fst)
  *   - Stem class applicability (applies_to)
- *   - Transduction correctness (input → expected output)
+ *   - Transduction correctness (input -> expected output)
  * 
  * Coverage:
  *   - MorphRule base class
@@ -122,7 +122,7 @@ void test_plural_rules() {
     assert(!reg_rule.applies_to(StemClass::Y_FINAL)); // Doesn't apply to Y_FINAL
     std::cout << "  ✓ Regular plural rule: " << reg_rule.description() << std::endl;
     
-    // Test transduction: +PL → s
+    // Test transduction: +PL -> s
     auto pl_sym = symbols.get_or_create("+PL", SymbolType::LEXICAL);
     std::vector<std::shared_ptr<Symbol>> input = {pl_sym};
     auto results = reg_rule.fst()->transduce(input);
@@ -160,7 +160,7 @@ void test_plural_rules() {
     
     assert(results.size() == 1);               // One path
     assert(results[0].output.size() == 3);     // Outputs three symbols: "ies"
-    assert(results[0].output[0]->repr() == "i");  // y → i alternation
+    assert(results[0].output[0]->repr() == "i");  // y -> i alternation
     assert(results[0].output[1]->repr() == "e");  // First part of suffix
     assert(results[0].output[2]->repr() == "s");  // Second part of suffix
     std::cout << "  ✓ y +PL → 'ies'" << std::endl;

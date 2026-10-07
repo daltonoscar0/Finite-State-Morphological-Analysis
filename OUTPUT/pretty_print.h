@@ -35,9 +35,9 @@ public:
      * print_analyses: Standard output format
      * 
      * Format Rules:
-     *   - No analyses: "word → (no analysis)"
-     *   - Single analysis: "word → stem +POS +FEATURE..."
-     *   - Multiple analyses: "word →" followed by indented alternatives
+     *   - No analyses: "word -> (no analysis)"
+     *   - Single analysis: "word -> stem +POS +FEATURE..."
+     *   - Multiple analyses: "word ->" followed by indented alternatives
      * 
      * Linguistic Notation:
      *   Uses the Leipzig Glossing Rules convention:
@@ -47,15 +47,15 @@ public:
      * 
      * Examples:
      *   Single:
-     *     cats → cat +N +PL
+     *     cats -> cat +N +PL
      *   
      *   Multiple (ambiguous):
-     *     flies →
+     *     flies ->
      *       fly +N +PL
      *       fly +V +3SG
      *   
      *   No analysis:
-     *     xyzzy → (no analysis)
+     *     xyzzy -> (no analysis)
      * 
      * Use Case:
      *   Interactive mode where users type words and see immediate analyses

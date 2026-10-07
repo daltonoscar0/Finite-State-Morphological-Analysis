@@ -47,7 +47,7 @@ private:
     Tokenizer tokenizer_;
     std::vector<std::shared_ptr<DerivationRule>> deriv_rules_;
 
-    // Irregular reverse index: surface form → [(lexeme, feature)]
+    // Irregular reverse index: surface form -> [(lexeme, feature)]
     std::unordered_map<std::string,
         std::vector<std::pair<std::shared_ptr<Lexeme>, Lexeme::Feature>>>
         irregular_index_;
@@ -74,6 +74,35 @@ public:
                 irregular_index_[form].push_back({lex, feat});
             }
         }
+    }
+
+    /**
+     * is_irregular_form: Did an analysis come from a stored irregular form?
+     *
+     * The irregular pre-pass in analyze() produces analyses straight out of
+     * each lexeme's irregular_forms_ map (went -> go +V +PAST), which share no
+     * predictable surface material with the lemma. The surface segmentation
+     * output needs to tell those apart from rule-derived analyses so it can
+     * keep them as a single piece. This is a read-only query; it does not
+     * affect analysis.
+     *
+     * @param surface_lower  The lowercased surface word
+     * @param stem           Lemma of the analysis in question
+     * @param features       Feature tags of the analysis in question
+     * @return               true if the irregular index holds this pairing
+     */
+    bool is_irregular_form(const std::string& surface_lower,
+                           const std::string& stem,
+                           const std::vector<std::string>& features) const {
+        if (features.size() != 1) return false;
+        auto it = irregular_index_.find(surface_lower);
+        if (it == irregular_index_.end()) return false;
+        for (const auto& [lex, feat] : it->second) {
+            if (lex->stem() == stem && feature_to_tag(feat) == features[0]) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // English prefixes for prefix stripping
@@ -136,7 +165,7 @@ public:
                 results.insert(results.end(), analyses.begin(), analyses.end());
             }
 
-            // Y→I alternation reversal: "citi" → "city"
+            // Y->I alternation reversal: "citi" -> "city"
             if (stem_len > 0 && !potential_stem.empty() && potential_stem.back() == 'i') {
                 std::string y_stem = potential_stem;
                 y_stem.back() = 'y';
@@ -144,13 +173,13 @@ public:
                 auto y_lexemes = lexicon_->lookup_all(y_stem);
                 for (auto& lexeme : y_lexemes) {
                     if (lexeme->stem_class() == StemClass::Y_FINAL) {
-                        // Noun plural: city → cities (suffix = "es")
+                        // Noun plural: city -> cities (suffix = "es")
                         if (lexeme->pos() == PartOfSpeech::NOUN && suffix == "es") {
                             Analysis a(y_stem, PartOfSpeech::NOUN, {"+PL"});
                             a.set_weight(lexeme->weight());
                             results.push_back(a);
                         }
-                        // Verb 3SG: carry → carries (suffix = "es")
+                        // Verb 3SG: carry -> carries (suffix = "es")
                         else if (lexeme->pos() == PartOfSpeech::VERB) {
                             if (suffix == "es") {
                                 Analysis a(y_stem, PartOfSpeech::VERB, {"+3SG"});
@@ -166,7 +195,7 @@ public:
                                 results.push_back(a2);
                             }
                         }
-                        // Adjective comparative/superlative: happy → happier/happiest
+                        // Adjective comparative/superlative: happy -> happier/happiest
                         else if (lexeme->pos() == PartOfSpeech::ADJECTIVE) {
                             if (suffix == "er") {
                                 Analysis a(y_stem, PartOfSpeech::ADJECTIVE, {"+COMP"});
@@ -183,7 +212,7 @@ public:
                 }
             }
 
-            // DOUBLE_CONS reversal: "stopp" → "stop" (doubled final consonant)
+            // DOUBLE_CONS reversal: "stopp" -> "stop" (doubled final consonant)
             if (stem_len >= 2 && potential_stem[stem_len-1] == potential_stem[stem_len-2]) {
                 std::string undoubled = potential_stem.substr(0, stem_len - 1);
                 auto dc_lexemes = lexicon_->lookup_all(undoubled);
@@ -219,7 +248,7 @@ public:
                 }
             }
 
-            // SILENT_E reversal: "hop" + "ing" → "hope" + "ing" (restore 'e')
+            // SILENT_E reversal: "hop" + "ing" -> "hope" + "ing" (restore 'e')
             {
                 std::string e_stem = potential_stem + "e";
                 auto se_lexemes = lexicon_->lookup_all(e_stem);
@@ -275,7 +304,7 @@ public:
                     }
                 }
 
-                // Y-restoration: "happi" → "happy"
+                // Y-restoration: "happi" -> "happy"
                 if (drule->needs_y_restoration() && !base_candidate.empty() && base_candidate.back() == 'i') {
                     std::string y_base = base_candidate;
                     y_base.back() = 'y';
@@ -291,7 +320,7 @@ public:
                     }
                 }
 
-                // SILENT_E restoration: "hop" → "hope" + "ing" → derivation
+                // SILENT_E restoration: "hop" -> "hope" + "ing" -> derivation
                 {
                     std::string e_base = base_candidate + "e";
                     auto e_lexemes = lexicon_->lookup_all(e_base);

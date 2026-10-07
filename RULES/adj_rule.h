@@ -7,7 +7,7 @@
  * Adjective degree rules
  */
 
-// Regular +COMP: tall→taller
+// Regular +COMP: tall->taller
 class RegularCompRule : public MorphRule {
 public:
     RegularCompRule() : MorphRule("RegularComp", "+COMP → er (regular adjectives)") {
@@ -18,7 +18,7 @@ public:
     }
 };
 
-// Regular +SUP: tall→tallest
+// Regular +SUP: tall->tallest
 class RegularSupRule : public MorphRule {
 public:
     RegularSupRule() : MorphRule("RegularSup", "+SUP → est (regular adjectives)") {
@@ -29,7 +29,7 @@ public:
     }
 };
 
-// Y_FINAL +COMP: happy→happier  (y:i → +COMP:e → ε:r)
+// Y_FINAL +COMP: happy->happier  (y:i -> +COMP:e -> ε:r)
 class YFinalCompRule : public MorphRule {
 public:
     YFinalCompRule() : MorphRule("YFinalComp", "y→i, +COMP → er (y-final adjectives)") {
@@ -57,7 +57,7 @@ public:
     }
 };
 
-// Y_FINAL +SUP: happy→happiest  (y:i → +SUP:e → ε:s → ε:t)
+// Y_FINAL +SUP: happy->happiest  (y:i -> +SUP:e -> ε:s -> ε:t)
 class YFinalSupRule : public MorphRule {
 public:
     YFinalSupRule() : MorphRule("YFinalSup", "y→i, +SUP → est (y-final adjectives)") {

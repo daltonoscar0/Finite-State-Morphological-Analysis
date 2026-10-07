@@ -29,7 +29,7 @@
  * 
  * Integration Example:
  *   Phase 1 output: [cities] WORD, [are] WORD, [amazing] WORD
- *   Phase 2 takes: "cities" → [c, i, t, i, e, s] as Symbol objects
+ *   Phase 2 takes: "cities" -> [c, i, t, i, e, s] as Symbol objects
  *   Morphology produces: city +N +PL
  */
 class Tokenizer {
@@ -68,8 +68,8 @@ public:
      * @return       Vector of Symbol pointers, or empty vector if input contains invalid chars
      * 
      * Example:
-     *   tokenize("cat") → [Symbol('c'), Symbol('a'), Symbol('t')]
-     *   tokenize("cat!") → [] (invalid character '!')
+     *   tokenize("cat") -> [Symbol('c'), Symbol('a'), Symbol('t')]
+     *   tokenize("cat!") -> [] (invalid character '!')
      */
     std::vector<std::shared_ptr<Symbol>> tokenize(const std::string& input) const {
         std::vector<std::shared_ptr<Symbol>> result;

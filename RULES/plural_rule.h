@@ -7,11 +7,11 @@
  * RegularPluralRule: Standard English plural suffixation
  *
  * Formal Rule:
- *   +PL → s
+ *   +PL -> s
  *
  *   FST: (start) --+PL:s--> (final)
  *
- * Examples: cat → cats, dog → dogs, book → books
+ * Examples: cat -> cats, dog -> dogs, book -> books
  *
  * Stem Class Restriction: REG only
  */
@@ -31,11 +31,11 @@ public:
  * SibilantPluralRule: Plural after sibilant consonants
  *
  * Formal Rule:
- *   +PL → es / [+sibilant] _
+ *   +PL -> es / [+sibilant] _
  *
  *   FST: (start) --+PL:e--> (s1) --ε:s--> (final)
  *
- * Examples: kiss → kisses, buzz → buzzes, church → churches
+ * Examples: kiss -> kisses, buzz -> buzzes, church -> churches
  *
  * Stem Class Restriction: SIBILANT only
  */
@@ -52,14 +52,14 @@ public:
 };
 
 /**
- * YPluralRule: Plural with y→i orthographic alternation
+ * YPluralRule: Plural with y->i orthographic alternation
  *
  * Formal Rule:
- *   y → i / C _ +PL, +PL → es
+ *   y -> i / C _ +PL, +PL -> es
  *
  *   FST: (s0) --y:i--> (s1) --+PL:e--> (s2) --ε:s--> (s3:final)
  *
- * Examples: city → cities, fly → flies, baby → babies
+ * Examples: city -> cities, fly -> flies, baby -> babies
  *
  * Stem Class Restriction: Y_FINAL only
  */

@@ -1,0 +1,14 @@
+CLAUDE.md
+AGENTS.md
+.claude/
+.agentnotes/
+.cursor/
+.mcp.json
+tasks/lessons.md
+tasks/todo.md
+morphology/
+analyzer
+test_*
+!test_*.cpp
+.DS_Store
+.claude/

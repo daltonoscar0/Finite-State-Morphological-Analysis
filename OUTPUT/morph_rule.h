@@ -23,28 +23,28 @@
  *   Example:
  *     Lexical:  cat + +PL
  *     Surface:  c a t s
- *     Rule FST: +PL → s
+ *     Rule FST: +PL -> s
  * 
  * Rule Types in English Morphology:
  *   
  *   1. Affixation Rules (concatenative morphology):
  *      - Add suffixes/prefixes to stems
  *      - Examples:
- *        * +PL → s        (cat → cats)
- *        * +PAST → ed     (walk → walked)
- *        * +ING → ing     (walk → walking)
+ *        * +PL -> s        (cat -> cats)
+ *        * +PAST -> ed     (walk -> walked)
+ *        * +ING -> ing     (walk -> walking)
  *   
  *   2. Orthographic Rules (surface realization):
  *      - Adjust spelling at morph boundaries
  *      - Examples:
- *        * y → i / _ +PL   (city → cities)
- *        * e → ø / _ +ing  (hope → hoping)
- *        * C → CC / VC_+V  (stop → stopped)
+ *        * y -> i / _ +PL   (city -> cities)
+ *        * e -> ø / _ +ing  (hope -> hoping)
+ *        * C -> CC / VC_+V  (stop -> stopped)
  *   
  *   3. Phonological Rules (if modeling sound):
  *      - Handle sound changes
  *      - Examples:
- *        * /s/ → /z/ / [+voice]_  (cats /kæts/ vs dogs /dɔgz/)
+ *        * /s/ -> /z/ / [+voice]_  (cats /kæts/ vs dogs /dɔgz/)
  *      - Not implemented in this system (orthographic only)
  * 
  * Design Rationale:
@@ -82,7 +82,7 @@ public:
      * Constructor
      * 
      * @param name         Rule name (e.g., "RegularPlural")
-     * @param description  Linguistic description (e.g., "+PL → s")
+     * @param description  Linguistic description (e.g., "+PL -> s")
      * 
      * Note: FST is not built here - it's created lazily via build_fst()
      */
@@ -106,13 +106,13 @@ public:
      * applies_to: Check if this rule applies to a given stem class
      * 
      * Logic:
-     *   - If applicable_classes_ is empty → rule is universal (applies to all)
-     *   - Otherwise → rule applies only if sc is in the set
+     *   - If applicable_classes_ is empty -> rule is universal (applies to all)
+     *   - Otherwise -> rule applies only if sc is in the set
      * 
      * Example:
      *   RegularPluralRule has applicable_classes_ = {REG}
-     *   applies_to(REG) → true
-     *   applies_to(Y_FINAL) → false
+     *   applies_to(REG) -> true
+     *   applies_to(Y_FINAL) -> false
      * 
      * @param sc  Stem class to check
      * @return    true if rule can apply, false otherwise
@@ -197,11 +197,11 @@ public:
  * make_simple_affix_fst: Helper for creating standard affixation FSTs
  * 
  * Purpose:
- *   Most morphological rules are simple affixation: tag → suffix.
+ *   Most morphological rules are simple affixation: tag -> suffix.
  *   This function creates the FST for such rules automatically.
  * 
  * Pattern:
- *   lexical_tag → surface_affix
+ *   lexical_tag -> surface_affix
  * 
  * Examples:
  *   make_simple_affix_fst(symbols, "+PL", "s")
@@ -223,7 +223,7 @@ public:
  *   FSTs traditionally have single-symbol transitions. For multi-character
  *   output, we chain epsilon transitions:
  *   
- *   For "+PL" → "es":
+ *   For "+PL" -> "es":
  *     (s0) --+PL:e--> (s1) --ε:s--> (s2:final)
  *   
  *   This reads "+PL" once and outputs 'e', then outputs 's' without
@@ -274,12 +274,12 @@ inline std::unique_ptr<FST> make_simple_affix_fst(
         State* prev = s0;
         State* curr = nullptr;
         
-        // First transition: lexical_tag → first_char
+        // First transition: lexical_tag -> first_char
         curr = fst->create_fst_state(false);
         fst->create_fst_transition(prev, curr, lex_sym, first_sym);
         prev = curr;
         
-        // Subsequent transitions: ε → remaining_chars
+        // Subsequent transitions: ε -> remaining_chars
         auto eps = symbols->epsilon();
         for (size_t i = 1; i < surface_affix.length(); i++) {
             auto sym = symbols->get_or_create(

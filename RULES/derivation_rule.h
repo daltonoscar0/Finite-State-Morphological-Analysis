@@ -20,7 +20,7 @@ public:
     virtual bool needs_y_restoration() const { return false; }
 };
 
-// -ness: ADJ → NOUN (happiness, darkness, weakness)
+// -ness: ADJ -> NOUN (happiness, darkness, weakness)
 class NessRule : public DerivationRule {
     std::string suffix_{"ness"};
 public:
@@ -33,7 +33,7 @@ public:
     bool needs_y_restoration() const override { return true; }
 };
 
-// -ly: ADJ → ADV (quickly, slowly, happily)
+// -ly: ADJ -> ADV (quickly, slowly, happily)
 class LyRule : public DerivationRule {
     std::string suffix_{"ly"};
 public:
@@ -46,7 +46,7 @@ public:
     bool needs_y_restoration() const override { return true; }
 };
 
-// -er (agentive): VERB → NOUN (teacher, runner, writer)
+// -er (agentive): VERB -> NOUN (teacher, runner, writer)
 class AgentiveRule : public DerivationRule {
     std::string suffix_{"er"};
 public:
@@ -60,7 +60,7 @@ public:
     bool needs_y_restoration() const override { return true; }
 };
 
-// -tion/-ion: VERB → NOUN (action, creation)
+// -tion/-ion: VERB -> NOUN (action, creation)
 class TionRule : public DerivationRule {
     std::string suffix_{"tion"};
 public:
@@ -72,7 +72,7 @@ public:
     }
 };
 
-// -ment: VERB → NOUN (movement, management, development)
+// -ment: VERB -> NOUN (movement, management, development)
 class MentRule : public DerivationRule {
     std::string suffix_{"ment"};
 public:

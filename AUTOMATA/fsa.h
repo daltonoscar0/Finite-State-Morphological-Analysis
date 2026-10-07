@@ -13,10 +13,10 @@
  * 
  * Formal Definition:
  *   An FSA is a 5-tuple (Q, Σ, δ, q₀, F) where:
- *     δ: Q × Σ → Q  (deterministic transition function)
+ *     δ: Q × Σ -> Q  (deterministic transition function)
  *   
  *   Contrast with NFA:
- *     δ: Q × (Σ ∪ {ε}) → P(Q)  (nondeterministic, returns set of states)
+ *     δ: Q × (Σ ∪ {ε}) -> P(Q)  (nondeterministic, returns set of states)
  * 
  * Properties:
  *   1. Deterministic: At most one transition per (state, symbol) pair
@@ -41,7 +41,7 @@
  * 
  * Comparison with FST:
  *   - FSA: Recognition only (yes/no answer)
- *   - FST: Transduction (maps input → output)
+ *   - FST: Transduction (maps input -> output)
  */
 class FSA : public Automaton {
 public:
@@ -61,7 +61,7 @@ public:
      *   1. Start at q₀ (start state)
      *   2. For each input symbol sᵢ:
      *      a. Find transition where input matches sᵢ
-     *      b. If no transition exists → reject immediately
+     *      b. If no transition exists -> reject immediately
      *      c. Otherwise, move to target state
      *   3. After consuming all input:
      *      - Accept if current state ∈ F (is final)
@@ -82,8 +82,8 @@ public:
      * 
      * Example:
      *   FSA for L = {w | w contains "cat"}
-     *     accepts([c,a,t]) → true
-     *     accepts([d,o,g]) → false
+     *     accepts([c,a,t]) -> true
+     *     accepts([d,o,g]) -> false
      */
     bool accepts(const std::vector<std::shared_ptr<Symbol>>& input) const override {
         // Structural validity check
@@ -104,7 +104,7 @@ public:
             }
             
             if (next == nullptr) {
-                // No valid transition → string not in language
+                // No valid transition -> string not in language
                 return false;
             }
             
@@ -148,7 +148,7 @@ public:
      * epsilon_closure: Compute ε-closure of a state
      * 
      * Definition:
-     *   ε-closure(q) = {q' | q →* q' via zero or more ε-transitions}
+     *   ε-closure(q) = {q' | q ->* q' via zero or more ε-transitions}
      * 
      * Purpose:
      *   In NFAs with ε-transitions, we can spontaneously move between states.
@@ -190,7 +190,7 @@ public:
      * 
      * Utility method for:
      *   - Debugging (visualize accepting configurations)
-     *   - Algorithms (NFA→DFA conversion, minimization)
+     *   - Algorithms (NFA->DFA conversion, minimization)
      *   - Analysis (count number of accepting states)
      * 
      * Time Complexity: O(|Q|) where |Q| = number of states

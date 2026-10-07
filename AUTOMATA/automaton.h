@@ -102,8 +102,8 @@ public:
      * this ensures the derived class destructor is called.
      * 
      * Cleanup happens automatically via unique_ptr:
-     *   - states_ vector destruction → all States destroyed
-     *   - transitions_ vector destruction → all Transitions destroyed
+     *   - states_ vector destruction -> all States destroyed
+     *   - transitions_ vector destruction -> all Transitions destroyed
      */
     virtual ~Automaton() = default;
     
@@ -169,7 +169,7 @@ public:
      * Create a transition and add it to the automaton
      * 
      * Process:
-     *   1. Create Transition object connecting source → target via input symbol
+     *   1. Create Transition object connecting source -> target via input symbol
      *   2. Store in transitions_ vector (automaton owns it)
      *   3. Register with source state's outgoing transition list
      *   4. Return raw pointer for reference

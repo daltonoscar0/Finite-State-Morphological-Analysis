@@ -14,17 +14,17 @@
  *     - Borrowed words (typically)
  * 
  * Formal Rule:
- *   +PL → s
+ *   +PL -> s
  *   
  *   In FST notation:
  *     (start) --+PL:s--> (final)
  * 
  * Examples:
- *   cat +PL → cats
- *   dog +PL → dogs
- *   book +PL → books
- *   computer +PL → computers (modern word)
- *   emoji +PL → emojis (recent borrowing)
+ *   cat +PL -> cats
+ *   dog +PL -> dogs
+ *   book +PL -> books
+ *   computer +PL -> computers (modern word)
+ *   emoji +PL -> emojis (recent borrowing)
  * 
  * Phonological Note:
  *   Although we write "s", phonologically this has three variants:
@@ -38,9 +38,9 @@
  * Stem Class Restriction:
  *   Applies ONLY to REG (regular) stem class
  *   Does not apply to:
- *     - Y_FINAL: "city" → "cities" (not *citys) [handled by YPluralRule]
- *     - SIBILANT: "kiss" → "kisses" (not *kisss) [handled by SibilantPluralRule]
- *     - IRR_*: "mouse" → "mice" (not *mouses) [handled by lexicon]
+ *     - Y_FINAL: "city" -> "cities" (not *citys) [handled by YPluralRule]
+ *     - SIBILANT: "kiss" -> "kisses" (not *kisss) [handled by SibilantPluralRule]
+ *     - IRR_*: "mouse" -> "mice" (not *mouses) [handled by lexicon]
  */
 class RegularPluralRule : public MorphRule {
 public:
@@ -92,7 +92,7 @@ public:
  *   The phonological /ɪz/ is written as "-es"
  * 
  * Formal Rule:
- *   +PL → es / [+sibilant] _
+ *   +PL -> es / [+sibilant] _
  *   
  *   In FST notation:
  *     (start) --+PL:e--> (s1) --ε:s--> (final)
@@ -106,11 +106,11 @@ public:
  *   - (ge/dge): (sometimes) judge, garage (/dʒ/)
  * 
  * Examples:
- *   kiss +PL → kisses
- *   buzz +PL → buzzes
- *   church +PL → churches
- *   box +PL → boxes
- *   wish +PL → wishes
+ *   kiss +PL -> kisses
+ *   buzz +PL -> buzzes
+ *   church +PL -> churches
+ *   box +PL -> boxes
+ *   wish +PL -> wishes
  * 
  * Stem Class Restriction:
  *   Applies ONLY to SIBILANT stem class
@@ -143,7 +143,7 @@ public:
 };
 
 /**
- * YPluralRule: Plural with y→i orthographic alternation
+ * YPluralRule: Plural with y->i orthographic alternation
  * 
  * Linguistic Generalization:
  *   English nouns ending in consonant+y change the 'y' to 'i' before
@@ -156,19 +156,19 @@ public:
  *   spelling pattern.
  * 
  * Formal Rule:
- *   y → i / C _ +PL
- *   +PL → es
+ *   y -> i / C _ +PL
+ *   +PL -> es
  *   
  *   Where C = consonant (the stem ends in consonant + y)
  * 
  * Important Distinction:
- *   - Consonant + y: city → cities, baby → babies
- *   - Vowel + y: boy → boys, key → keys (no change!)
+ *   - Consonant + y: city -> cities, baby -> babies
+ *   - Vowel + y: boy -> boys, key -> keys (no change!)
  * 
  * FST Structure:
  *   This rule must handle TWO operations:
- *     1. Orthographic alternation: y → i
- *     2. Suffixation: +PL → es
+ *     1. Orthographic alternation: y -> i
+ *     2. Suffixation: +PL -> es
  *   
  *   FST encoding:
  *     (s0) --y:i--> (s1) --+PL:e--> (s2) --ε:s--> (s3:final)
@@ -179,15 +179,15 @@ public:
  *     - Write 's' (epsilon transition)
  * 
  * Examples:
- *   city +PL → cities
- *   fly +PL → flies
- *   baby +PL → babies
- *   party +PL → parties
- *   cherry +PL → cherries
+ *   city +PL -> cities
+ *   fly +PL -> flies
+ *   baby +PL -> babies
+ *   party +PL -> parties
+ *   cherry +PL -> cherries
  * 
  * Counterexamples (vowel+y, NOT handled by this rule):
- *   boy → boys (not *boies)
- *   key → keys (not *keies)
+ *   boy -> boys (not *boies)
+ *   key -> keys (not *keies)
  *   These use RegularPluralRule instead
  * 
  * Stem Class Restriction:
@@ -214,9 +214,9 @@ public:
      * 
      * FST Structure (4 states):
      *   State 0 (start): Initial state
-     *   State 1: After y→i alternation
-     *   State 2: After +PL→e
-     *   State 3 (final): After ε→s
+     *   State 1: After y->i alternation
+     *   State 2: After +PL->e
+     *   State 3 (final): After ε->s
      * 
      * Transitions:
      *   s0 --y:i--> s1    Read stem-final 'y', write 'i'
@@ -228,7 +228,7 @@ public:
      *   Output tape: c i t i e s
      *   
      *   The stem "cit" is handled by previous processing
-     *   This FST handles: y +PL → i e s
+     *   This FST handles: y +PL -> i e s
      * 
      * @param symbols  Global SymbolTable
      */
@@ -237,9 +237,9 @@ public:
         
         // Create 4-state FST
         auto s0 = fst_->create_fst_state(false);  // Start
-        auto s1 = fst_->create_fst_state(false);  // After y→i
-        auto s2 = fst_->create_fst_state(false);  // After +PL→e
-        auto s3 = fst_->create_fst_state(true);   // Final (after ε→s)
+        auto s1 = fst_->create_fst_state(false);  // After y->i
+        auto s2 = fst_->create_fst_state(false);  // After +PL->e
+        auto s3 = fst_->create_fst_state(true);   // Final (after ε->s)
         
         fst_->set_start_state(s0);
         
@@ -252,13 +252,13 @@ public:
         auto eps = symbols->epsilon();
         
         // Build transition chain
-        // Transition 1: y → i (orthographic alternation)
+        // Transition 1: y -> i (orthographic alternation)
         fst_->create_fst_transition(s0, s1, sym_y, sym_i);
         
-        // Transition 2: +PL → e (first part of suffix)
+        // Transition 2: +PL -> e (first part of suffix)
         fst_->create_fst_transition(s1, s2, sym_pl, sym_e);
         
-        // Transition 3: ε → s (second part of suffix)
+        // Transition 3: ε -> s (second part of suffix)
         fst_->create_fst_transition(s2, s3, eps, sym_s);
     }
 };
@@ -273,23 +273,23 @@ public:
  * Types of Irregular Plurals in English:
  *   
  *   1. Umlaut/Ablaut (vowel change):
- *      - mouse → mice, louse → lice
- *      - goose → geese, tooth → teeth
- *      - foot → feet, man → men, woman → women
+ *      - mouse -> mice, louse -> lice
+ *      - goose -> geese, tooth -> teeth
+ *      - foot -> feet, man -> men, woman -> women
  *      Historical: Germanic i-mutation (vowel fronting)
  *   
  *   2. -en Plurals (archaic suffix):
- *      - ox → oxen, child → children
+ *      - ox -> oxen, child -> children
  *      Historical: Old English weak declension
  *   
  *   3. Zero-marked Plurals:
- *      - sheep → sheep, deer → deer, fish → fish
- *      - series → series, species → species
+ *      - sheep -> sheep, deer -> deer, fish -> fish
+ *      - series -> series, species -> species
  *      Often: mass nouns or animals
  *   
  *   4. Latin/Greek Plurals:
- *      - datum → data, phenomenon → phenomena
- *      - criterion → criteria, analysis → analyses
+ *      - datum -> data, phenomenon -> phenomena
+ *      - criterion -> criteria, analysis -> analyses
  *      (Sometimes alternate with regular: formulas/formulae)
  * 
  * Implementation Strategy:
@@ -308,8 +308,8 @@ public:
  * 
  * Usage in Analysis:
  *   When analyzing "mice":
- *     1. Lookup "mice" in lexicon → not found
- *     2. Try stem "mouse" + suffix → lookup "mouse"
+ *     1. Lookup "mice" in lexicon -> not found
+ *     2. Try stem "mouse" + suffix -> lookup "mouse"
  *     3. Found "mouse" with irregular_forms[PLURAL] = "mice"
  *     4. Return Analysis("mouse", NOUN, {"+PL"})
  * 
@@ -361,7 +361,7 @@ public:
         auto sym_pl = symbols->get_or_create("+PL", SymbolType::LEXICAL);
         auto eps = symbols->epsilon();
         
-        // +PL → ε (output comes from lexicon instead)
+        // +PL -> ε (output comes from lexicon instead)
         fst_->create_fst_transition(s0, s1, sym_pl, eps);
     }
 };

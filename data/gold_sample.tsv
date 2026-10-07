@@ -1,0 +1,79 @@
+# Hand-written gold segmentations, for smoke-testing tools/score_segmentation.py.
+#
+# This is NOT an evaluation set. It is 40 entries written by hand to exercise
+# every branch of the scorer and every case in the segmentation convention
+# documented in docs/SEGMENTATION.md. Numbers computed against it say nothing
+# about the analyzer's accuracy on real text; use a real gold standard for that.
+#
+# Format: word<TAB>piece|piece|piece
+#
+# The convention: the stem piece is the longest prefix of the surface word
+# shared with the lemma, and everything after it belongs to the suffix piece,
+# allomorph included. Irregular and suppletive forms stay whole.
+#
+# A few entries below are deliberately ones the current lexicon cannot reach,
+# so the scorer visibly reports a miss rather than silently agreeing with
+# itself: quickly, clearly, slowly, movement and teacher all have the whole
+# form stored as its own lexeme, which outranks the derivational reading.
+
+# Regular suffixation, no alternation
+cats	cat|s
+dogs	dog|s
+books	book|s
+jumps	jump|s
+walked	walk|ed
+walking	walk|ing
+hoped	hope|d
+
+# y -> i
+cities	cit|ies
+flies	fl|ies
+carried	carr|ied
+studies	stud|ies
+happier	happ|ier
+happiest	happ|iest
+
+# Silent e deletion
+hoping	hop|ing
+
+# Consonant doubling
+stopped	stop|ped
+stopping	stop|ping
+running	run|ning
+bigger	big|ger
+biggest	big|gest
+
+# Epenthesis before -s
+kisses	kiss|es
+boxes	box|es
+churches	church|es
+
+# Derivation
+darkness	dark|ness
+weakness	weak|ness
+happiness	happ|iness
+movement	move|ment
+quickly	quick|ly
+clearly	clear|ly
+slowly	slow|ly
+teacher	teach|er
+
+# Prefixes
+unkind	un|kind
+rewrite	re|write
+unhappiness	un|happ|iness
+
+# Irregular and suppletive, kept whole
+went	went
+mice	mice
+sheep	sheep
+children	children
+oxen	oxen
+better	better
+
+# Known stems with no affix
+bank	bank
+light	light
+
+# Nothing to analyze
+zxqvkj	zxqvkj
