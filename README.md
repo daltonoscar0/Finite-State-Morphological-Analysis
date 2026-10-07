@@ -162,3 +162,7 @@ go	V	REG	PAST=went	WEIGHT=1.0
 └── data/
     └── english_lexicon.tsv         # Supplementary lexicon
 ```
+
+## Surface segmentation
+
+See [docs/SEGMENTATION.md](docs/SEGMENTATION.md) for the `--segment-jsonl` and `--segment-text` output formats and the scorer.
