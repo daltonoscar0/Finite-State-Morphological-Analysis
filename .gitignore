@@ -1,6 +1,4 @@
-CLAUDE.md
 AGENTS.md
-.claude/
 .agentnotes/
 .cursor/
 .mcp.json
@@ -11,4 +9,3 @@ analyzer
 test_*
 !test_*.cpp
 .DS_Store
-.claude/
