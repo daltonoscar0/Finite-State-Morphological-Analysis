@@ -37,7 +37,8 @@ go       VERB   IRR_GO       PAST=went   PAST_PART=gone
 quickly  ADVERB REG          WEIGHT=0.8
 ```
 
-`POS` is one of `NOUN`, `VERB`, `ADJECTIVE` (or `ADJ`), `ADVERB` (or `ADV`).
+`POS` is one of `NOUN`, `VERB`, `ADJECTIVE` (or `ADJ`), `ADVERB` (or `ADV`),
+`FUNCTION` (or `FUNC`), the last added by this work for the closed class.
 `StemClass` is one of `REG`, `Y_FINAL`, `SIBILANT`, `DOUBLE_CONS`, `SILENT_E`,
 `IRR_MOUSE`, `IRR_CHILD`, `IRR_SHEEP`, `IRR_OX`, `IRR_GO`, `IRR_BE`,
 `IRR_HAVE`, `IRR_DO`, `IRR_SING`, `IRR_RING`, `IRR_SWIM`. `FEATURE` is one of
@@ -104,6 +105,142 @@ Four fixes, and the remainder is zero:
 
 4. **Nothing is generated whose orthography the lexicon does not determine.**
    See the decisions below.
+
+## Loading a bigger lexicon
+
+```bash
+./analyzer --lexicon ~/data/morph/lexicons/en_100k.tsv --segment-jsonl
+./analyzer --lexicon data/closed_class.tsv \
+           --lexicon ~/data/morph/lexicons/en_100k.tsv --segment-text
+```
+
+`--lexicon` is repeatable and the files are loaded in the order given, after
+the built-in lists. With no `--lexicon`, the loaded lexicon is the same 1,825
+lexemes it has always been and every output is byte for byte what it was.
+
+A stem that arrives twice becomes two lexemes, which is already how the
+built-in lists handle a word that is both a noun and a verb. Two entries that
+agree produce the same analysis twice and the analyzer's deduplication
+collapses them; two that disagree about the stem class produce both readings,
+which is the same ambiguity the lexicon has always been able to express.
+
+`--load-stats` prints the lexicon size, the load time and the peak resident
+set size to stderr, which is where the numbers below come from.
+
+### Cost at scale
+
+Measured on one machine, loading a generated lexicon on top of the built-in
+lists, so the lexeme counts include those 1,825. Analysis throughput is 20,000
+words through `--segment-jsonl`, excluding load time.
+
+| Lexemes | Trie nodes | Load before | Load after | RSS before | RSS after | Words/s |
+|---------|-----------:|------------:|-----------:|-----------:|----------:|--------:|
+| 1,825 | 6k | 5 ms | 5 ms | 3 MB | 3 MB | 31,600 |
+| 11,825 | 22k | 75 ms | 47 ms | 9 MB | 7 MB | 25,000 |
+| 101,825 | 252k | 918 ms | 457 ms | 74 MB | 52 MB | 19,100 |
+| 451,856 | 1,497k | 5,708 ms | 2,832 ms | 383 MB | 260 MB | 11,800 |
+
+Three things were costing most of that, and none of them was the trie itself:
+
+1. **Every trie node carried a `LexiconState` annotation object.** A 450k
+   lexicon has 1.5 million nodes and only 450k of them hold a lexeme, so two
+   thirds of the annotations, their heap allocations and their hash map entries
+   existed to say nothing. Annotations are now created for terminal states
+   only. `get_annotation` returns null for an interior state, which is what it
+   has always returned for a state it does not know, and nothing outside
+   `LEXICON/lexicon_fsa.h` reads it.
+
+2. **Every byte of every stem went through the symbol table.** That meant
+   building a one-character `std::string` and hashing it, four million times on
+   load and a quadratic number of times per word during analysis, since
+   analysis tries every stem length and looks up four candidate stems for each.
+   `LexiconFSA` now caches the 256 single-byte surface symbols in an array,
+   filled lazily so no symbol is created that the lexicon does not use. The
+   symbol table keys its registry on the representation alone, so a one-byte
+   representation names exactly one symbol and the cache cannot disagree with
+   it.
+
+3. **Walking the trie paid a reference count update per edge examined.**
+   `FSA::step` goes through the virtual `Transition::matches`, which takes its
+   argument as a `shared_ptr` by value, so every candidate edge cost an atomic
+   increment and decrement. Symbol equality is ID equality, so `LexiconFSA`
+   now compares IDs directly through a new non-virtual `Transition::input_id`.
+   `FSA::step` is untouched and still serves the rule FSTs.
+
+The irregular reverse index did not need changing. It holds one entry per
+stored irregular form, not per lexeme, so it stays proportional to the
+irregular vocabulary rather than to the lexicon.
+
+What is left is inherent to a pointer-chasing trie of one-node-per-character:
+about 580 bytes per lexeme, spread across a `unique_ptr` state, a `unique_ptr`
+transition, a one-element `vector` of outgoing edges per node, and the lexeme
+itself. Cutting it further means giving the lexicon a packed representation
+instead of the generic `Automaton` state and edge objects, which is a larger
+change than this work needed: 2.8 seconds and 260 MB for 450k entries is one
+load at startup for a process that then runs for the length of a corpus.
+
+## The closed class
+
+`data/closed_class.tsv`, 324 words: determiners, prepositions, conjunctions,
+pronouns, auxiliaries and modals, particles, numerals and common
+interjections.
+
+The Wiktionary dump this project builds from carries only noun, verb,
+adjective and adverb, so no built lexicon can supply a single determiner or
+preposition, and those are the most frequent words in any English text. That
+makes them the largest hole a built lexicon leaves, and the reason `the` is
+the canonical `no_analysis` example in
+[SEGMENTATION.md](SEGMENTATION.md).
+
+They load through `--lexicon`, not by default:
+
+```bash
+./analyzer --lexicon data/closed_class.tsv --segment-jsonl
+```
+
+All 324 report `gate: lexicon_stem`. That took three things, which is why the
+file alone was not enough:
+
+- **A part of speech no rule matches.** `PartOfSpeech::FUNCTION`, one new enum
+  value. See decision 6.
+- **`WEIGHT=1.3`**, the top of the frequency-derived scale below. Four of the
+  words are also real inflected forms, and without a weight above the ordinary
+  1.0 the tie-break would report `being` as `be` plus `-ing` and `used` as
+  `use` plus `-d`. Those readings are still available under `--nbest 2`.
+- **No derivational prefix on a function word.** Otherwise `unto` comes apart
+  as `un-` plus the preposition `to`, and `upon` as `up-` plus `on`. English
+  derivational prefixes attach to open-class stems, so the analyzer now
+  declines, and the form generator stops generating the prefixed variants to
+  match. No lexeme is `FUNCTION` unless a closed-class file is loaded, so
+  nothing in the default lexicon is affected.
+
+## The weight scale
+
+Weights are the analyzer's ambiguity ranking, and the existing scale is set by
+two facts: an entry with no `WEIGHT` has weight 1.0, and a derivational reading
+is multiplied by 0.9. So 1.0 is an ordinary word, and a derived reading of an
+ordinary stem scores 0.9 and loses to any stored whole word of ordinary
+frequency. A built lexicon maps Zipf frequency onto the same scale:
+
+```
+weight = clamp(0.70 + 0.075 * zipf, 0.70, 1.30)
+```
+
+| Zipf | Example | Weight |
+|------|---------|-------:|
+| 7.7 | the | 1.28 |
+| 6.0 | time | 1.15 |
+| 4.0 | ordinary word | 1.00 |
+| 3.0 | 1 per million | 0.92 |
+| 1.0 | rare | 0.77 |
+
+Zipf 4 maps to exactly 1.0, so an ordinary word keeps the weight the
+hand-written lexicon gives it, and the 0.9 derivation penalty keeps meaning
+what it meant. The range is deliberately narrow: frequency breaks ties, it
+does not override the morphology. A derived reading of a common stem (0.9 times
+1.15, so 1.035) does outrank a stored rare word (0.77), which is the behaviour
+a tokenizer wants, and `--derived-first` below makes that policy explicit
+rather than a side effect of the arithmetic.
 
 ## Decisions
 
@@ -181,3 +318,29 @@ Judgment calls made while scaling the lexicon, and why. The decisions in
    This is the same stored-versus-derived question Stage 5 below turns into a
    flag. Nothing about the record format changed, and no input lost an
    analysis.
+
+6. **One new part of speech, `FUNCTION`, rather than eight.** The closed-class
+   list needs a category that no inflectional or derivational rule matches.
+   Tagging those words `NOUN` would make `thes` a plural, and `ADVERB` would
+   work mechanically while being false. The obvious alternative is to add
+   `DETERMINER`, `PRONOUN`, `PREPOSITION`, `CONJUNCTION`, `AUXILIARY`,
+   `PARTICLE`, `NUMERAL` and `INTERJECTION`, which is what the comment on the
+   enum has always suggested.
+
+   One value was added instead. The four open classes exist in this enum
+   because each selects an inflectional paradigm, which is the only thing the
+   rules ever ask a part of speech for. A function word has no paradigm, so one
+   uninflecting category covers all of them as far as morphology is concerned,
+   and the difference between a determiner and a preposition is syntax that no
+   rule in this system would read. The finer grouping is kept where a human can
+   see it, as comment headings in `data/closed_class.tsv`. Adding the eight
+   properly is a one-line-each change if a later stage grows a syntax that
+   needs them.
+
+7. **`data/closed_class.tsv` is not loaded by default.** It would be more
+   convenient if it were, and it would change the output of inputs that already
+   have an analysis: `is`, `was`, `been`, `had`, `does`, `being`, `having`,
+   `doing` and `used` all analyze today through `be`, `have`, `do` and `use`,
+   and a `FUNCTION` entry at weight 1.3 outranks them. The segmentation
+   contract fixes those outputs in place, so the file is opt-in. Any corpus
+   evaluation should pass it, and `tools/eval_lexicon.py` does.

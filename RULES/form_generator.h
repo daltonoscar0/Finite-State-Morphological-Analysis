@@ -184,9 +184,13 @@ inline std::vector<GeneratedForm> generate_forms(
         }
     }
 
-    // Prefixed variants, exercising the prefix piece on real stems
-    forms.emplace_back("un" + s, lex, "prefix un-");
-    forms.emplace_back("re" + s, lex, "prefix re-");
+    // Prefixed variants, exercising the prefix piece on real stems. A
+    // derivational prefix does not attach to a closed-class word, and the
+    // analyzer declines to strip one from it, so none is generated either.
+    if (lex->pos() != PartOfSpeech::FUNCTION) {
+        forms.emplace_back("un" + s, lex, "prefix un-");
+        forms.emplace_back("re" + s, lex, "prefix re-");
+    }
 
     return forms;
 }

@@ -41,7 +41,10 @@
 #include "RULES/form_generator.h"
 #include "LANGUAGES/english_configuration.h"
 
+#include <sys/resource.h>
+
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <map>
@@ -360,15 +363,38 @@ void print_usage() {
         << "  analyzer --segment-jsonl     Surface pieces, one word per stdin line\n"
         << "  analyzer --segment-text      Surface pieces, raw text lines via Scalpel\n"
         << "  analyzer --nbest K           Report K analyses per word (default 1)\n"
-        << "  analyzer --selfcheck         List generated forms the analyzer cannot read back\n";
+        << "  analyzer --selfcheck         List generated forms the analyzer cannot read back\n"
+        << "  analyzer --lexicon FILE      Load an extra lexicon TSV; repeatable, merged in order\n"
+        << "  analyzer --load-stats        Print lexicon size, load time and peak RSS to stderr\n";
+}
+
+/**
+ * peak_rss_bytes: Peak resident set size of this process
+ *
+ * getrusage reports ru_maxrss in bytes on macOS and in kilobytes on Linux,
+ * which is a documented difference between the two, so the unit is fixed here
+ * rather than at the call site.
+ *
+ * @return Peak RSS in bytes, or 0 if it could not be read
+ */
+static size_t peak_rss_bytes() {
+    struct rusage usage;
+    if (getrusage(RUSAGE_SELF, &usage) != 0) return 0;
+#ifdef __APPLE__
+    return static_cast<size_t>(usage.ru_maxrss);
+#else
+    return static_cast<size_t>(usage.ru_maxrss) * 1024;
+#endif
 }
 
 int main(int argc, char* argv[]) {
     bool segment_jsonl = false;
     bool segment_text  = false;
     bool selfcheck     = false;
+    bool load_stats    = false;
     int  nbest = 1;
     std::vector<std::string> words;
+    std::vector<std::string> lexicon_files;
 
     for (int i = 1; i < argc; i++) {
         const std::string arg = argv[i];
@@ -379,6 +405,16 @@ int main(int argc, char* argv[]) {
             segment_text = true;
         } else if (arg == "--selfcheck") {
             selfcheck = true;
+        } else if (arg == "--load-stats") {
+            load_stats = true;
+        } else if (arg == "--lexicon") {
+            if (i + 1 >= argc) {
+                std::cerr << "error: --lexicon needs a file" << std::endl;
+                return 2;
+            }
+            lexicon_files.push_back(argv[++i]);
+        } else if (arg.rfind("--lexicon=", 0) == 0) {
+            lexicon_files.push_back(arg.substr(10));
         } else if (arg == "--nbest") {
             if (i + 1 >= argc) {
                 std::cerr << "error: --nbest needs a value" << std::endl;
@@ -421,8 +457,22 @@ int main(int argc, char* argv[]) {
     std::ostream& log = (segmenting || selfcheck) ? std::cerr : std::cout;
 
     log << "Loading English lexicon and rules..." << std::endl;
-    EnglishConfig::initialize(symbols, lexicon, analyzer);
+    const auto load_start = std::chrono::steady_clock::now();
+    EnglishConfig::initialize(symbols, lexicon, analyzer, lexicon_files);
+    const auto load_end = std::chrono::steady_clock::now();
     log << "Loaded " << lexicon.num_lexemes() << " lexemes.\n" << std::endl;
+
+    if (load_stats) {
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            load_end - load_start).count();
+        std::cerr << "load-stats"
+                  << " lexemes=" << lexicon.num_lexemes()
+                  << " states=" << lexicon.num_states()
+                  << " transitions=" << lexicon.num_transitions()
+                  << " load_ms=" << ms
+                  << " rss_mb=" << (peak_rss_bytes() / (1024 * 1024))
+                  << std::endl;
+    }
 
     if (selfcheck) {
         if (!words.empty()) {

@@ -11,7 +11,7 @@
  * LexiconLoader: Load lexicon entries from a TSV file
  *
  * TSV format (tab-separated):
- *   stem  POS  StemClass  [FEATURE=form ...]
+ *   stem  POS  StemClass  [FEATURE=form ...]  [WEIGHT=N.N]
  *
  * Examples:
  *   cat      NOUN    REG
@@ -20,8 +20,17 @@
  *   go       VERB    IRR_GO      PAST=went   PAST_PART=gone
  *   walk     VERB    REG
  *   walk     NOUN    REG
+ *   the      FUNCTION REG
+ *   quickly  ADVERB  REG         WEIGHT=0.96
  *
- * Lines beginning with '#' are comments. Blank lines are ignored.
+ * POS is NOUN, VERB, ADJECTIVE (or ADJ), ADVERB (or ADV), or FUNCTION (or
+ * FUNC) for a closed-class word. WEIGHT sets the ambiguity ranking weight,
+ * default 1.0; see docs/LEXICON.md for the scale.
+ *
+ * Lines beginning with '#' are comments. Blank lines are ignored. Unparsable
+ * lines are skipped with a warning on stderr rather than aborting the load,
+ * because a generated lexicon of half a million entries should not be lost to
+ * one bad row.
  */
 class LexiconLoader {
 public:
@@ -35,8 +44,15 @@ public:
         std::string line;
         int line_num = 0;
 
+        // A generated lexicon can be hundreds of thousands of lines long, so a
+        // warning per bad line would bury everything else. The first few are
+        // printed and the rest are counted.
+        const int max_warnings = 10;
+        int warnings = 0;
+
         while (std::getline(file, line)) {
             line_num++;
+            if (!line.empty() && line.back() == '\r') line.pop_back();
             if (line.empty() || line[0] == '#') continue;
 
             std::istringstream ss(line);
@@ -48,7 +64,11 @@ public:
             StemClass sc = parse_stem_class(sc_str);
 
             if (sc == StemClass::UNKNOWN && sc_str != "UNKNOWN") {
-                std::cerr << "Warning: line " << line_num << ": unknown stem class '" << sc_str << "'" << std::endl;
+                if (++warnings <= max_warnings) {
+                    std::cerr << "Warning: " << filepath << ":" << line_num
+                              << ": unknown stem class '" << sc_str << "'"
+                              << std::endl;
+                }
                 continue;
             }
 
@@ -75,6 +95,13 @@ public:
             lexicon.insert_lexeme(lex);
         }
 
+        if (warnings > max_warnings) {
+            std::cerr << "Warning: " << filepath << ": "
+                      << (warnings - max_warnings)
+                      << " further lines skipped for the same reason"
+                      << std::endl;
+        }
+
         return true;
     }
 
@@ -84,6 +111,7 @@ private:
         if (s == "VERB") return PartOfSpeech::VERB;
         if (s == "ADJECTIVE" || s == "ADJ") return PartOfSpeech::ADJECTIVE;
         if (s == "ADVERB" || s == "ADV") return PartOfSpeech::ADVERB;
+        if (s == "FUNCTION" || s == "FUNC") return PartOfSpeech::FUNCTION;
         return PartOfSpeech::NOUN;
     }
 

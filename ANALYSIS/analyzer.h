@@ -326,6 +326,13 @@ public:
                     if (remainder.size() >= 2) {
                         auto base = analyze(remainder, false);
                         for (auto& ba : base) {
+                            // A derivational prefix attaches to an open-class
+                            // stem. Without this test "unto" comes apart as
+                            // un- plus the preposition "to", and "upon" as
+                            // up- plus "on". No lexeme is FUNCTION unless a
+                            // closed-class file was loaded, so nothing the
+                            // default lexicon analyzes is affected.
+                            if (ba.pos() == PartOfSpeech::FUNCTION) continue;
                             if (!ba.has_prefix()) {
                                 Analysis prefixed = ba;
                                 prefixed.set_prefix(prefix);

@@ -9,6 +9,7 @@
 #include "../RULES/derivation_rule.h"
 #include "../ANALYSIS/analyzer.h"
 #include <memory>
+#include <string>
 #include <vector>
 
 /**
@@ -639,8 +640,23 @@ public:
         analyzer.add_derivation_rule(std::make_shared<MentRule>());
     }
 
-    static void initialize(SymbolTable& symbols, LexiconFSA& lexicon, Analyzer& analyzer) {
+    /**
+     * initialize: Load the lexicon and the rules
+     *
+     * @param symbols    The shared symbol table
+     * @param lexicon    Receives the lexemes
+     * @param analyzer   Receives the rules and the irregular reverse index
+     * @param extra      Extra lexicon files, loaded after the built-in lists
+     *                   in the order given. Empty by default, which leaves the
+     *                   loaded lexicon exactly as it has always been.
+     */
+    static void initialize(SymbolTable& symbols, LexiconFSA& lexicon,
+                           Analyzer& analyzer,
+                           const std::vector<std::string>& extra = {}) {
         load_lexicon(lexicon);
+        for (const auto& path : extra) {
+            LexiconLoader::load_from_tsv(path, lexicon);
+        }
         load_rules(analyzer);
         analyzer.build_irregular_index();
     }

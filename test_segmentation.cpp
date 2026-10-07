@@ -1,12 +1,18 @@
 /**
  * test_segmentation.cpp: Tests for surface-piece segmentation output
  *
- * Four groups:
+ * Six groups:
  *
  *   1. A table of hand-written expected segmentations, one row per case in the
  *      documented convention (regular suffixation, each orthographic
  *      alternation, prefixes, derivation, irregulars, fallback, passthrough,
  *      case preservation).
+ *
+ *   1b. Irregular stems under the productive rules: an irregular verb still
+ *      inflects regularly where it stores nothing, and not where it does.
+ *
+ *   1c. Extra lexicon files, as --lexicon loads them, and the closed-class
+ *      list coming through as known stems.
  *
  *   2. A property test over the whole loaded lexicon. Every lexeme is expanded
  *      into its inflected and derived surface forms using the same stem-class
@@ -36,6 +42,7 @@
 #include "RULES/form_generator.h"
 
 #include <cassert>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <set>
@@ -49,8 +56,14 @@ struct Env {
     SymbolTable symbols;
     LexiconFSA lexicon;
     Analyzer analyzer;
-    Env() : lexicon(&symbols), analyzer(&symbols, &lexicon) {
-        EnglishConfig::initialize(symbols, lexicon, analyzer);
+
+    /**
+     * @param extra  Extra lexicon files, as --lexicon passes them. Empty by
+     *               default, which is the lexicon every other test sees.
+     */
+    explicit Env(const std::vector<std::string>& extra = {})
+        : lexicon(&symbols), analyzer(&symbols, &lexicon) {
+        EnglishConfig::initialize(symbols, lexicon, analyzer, extra);
     }
 };
 
@@ -474,6 +487,89 @@ static void test_irregular_inflection(Env& env) {
     std::cout << "  ✓ noun plurals stay unblocked (sheeps, mouses)" << std::endl;
 }
 
+// ── Group 1c: extra lexicon files ────────────────────────────────────────────
+
+/**
+ * test_extra_lexicon: --lexicon loads a file, and the closed class comes
+ * through as known stems
+ *
+ * Wiktionary's dump carries only the four open classes, so no built lexicon
+ * can supply a determiner or a preposition, and those are the most frequent
+ * words in any text. `data/closed_class.tsv` fills that hole. Every word in it
+ * has to come out as a single known stem, which takes three things working
+ * together: the FUNCTION part of speech that no rule matches, a weight above
+ * the ordinary 1.0 so the function reading outranks a competing inflection
+ * ("being", "used"), and the analyzer declining to strip a derivational
+ * prefix off a function word ("unto", "upon").
+ *
+ * The file is not loaded by default, and that is asserted too: loading it
+ * would change the output of inputs that already had an analysis.
+ */
+static void test_extra_lexicon(Env& plain) {
+    std::cout << "\nTest: --lexicon and the closed-class list" << std::endl;
+
+    std::ifstream file("data/closed_class.tsv");
+    assert(file.is_open() && "run the tests from the repository root");
+
+    std::vector<std::string> words;
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        const size_t tab = line.find('\t');
+        if (tab == std::string::npos) continue;
+        words.push_back(line.substr(0, tab));
+    }
+    assert(words.size() > 250);
+
+    // Not loaded by default: the default lexicon knows none of these as a
+    // function word, and "the" is the canonical no_analysis case elsewhere in
+    // this file.
+    for (const auto& a : plain.analyzer.analyze("the")) {
+        assert(a.pos() != PartOfSpeech::FUNCTION);
+    }
+    assert(plain.analyzer.analyze("the").empty());
+
+    Env loaded({"data/closed_class.tsv"});
+    WordSegmenter ws(&loaded.analyzer, &loaded.lexicon);
+    assert(loaded.lexicon.num_lexemes() ==
+           plain.lexicon.num_lexemes() + words.size());
+
+    size_t checked = 0;
+    for (const auto& word : words) {
+        const auto ranked = ws.segment_word(word);
+        verify(ranked[0], "closed-class:" + word);
+        if (ranked[0].gate != seg_gate::LEXICON_STEM) {
+            std::cerr << "FAIL: " << word << " gate " << ranked[0].gate
+                      << " pieces " << ranked[0].pieces.size() << std::endl;
+            assert(false);
+        }
+        checked++;
+    }
+
+    std::cout << "  lexemes without the file: " << plain.lexicon.num_lexemes()
+              << std::endl;
+    std::cout << "  lexemes with it:          " << loaded.lexicon.num_lexemes()
+              << std::endl;
+    std::cout << "  ✓ " << checked
+              << " closed-class words report gate lexicon_stem" << std::endl;
+
+    // The inflected readings are still there, just ranked below
+    bool found_be_ing = false;
+    for (const auto& seg : ws.segment_word("being")) {
+        if (seg.lemma == "be" && seg.pieces.size() == 2) found_be_ing = true;
+    }
+    assert(found_be_ing);
+    std::cout << "  ✓ being is one piece, with be + -ing still available"
+              << std::endl;
+
+    // A function word is not a stem for prefixation or inflection
+    assert(loaded.analyzer.analyze("unto").size() == 1);
+    assert(!loaded.analyzer.analyze("thes").size());
+    assert(!loaded.analyzer.analyze("ofs").size());
+    std::cout << "  ✓ no prefixing or inflection of function words"
+              << std::endl;
+}
+
 // ── Group 2: property test over the lexicon ──────────────────────────────────
 
 static void test_property_over_lexicon(Env& env, const WordSegmenter& ws) {
@@ -831,6 +927,7 @@ int main() {
 
     test_table(ws);
     test_irregular_inflection(env);
+    test_extra_lexicon(env);
     test_json_escaping();
     test_nbest_records(ws);
     test_fuzz(ws);

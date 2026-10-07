@@ -79,10 +79,23 @@ public:
     
     /**
      * Get the input symbol required to traverse this transition
-     * 
+     *
      * @return Shared pointer to the Symbol that must be matched
      */
     std::shared_ptr<Symbol> input() const { return input_; }
+
+    /**
+     * input_id: ID of the input symbol, without touching the reference count
+     *
+     * input() returns the shared_ptr by value, so reading it to compare one
+     * symbol costs an atomic increment and decrement. That is invisible at the
+     * scale of a rule FST and not at the scale of a lexicon trie, where
+     * walking a 500k-entry lexicon examines tens of millions of transitions.
+     * Symbol equality is ID equality, so comparing IDs is the same test.
+     *
+     * @return The input symbol's unique ID
+     */
+    int input_id() const { return input_->id(); }
     
     // ========== Query Methods ==========
     
