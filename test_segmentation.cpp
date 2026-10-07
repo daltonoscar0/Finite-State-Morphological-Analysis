@@ -33,6 +33,7 @@
 #include "OUTPUT/jsonl_print.h"
 #include "LANGUAGES/english_configuration.h"
 #include "RULES/derivation_rule.h"
+#include "RULES/form_generator.h"
 
 #include <cassert>
 #include <iostream>
@@ -349,133 +350,153 @@ static void test_table(const WordSegmenter& ws) {
     std::cout << "  ✓ <empty line> → no pieces, offsets [0]" << std::endl;
 }
 
-// ── Group 2: property test over the lexicon ──────────────────────────────────
+// ── Group 1b: irregular stems and the productive rules ───────────────────────
 
 /**
- * generated_forms: Surface forms for one lexeme
+ * has_analysis: Does the analyzer report this lemma with this feature?
  *
- * The inflectional FSTs in RULES/ are built for recognition and expose no
- * generation entry point, so the forms are produced here from the lexeme's
- * stem class, which is the same orthography the analyzer reverses during
- * analysis. Irregular forms are taken straight from the lexeme, and
- * derivational forms from the DerivationRule objects the configuration
- * registers, so those two groups come from the existing rule data directly.
+ * @param env   The loaded analyzer
+ * @param word  Surface form to analyze
+ * @param lemma Expected lemma, or "" to accept any
+ * @param tag   Expected feature tag, or "" to accept any
  */
-static std::vector<std::string> generated_forms(
-        const std::shared_ptr<Lexeme>& lex,
-        const std::vector<std::shared_ptr<DerivationRule>>& deriv_rules) {
-
-    const std::string s = lex->stem();
-    const StemClass sc  = lex->stem_class();
-    std::vector<std::string> forms;
-
-    forms.push_back(s);  // the citation form itself
-
-    if (s.empty()) return forms;
-
-    const std::string no_last = s.substr(0, s.size() - 1);
-    const char last = s.back();
-
-    switch (lex->pos()) {
-        case PartOfSpeech::NOUN:
-            if (sc == StemClass::SIBILANT) forms.push_back(s + "es");
-            else if (sc == StemClass::Y_FINAL) forms.push_back(no_last + "ies");
-            else forms.push_back(s + "s");
-            break;
-
-        case PartOfSpeech::VERB:
-            if (sc == StemClass::SIBILANT) {
-                forms.push_back(s + "es");
-                forms.push_back(s + "ed");
-                forms.push_back(s + "ing");
-            } else if (sc == StemClass::Y_FINAL) {
-                forms.push_back(no_last + "ies");
-                forms.push_back(no_last + "ied");
-                forms.push_back(s + "ing");
-            } else if (sc == StemClass::DOUBLE_CONS) {
-                forms.push_back(s + "s");
-                forms.push_back(s + last + "ed");
-                forms.push_back(s + last + "ing");
-            } else if (sc == StemClass::SILENT_E) {
-                forms.push_back(s + "s");
-                forms.push_back(s + "d");
-                forms.push_back(no_last + "ed");
-                forms.push_back(no_last + "ing");
-            } else {
-                forms.push_back(s + "s");
-                forms.push_back(s + "ed");
-                forms.push_back(s + "ing");
-            }
-            break;
-
-        case PartOfSpeech::ADJECTIVE:
-            if (sc == StemClass::Y_FINAL) {
-                forms.push_back(no_last + "ier");
-                forms.push_back(no_last + "iest");
-            } else if (sc == StemClass::DOUBLE_CONS) {
-                forms.push_back(s + last + "er");
-                forms.push_back(s + last + "est");
-            } else if (sc == StemClass::SILENT_E) {
-                forms.push_back(no_last + "er");
-                forms.push_back(no_last + "est");
-            } else {
-                forms.push_back(s + "er");
-                forms.push_back(s + "est");
-            }
-            break;
-
-        case PartOfSpeech::ADVERB:
-        default:
-            break;
-    }
-
-    // Stored irregular forms: mice, went, children, better
-    for (const auto& [feat, form] : lex->irregular_forms_map()) {
-        (void)feat;
-        forms.push_back(form);
-    }
-
-    // Derivational forms, from the registered rules
-    for (const auto& rule : deriv_rules) {
-        if (lex->pos() != rule->source_pos()) continue;
-        if (!rule->applies_to(sc)) continue;
-        forms.push_back(s + rule->suffix());
-        if (rule->needs_y_restoration() && last == 'y') {
-            forms.push_back(no_last + "i" + rule->suffix());
-        }
-        if (sc == StemClass::SILENT_E) {
-            forms.push_back(no_last + rule->suffix());
+static bool has_analysis(Env& env, const std::string& word,
+                         const std::string& lemma, const std::string& tag) {
+    for (const auto& a : env.analyzer.analyze(word)) {
+        if (!lemma.empty() && a.stem() != lemma) continue;
+        if (tag.empty()) return true;
+        for (const auto& f : a.features()) {
+            if (f == tag) return true;
         }
     }
-
-    // A prefixed variant, exercising the prefix piece on real stems
-    forms.push_back("un" + s);
-    forms.push_back("re" + s);
-
-    return forms;
+    return false;
 }
+
+/**
+ * test_irregular_inflection: An irregular stem still inflects regularly where
+ * it stores nothing, and not where it does
+ *
+ * StemClass holds either the orthography or the irregularity, never both, so
+ * an irregular verb used to be shut out of the productive rules entirely and
+ * "breaks", "goes" and "choosing" came back with no analysis at all. The
+ * orthography is now read off the spelling (RULES/orthography.h) and lexical
+ * storage blocks the rule for the feature it stores, so the two halves have to
+ * be tested together: widening without blocking would accept "breaked".
+ */
+static void test_irregular_inflection(Env& env) {
+    std::cout << "\nTest: irregular stems under the productive rules"
+              << std::endl;
+
+    // Must analyze: the stem stores nothing for this feature, and the
+    // spelling fixes how the suffix attaches.
+    const struct { const char* word; const char* lemma; const char* tag; } present[] = {
+        // Plain -s and -ing on an irregular stem
+        {"breaks",    "break",  "+3SG"},
+        {"breaking",  "break",  "+PRES_PART"},
+        {"drinks",    "drink",  "+3SG"},
+        {"drinking",  "drink",  "+PRES_PART"},
+        {"puts",      "put",    "+3SG"},
+        {"gets",      "get",    "+3SG"},
+        // -es, because the stem ends in o or in a sibilant
+        {"goes",      "go",     "+3SG"},
+        {"going",     "go",     "+PRES_PART"},
+        {"teaches",   "teach",  "+3SG"},
+        {"catches",   "catch",  "+3SG"},
+        // A silent e the irregular class hid: chooses, choosing, having
+        {"chooses",   "choose", "+3SG"},
+        {"choosing",  "choose", "+PRES_PART"},
+        {"having",    "have",   "+PRES_PART"},
+        // Short stems where the final e is not silent: being, doing
+        {"being",     "be",     "+PRES_PART"},
+        {"doing",     "do",     "+PRES_PART"},
+        // Regular classes that the feature gate used to exclude
+        {"hopes",     "hope",   "+3SG"},    // SILENT_E verb, plain -s
+        {"stops",     "stop",   "+3SG"},    // DOUBLE_CONS verb, plain -s
+        {"fixed",     "fix",    "+PAST"},   // SIBILANT verb, plain -ed
+        {"passed",    "pass",   "+PAST"},
+        // The verb "light" is regular, not silent-e
+        {"lighting",  "light",  "+PRES_PART"},
+        {"lighted",   "light",  "+PAST"},
+        // -er on a stem that ends in y but is not Y_FINAL
+        {"delayer",   "delay",  ""},
+    };
+
+    for (const auto& c : present) {
+        if (!has_analysis(env, c.word, c.lemma, c.tag)) {
+            std::cerr << "FAIL: " << c.word << " should analyze as " << c.lemma
+                      << " " << c.tag << std::endl;
+            assert(false);
+        }
+        std::cout << "  ✓ " << c.word << " → " << c.lemma << " " << c.tag
+                  << std::endl;
+    }
+
+    // Must not analyze at all. Each of these is blocked by a stored form, or
+    // by an orthography the lexicon does not determine.
+    const char* absent[] = {
+        // The stored past blocks the productive -ed
+        "breaked", "goed", "doed", "beed", "drinked", "ringed", "choosed",
+        "teached", "fighted",
+        // The stored third person singular blocks the productive -s
+        "haves", "bes", "dos",
+        // The stored comparative and superlative block -er and -est
+        "farer", "farest",
+        // An irregular stem that might double its final consonant leaves -ing
+        // undetermined, so the undoubled form is not accepted
+        "puting", "geting",
+        // y-to-i needs the Y_FINAL class, which "delay" does not have
+        "delaier",
+        // The former SILENT_E reading of the verb "light" read an e that is
+        // not in the spelling
+        "lightd", "lighing", "lighment",
+    };
+
+    for (const char* word : absent) {
+        if (!env.analyzer.analyze(word).empty()) {
+            std::cerr << "FAIL: " << word << " should have no analysis, got "
+                      << env.analyzer.analyze(word)[0].to_string() << std::endl;
+            assert(false);
+        }
+    }
+    std::cout << "  ✓ " << (sizeof(absent) / sizeof(absent[0]))
+              << " blocked forms have no analysis" << std::endl;
+
+    // "riding" is the participle of "ride". "rid" would have to double its
+    // consonant to reach it, so the undoubled reading must not appear.
+    assert(has_analysis(env, "riding", "ride", "+PRES_PART"));
+    assert(!has_analysis(env, "riding", "rid", "+PRES_PART"));
+    std::cout << "  ✓ riding is ride, not rid" << std::endl;
+
+    // The noun plural path is deliberately left permissive, so these keep the
+    // analyses the output contract already fixed in place. See docs/LEXICON.md.
+    assert(has_analysis(env, "sheeps", "sheep", "+PL"));
+    assert(has_analysis(env, "mouses", "mouse", "+PL"));
+    std::cout << "  ✓ noun plurals stay unblocked (sheeps, mouses)" << std::endl;
+}
+
+// ── Group 2: property test over the lexicon ──────────────────────────────────
 
 static void test_property_over_lexicon(Env& env, const WordSegmenter& ws) {
     std::cout << "\nTest: invariants over every lexeme's generated forms"
               << std::endl;
 
-    // The same derivation rules the English configuration registers
-    std::vector<std::shared_ptr<DerivationRule>> deriv_rules = {
-        std::make_shared<NessRule>(),
-        std::make_shared<LyRule>(),
-        std::make_shared<AgentiveRule>(),
-        std::make_shared<TionRule>(),
-        std::make_shared<MentRule>()
-    };
+    // The rules the English configuration registered, not a second copy of
+    // the list: generate_forms and the analyzer must see the same objects.
+    const auto& deriv_rules = env.analyzer.derivation_rules();
 
     size_t lexemes = 0, forms = 0, records = 0;
     size_t by_gate_decomposed = 0, by_gate_stem = 0, by_gate_irregular = 0;
     size_t by_gate_none = 0, by_source_fst = 0;
     size_t with_alt = 0, multi_piece = 0;
 
+    // Every generated form the analyzer cannot read back, with the cause it
+    // was generated from, so a regression names the gap rather than a count.
+    std::vector<std::string> unreadable;
+
     for (const auto& lex : env.lexicon.all_lexemes()) {
         lexemes++;
-        for (const auto& form : generated_forms(lex, deriv_rules)) {
+        for (const auto& gf : generate_forms(lex, deriv_rules)) {
+            const std::string& form = gf.surface;
             forms++;
 
             // Every ranked candidate must satisfy the invariants, not just
@@ -493,6 +514,12 @@ static void test_property_over_lexicon(Env& env, const WordSegmenter& ws) {
             else if (best.gate == seg_gate::LEXICON_STEM) by_gate_stem++;
             else if (best.gate == seg_gate::IRREGULAR)    by_gate_irregular++;
             else if (best.gate == seg_gate::NO_ANALYSIS)  by_gate_none++;
+            if (best.source == seg_source::FALLBACK) {
+                unreadable.push_back(form + " (" + gf.lemma + " " +
+                                     pos_to_string(gf.pos) + " " +
+                                     stem_class_to_string(gf.stem_class) + " " +
+                                     gf.origin + ")");
+            }
             if (!best.alt.empty()) with_alt++;
             if (best.pieces.size() > 1) multi_piece++;
 
@@ -523,6 +550,25 @@ static void test_property_over_lexicon(Env& env, const WordSegmenter& ws) {
     std::cout << "  multi-piece splits:    " << multi_piece << std::endl;
     std::cout << "  with an alternation:   " << with_alt << std::endl;
     std::cout << "  ✓ all invariants hold" << std::endl;
+
+    // The analyzer must be able to read back everything its own rules
+    // generate. Anything left here is a gap in the rules or in the lexicon;
+    // see docs/LEXICON.md for the documented remainder.
+    if (!unreadable.empty()) {
+        std::cerr << "FAIL [property] " << unreadable.size()
+                  << " generated forms have no analysis:" << std::endl;
+        for (size_t i = 0; i < unreadable.size() && i < 40; i++) {
+            std::cerr << "  " << unreadable[i] << std::endl;
+        }
+        if (unreadable.size() > 40) {
+            std::cerr << "  ... and " << (unreadable.size() - 40) << " more"
+                      << std::endl;
+        }
+        std::cerr << "Run ./analyzer --selfcheck for the grouped report."
+                  << std::endl;
+        assert(false);
+    }
+    std::cout << "  ✓ every generated form reads back" << std::endl;
 }
 
 // ── Group 3: fuzz-style inputs ───────────────────────────────────────────────
@@ -784,6 +830,7 @@ int main() {
     WordSegmenter ws(&env.analyzer, &env.lexicon);
 
     test_table(ws);
+    test_irregular_inflection(env);
     test_json_escaping();
     test_nbest_records(ws);
     test_fuzz(ws);
