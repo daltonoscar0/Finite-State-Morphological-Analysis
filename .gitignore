@@ -11,3 +11,4 @@ analyzer
 test_*
 !test_*.cpp
 .DS_Store
+.claude/
