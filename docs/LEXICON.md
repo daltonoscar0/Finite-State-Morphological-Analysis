@@ -214,6 +214,131 @@ file alone was not enough:
   match. No lexeme is `FUNCTION` unless a closed-class file is loaded, so
   nothing in the default lexicon is affected.
 
+## Building a lexicon from Wiktionary
+
+Two scripts, both of which write outside the repository. Nothing they produce
+is committed except the 180-line reference sample in
+`data/lexicon_sample.tsv`.
+
+```bash
+# wordfreq lives in a virtualenv outside the repository
+python3 -m venv ~/data/morph/.venv
+~/data/morph/.venv/bin/pip install wordfreq
+
+~/data/morph/.venv/bin/python tools/make_freq.py \
+    --wiktionary ~/data/morph/wiktionary/wikt_en.jsonl \
+    --out ~/data/morph/freq_en.tsv
+
+python3 tools/build_lexicon.py \
+    --wiktionary ~/data/morph/wiktionary/wikt_en.jsonl \
+    --freq ~/data/morph/freq_en.tsv \
+    --out-dir ~/data/morph/lexicons \
+    --sizes 5000,20000,50000,100000,all
+```
+
+`tools/make_freq.py` needs `wordfreq`; `tools/build_lexicon.py` is standard
+library only. If `wordfreq` cannot be installed, `make_freq.py --corpus FILE`
+counts frequencies from a corpus instead and says so in the output header and
+on stderr, because counts from one corpus are not interchangeable with
+wordfreq's blend of several.
+
+`make_freq.py` found a Zipf frequency for 289,023 of the 420,850 lowercase
+a-to-z headwords in the dump. A word it has never seen gets no row, and the
+builder reads a missing row as the floor of the scale, 0.70.
+
+### What comes out
+
+| Lexicon | Words | Entries |
+|---------|------:|--------:|
+| `en_5k.tsv` | 5,000 | 8,736 |
+| `en_20k.tsv` | 20,000 | 29,719 |
+| `en_50k.tsv` | 50,000 | 65,285 |
+| `en_100k.tsv` | 100,000 | 118,758 |
+| `en_all.tsv` | 409,889 | 437,753 |
+
+Sizes are vocabulary sizes, by frequency rank. A word listed under more than
+one part of speech brings all its entries in together, which is why there are
+more entries than words.
+
+| Stem class | Entries | Share |
+|------------|--------:|------:|
+| `NOUN REG` | 158,588 | 36.2% |
+| `ADJECTIVE UNKNOWN` | 122,177 | 27.9% |
+| `NOUN UNKNOWN` | 79,235 | 18.1% |
+| `ADVERB REG` | 21,875 | 5.0% |
+| `VERB SILENT_E` | 13,628 | 3.1% |
+| `VERB REG` | 13,167 | 3.0% |
+| `NOUN Y_FINAL` | 10,603 | 2.4% |
+| `NOUN SIBILANT` | 9,941 | 2.3% |
+| `VERB DOUBLE_CONS` | 2,491 | 0.6% |
+| `VERB SIBILANT` | 1,834 | 0.4% |
+| `ADJECTIVE Y_FINAL` | 1,778 | 0.4% |
+| `VERB Y_FINAL` | 1,342 | 0.3% |
+| the rest | 1,183 | 0.3% |
+
+`ADJECTIVE UNKNOWN` is the second largest group because most English
+adjectives form their comparative with "more" rather than with `-er`, and the
+dump lists no synthetic comparative for them. `NOUN UNKNOWN` is a noun with no
+plural listed.
+
+### Choosing a stem class
+
+Every candidate class is a claim about how suffixes attach, and the dump lists
+the forms, so the claim is testable. The builder generates what each permitted
+class predicts, keeps the class that reproduces the most of the listed forms,
+and writes out whatever it still fails to reproduce as an explicit
+`FEATURE=form`, which the rules read as blocking the productive rule for that
+feature.
+
+```
+break   VERB  REG          PAST=broke  PAST_PART=broken  WEIGHT=1.09
+run     VERB  DOUBLE_CONS  PAST=ran    PAST_PART=run     WEIGHT=1.11
+go      VERB  SIBILANT     PAST=went   PAST_PART=gone    WEIGHT=1.15
+choose  VERB  SILENT_E     PAST=chose  PAST_PART=chosen  WEIGHT=1.07
+city    NOUN  Y_FINAL                                    WEIGHT=1.12
+```
+
+So `breaks` and `breaking` decompose while `breaked` does not analyze;
+`ridding` decomposes while `riding` stays the participle of `ride`; `goes`
+decomposes as `go|es` with `alt: epenthesis`.
+
+### The self-check
+
+`build_lexicon.py` regenerates every entry's forms from the class it chose
+plus the forms it stored, and compares them against the forms the dump listed.
+
+```
+listed forms checked:          313,207
+reproduced:                    313,207
+mismatched:                          0  (0.0000%)
+forms the format cannot hold:    8,368  (2.7%)
+entries with explicit forms:    11,567
+entries with no forms listed:  223,518
+```
+
+The zero is close to a tautology, since the class was chosen to maximise
+matches and the remainder was stored. It is checked anyway, because the
+prediction tables in `build_lexicon.py` duplicate the orthography in
+`RULES/orthography.h`, and a duplicate that drifts is exactly what a build
+should notice.
+
+The 8,368 are forms the format has no slot for: `index` lists both `indexes`
+and `indices` and there is one `PLURAL` field. They are counted, not hidden.
+
+The check against the real rules rather than against a Python copy of them is
+`--selfcheck`, and it passes at every size:
+
+| Lexicon | Lexemes | Generated forms | No analysis |
+|---------|--------:|----------------:|------------:|
+| built-in | 1,825 | 10,684 | 0 |
+| `en_5k` | 10,885 | 59,221 | 0 |
+| `en_20k` | 31,868 | 165,784 | 0 |
+| `en_50k` | 67,434 | 327,319 | 0 |
+| `en_100k` | 120,907 | 536,849 | 0 |
+| `en_all` | 439,902 | 1,756,780 | 0 |
+
+Each row is the built-in lists plus `data/closed_class.tsv` plus that file.
+
 ## The weight scale
 
 Weights are the analyzer's ambiguity ranking, and the existing scale is set by
@@ -344,3 +469,78 @@ Judgment calls made while scaling the lexicon, and why. The decisions in
    and a `FUNCTION` entry at weight 1.3 outranks them. The segmentation
    contract fixes those outputs in place, so the file is opt-in. Any corpus
    evaluation should pass it, and `tools/eval_lexicon.py` does.
+
+8. **Generated entries never use the `IRR_*` stem classes.** An `IRR_*` class
+   says which forms are stored without saying how the rest are spelled, and
+   losing the orthography that way is exactly what left the analyzer unable to
+   read back its own output. A generated entry states an orthographic class and
+   lists its exceptions, which carries strictly more information:
+   `run VERB DOUBLE_CONS PAST=ran PAST_PART=run` says both that the past is
+   `ran` and that the participle is `running`. The hand-written entries still
+   use `IRR_*` and still work, through the spelling-derived orthography of
+   decision 2 above.
+
+9. **A form counts as an inflection only when its tag set is exactly the
+   canonical one.** The brief asks for forms tagged alternative, obsolete,
+   dialectal, archaic or misspelling to be dropped. Requiring an exact match
+   on `["plural"]`, `["participle","past"]` and the rest does that and more,
+   since every variant carries an extra tag, including `rare`, `nonstandard`
+   and the regional ones. It is stricter in the safe direction: the cost of
+   missing a rare plural is an entry with no plural, while the cost of
+   admitting one is a wrong rule. 190,363 of the 266,762 noun lines carry a
+   plural tagged exactly `["plural"]`.
+
+10. **A headword that is only an inflection of another lemma is dropped,
+    12,278 of them.** Wiktionary documents inflected forms as headwords, so the
+    dump has noun entries for `years`, `things`, `men` and `comes`. Loading
+    those as lexemes teaches the analyzer that `years` is a word in its own
+    right, and a stored whole word outranks a decomposition, so exactly the
+    words a tokenizer most needs to split would stop splitting.
+
+    A headword is treated as one of these when some other lemma lists it as an
+    inflection and it lists no inflection of its own. The second condition is
+    what makes it safe: `saw` is the past of `see` and also a noun with its own
+    plural `saws`, so it stays, while `arms` has no plural of its own, so it
+    goes and still analyzes as `arm` plus `-s`. Matching is across parts of
+    speech, so the noun `comes` is recognised as the third person singular of
+    the verb `come`. A form that is its own inflection does not count, or every
+    zero-plural noun would be dropped. `--keep-form-of` turns the filter off.
+
+11. **The most frequent candidate form wins, not the one a regular class
+    predicts.** The dump carries two verbs spelled `break`: the ordinary one
+    with `broke` and `broken`, and a second with the regularized `breaked`.
+    Merging the etymologies gives `PAST` two candidates and the lexicon has one
+    slot. Preferring the candidate a class predicts, to keep the entry regular,
+    looks tidy and is exactly backwards: it discards every irregular past the
+    dump also regularizes somewhere, and `break` came out as plain `REG` with
+    no stored past at all. Frequency separates the two cleanly, by four orders
+    of magnitude, and it is how ties are broken everywhere else here. Being
+    predicted by a class now only breaks a tie between equally frequent
+    candidates.
+
+12. **Deduplication keeps the highest weight, not the first occurrence.** This
+    was a real bug as soon as two lexicons were loaded. The same stem then
+    arrives twice, once from the built-in lists at the default weight of 1.0
+    and once from a generated file at its frequency-derived weight, and the
+    built-in lists load first. Keeping the first occurrence pinned
+    `run +V +PRES_PART` at 1.0, where the generated entry says 1.11, so
+    `running` lost to its own stored noun entry and came out as one piece.
+    `breaking` and `choosing` had the same problem. With the default lexicon
+    alone every weight is 1.0, so the default output is unchanged.
+
+13. **Wiktionary's marginal open-class senses are kept.** The dump has `the`
+    and `to` as adverbs, `and` as a noun and a verb, and a verb `to in` whose
+    participle is `inning`. These are real entries for real if peripheral
+    senses, and they help as often as they hurt: they are why `the` and `of`
+    analyze at all without `data/closed_class.tsv`. Filtering them would need
+    sense-level evidence, and the only field that looks like it, `sense_tags`,
+    is a union over all of a word's senses and so cannot say that a word is
+    marginal in every one of them. Frequency is the available signal, and it is
+    already in the weight.
+
+14. **A noun is never offered `SILENT_E` or `DOUBLE_CONS`.** A noun plural
+    neither deletes a silent e nor doubles a consonant: `house` gives `houses`
+    and `bus` gives `buses`, which `REG` and `SIBILANT` already predict. The
+    first version offered every class to every part of speech and labelled
+    35,047 nouns `SILENT_E`, a class that made no prediction about them and
+    told a reader nothing.

@@ -344,14 +344,28 @@ public:
             }
         }
 
-        // STEP 9: Deduplicate (keep first occurrence / highest weight if unordered)
-        // Use a seen-set approach since duplicates may not be adjacent
+        // STEP 9: Deduplicate, keeping the highest weight of each analysis.
+        // Duplicates may not be adjacent, so this is a scan rather than a
+        // neighbour comparison.
+        //
+        // Keeping the highest weight rather than the first one matters as soon
+        // as more than one lexicon is loaded. The same stem then arrives twice,
+        // once from the built-in lists at the default weight of 1.0 and once
+        // from a generated file at its frequency-derived weight, and the
+        // built-in lists are loaded first. Keeping the first occurrence threw
+        // the frequency away: "running" lost to its own stored noun entry
+        // because "run +V +PRES_PART" was pinned at 1.0. With the default
+        // lexicon alone every weight is 1.0, so nothing changes there.
         {
             std::vector<Analysis> deduped;
             for (auto& r : results) {
                 bool found = false;
-                for (const auto& d : deduped) {
-                    if (r == d) { found = true; break; }
+                for (auto& d : deduped) {
+                    if (r == d) {
+                        if (r.weight() > d.weight()) d.set_weight(r.weight());
+                        found = true;
+                        break;
+                    }
                 }
                 if (!found) deduped.push_back(r);
             }
@@ -438,9 +452,12 @@ private:
             orthography::may_double_final_consonant(lexeme->stem());
 
         if (lexeme->pos() == PartOfSpeech::NOUN) {
-            if (suffix == "s") {
-                features.push_back("+PL");
-            } else if (suffix == "es") {
+            // UNKNOWN is the one class that blocks this, and it is the only
+            // place anything blocks it: see the note on the noun plural path
+            // above. A generated lexicon writes UNKNOWN when the source lists
+            // no plural at all, which is how an uncountable noun arrives, and
+            // no hand-written entry uses it.
+            if (sc != StemClass::UNKNOWN && (suffix == "s" || suffix == "es")) {
                 features.push_back("+PL");
             }
         } else if (lexeme->pos() == PartOfSpeech::VERB) {

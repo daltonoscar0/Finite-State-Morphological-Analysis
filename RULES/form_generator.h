@@ -105,7 +105,14 @@ inline std::vector<GeneratedForm> generate_forms(
         forms.emplace_back(surface, lex, tag);
     };
 
-    switch (lex->pos()) {
+    // UNKNOWN states that no inflectional paradigm was established: an
+    // uncountable noun, a non-gradable adjective. No rule matches it, so
+    // nothing is generated for it either.
+    const PartOfSpeech paradigm = (eff == StemClass::UNKNOWN)
+                                      ? PartOfSpeech::FUNCTION
+                                      : lex->pos();
+
+    switch (paradigm) {
         case PartOfSpeech::NOUN:
             if (eff == StemClass::SIBILANT) add(s + "es", "+PL");
             else if (eff == StemClass::Y_FINAL) add(no_last + "ies", "+PL");
@@ -160,6 +167,7 @@ inline std::vector<GeneratedForm> generate_forms(
             break;
 
         case PartOfSpeech::ADVERB:
+        case PartOfSpeech::FUNCTION:   // also the UNKNOWN class, see above
         default:
             break;
     }
@@ -187,7 +195,10 @@ inline std::vector<GeneratedForm> generate_forms(
     // Prefixed variants, exercising the prefix piece on real stems. A
     // derivational prefix does not attach to a closed-class word, and the
     // analyzer declines to strip one from it, so none is generated either.
-    if (lex->pos() != PartOfSpeech::FUNCTION) {
+    // The analyzer also declines to leave a remainder shorter than two
+    // characters, so a one-letter stem gets no prefixed variant: a built
+    // lexicon contains the single letters as nouns, and "una" is not a word.
+    if (lex->pos() != PartOfSpeech::FUNCTION && s.size() >= 2) {
         forms.emplace_back("un" + s, lex, "prefix un-");
         forms.emplace_back("re" + s, lex, "prefix re-");
     }
