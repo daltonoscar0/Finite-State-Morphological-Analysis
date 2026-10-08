@@ -60,13 +60,17 @@ from score_segmentation import (internal_boundaries, match_boundaries,  # noqa: 
 WORD_RE = re.compile(r"^[a-z]+$")
 
 # An alphabetic token is a run of letters, which may carry an internal
-# apostrophe. Requiring a letter first is what keeps a clitic out of the
-# counts: WikiText writes possessives and negations with a space, as
-# "Federer 's" and "do n't", so a bare "[A-Za-z]+" pattern turns every one of
-# them into a one-letter token. "s" alone came to 7,607 tokens, one percent of
-# the corpus, all of it counted as the analyzer failing on a word that was
-# never a word.
-TOKEN_RE = re.compile(r"[A-Za-z]+(?:['’][A-Za-z]+)*")
+# apostrophe, and which does not begin straight after one.
+#
+# The lookbehind is what keeps a clitic out of the counts. WikiText separates
+# them, writing "Federer 's" and "do n't", so a bare "[A-Za-z]+" pattern reads
+# the possessive as the word "s": 7,607 tokens, one percent of the corpus,
+# every one scored as a failure on something that was never a word. A clitic
+# is not an alphabetic token and does not belong in a coverage figure.
+#
+# "do n't" still yields "n't", which is a token the analyzer fails on, and it
+# is left in: unlike "s" it is at least a real piece of the text.
+TOKEN_RE = re.compile(r"(?<!['’])[A-Za-z]+(?:['’][A-Za-z]+)*")
 
 DEFAULT_CORPUS = "~/data/morph/corpus/sample.txt"
 DEFAULT_LEXICON_DIR = "~/data/morph/lexicons"

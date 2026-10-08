@@ -28,6 +28,12 @@
  *   ./analyzer cats dogs flies    # Batch mode, analyze specific words
  *   ./analyzer --segment-jsonl    # Surface-piece mode, one word per stdin line
  *   ./analyzer --segment-text     # Surface-piece mode, raw text lines
+ *   ./analyzer --lexicon FILE     # Load an extra lexicon TSV, repeatable
+ *   ./analyzer --selfcheck        # Forms the rules generate but cannot read back
+ *   ./analyzer --derived-first    # Rank a decomposition above a stored word
+ *
+ * See docs/SEGMENTATION.md for the surface-piece format and docs/LEXICON.md
+ * for the lexicon flags and the evaluation.
  */
 
 #include "PIPELINE/text_pipeline.h"        // Scalpel bridge (no Tokenizer name clash)
@@ -46,6 +52,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <string>
@@ -459,6 +466,19 @@ int main(int argc, char* argv[]) {
         return 2;
     }
     const bool segmenting = segment_jsonl || segment_text;
+
+    // A lexicon the user named explicitly has to be there. The loader treats
+    // a missing file as a warning, which is right for the optional
+    // data/english_lexicon.tsv and wrong here: carrying on would silently
+    // measure a different lexicon from the one that was asked for.
+    for (const auto& path : lexicon_files) {
+        std::ifstream probe(path);
+        if (!probe.is_open()) {
+            std::cerr << "error: cannot open lexicon file " << path
+                      << std::endl;
+            return 2;
+        }
+    }
 
     // Initialization order matters: SymbolTable must outlive everything else
     SymbolTable symbols;

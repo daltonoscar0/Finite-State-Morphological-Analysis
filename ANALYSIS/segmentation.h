@@ -606,29 +606,33 @@ inline bool segmentation_less(const Segmentation& a, const Segmentation& b) {
 /**
  * segmentation_less_derived_first: The ranking --derived-first selects
  *
- * The only difference from segmentation_less is which key comes first. Here
- * the number of pieces is primary and weight is secondary, so a reading that
- * decomposes into a known stem plus a known affix outranks a stored whole
- * word for the same input. `quickly` becomes `quick` plus `-ly` even though
- * `quickly` is an adverb lexeme in its own right, and `accused` becomes
- * `accuse` plus `-d` even though `accused` is a noun.
+ * One change from segmentation_less: any reading that decomposes outranks any
+ * reading that keeps the word whole. So `quickly` becomes `quick` plus `-ly`
+ * even though `quickly` is an adverb lexeme in its own right, and `accused`
+ * becomes `accuse` plus `-d` even though `accused` is a noun.
  *
- * Everything below the first key is unchanged, so two readings that decompose
- * equally are still ordered by weight and then by the same tie-break as
- * before. The default ranking is untouched, and so is the lexical analysis
- * output, which never consults either of these: this is a reporting policy
- * over analyses the analyzer already produced, not a change to what it
- * produces.
+ * The test is "decomposes at all", not "has more pieces". Ranking purely by
+ * piece count also promotes a three-piece reading over a correct two-piece
+ * one, which turned `recording` into `re|cord|ing` and `underground` into
+ * `under|gr|ound`. Those readings are not competing with a stored whole word,
+ * which is the only competition this flag is meant to settle, so once both
+ * candidates decompose the ordering falls through to segmentation_less and
+ * weight decides: `record` is far more frequent than `cord`.
+ *
+ * The default ranking is untouched, and so is the lexical analysis output,
+ * which never consults either of these. This is a reporting order over
+ * analyses the analyzer already produced, not a change to what it produces,
+ * and both orders rank the same set.
  *
  * The cost is wrong splits on lexicalized words, where the decomposition
- * exists but is not what the word means any more. docs/LEXICON.md measures
- * the trade in both directions.
+ * exists but is not what the word means any more, and on short function words
+ * that happen to end in a suffix. docs/LEXICON.md measures both directions.
  */
 inline bool segmentation_less_derived_first(const Segmentation& a,
                                             const Segmentation& b) {
-    if (a.pieces.size() != b.pieces.size()) {
-        return a.pieces.size() > b.pieces.size();
-    }
+    const bool a_decomposes = a.pieces.size() > 1;
+    const bool b_decomposes = b.pieces.size() > 1;
+    if (a_decomposes != b_decomposes) return a_decomposes;
     return segmentation_less(a, b);
 }
 
