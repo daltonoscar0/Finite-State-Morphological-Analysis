@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Evaluate the analyzer as a tokenizer layer, at several lexicon sizes.
 
-Four stages, each of which can be run on its own:
+Five stages, each of which can be run on its own:
 
   corpus   Coverage on running text. What share of alphabetic tokens the
            analyzer reaches at all, what share it decomposes, and which words
@@ -12,6 +12,10 @@ Four stages, each of which can be run on its own:
            below.
 
   curve    Both of the above for each lexicon size, as a table and as JSON.
+
+  policy   The default ranking against --derived-first: where they disagree,
+           which one the gold prefers, and the worst cases in each direction
+           ordered by corpus frequency.
 
   morpholex  An independent check, if the spreadsheet can be read. Optional
            and reported separately.
@@ -344,6 +348,96 @@ def score_corpus(tokenizer, path, top_fallback=100):
     }
 
 
+# ── Comparing the two ranking policies ──────────────────────────────────────
+
+def corpus_counts(path):
+    """Token counts per lowercase type, for weighting the policy comparison."""
+    counts = collections.Counter()
+    if not os.path.isfile(path):
+        return counts
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            line = line.replace("@-@", "-").replace("@.@", ".").replace("@,@", ",")
+            for token in TOKEN_RE.findall(line):
+                counts[token.lower()] += 1
+    return counts
+
+
+def compare_policies(standard, derived, gold, counts, limit=25):
+    """Where the two rankings disagree, and which one the gold prefers.
+
+    Both policies rank the same analyses, so a disagreement is always one
+    reading winning over another, never a reading appearing or vanishing.
+    Each disagreement falls into one of three buckets: --derived-first agrees
+    with the gold where the default did not, the default agreed and
+    --derived-first does not, or neither agrees.
+
+    The lists are ordered by corpus frequency, because a wrong split on a word
+    nobody writes costs a tokenizer nothing and a wrong split on "government"
+    costs it on every page.
+    """
+    forms = sorted(gold)
+    standard_records = standard.segment_many(forms)
+    derived_records = derived.segment_many(forms)
+
+    counts_by_bucket = collections.Counter()
+    gains, losses, both_wrong = [], [], []
+
+    for form, a, b in zip(forms, standard_records, derived_records):
+        pieces_a, pieces_b = tuple(a["pieces"]), tuple(b["pieces"])
+        if pieces_a == pieces_b:
+            counts_by_bucket["same"] += 1
+            continue
+        counts_by_bucket["differ"] += 1
+        right_a = pieces_a in gold[form]
+        right_b = pieces_b in gold[form]
+        row = (counts.get(form, 0), form, "|".join(pieces_a),
+               "|".join(pieces_b),
+               " or ".join("|".join(p) for p in sorted(gold[form])))
+        if right_b and not right_a:
+            counts_by_bucket["gain"] += 1
+            gains.append(row)
+        elif right_a and not right_b:
+            counts_by_bucket["loss"] += 1
+            losses.append(row)
+        else:
+            counts_by_bucket["neither"] += 1
+            both_wrong.append(row)
+
+    gains.sort(reverse=True)
+    losses.sort(reverse=True)
+    both_wrong.sort(reverse=True)
+    return {
+        "same": counts_by_bucket["same"],
+        "differ": counts_by_bucket["differ"],
+        "gain": counts_by_bucket["gain"],
+        "loss": counts_by_bucket["loss"],
+        "neither": counts_by_bucket["neither"],
+        "top_gains": gains[:limit],
+        "top_losses": losses[:limit],
+        "top_neither": both_wrong[:limit],
+    }
+
+
+def print_policy(name, result):
+    print(f"\n{name}")
+    print(f"  forms where the two policies agree   {result['same']}")
+    print(f"  forms where they differ              {result['differ']}")
+    print(f"    --derived-first right, default wrong   {result['gain']}")
+    print(f"    default right, --derived-first wrong   {result['loss']}")
+    print(f"    neither matches the gold               {result['neither']}")
+    for label, key in (("gains", "top_gains"), ("losses", "top_losses"),
+                       ("neither", "top_neither")):
+        rows = result[key]
+        if not rows:
+            continue
+        print(f"\n  worst {label}, by corpus frequency:")
+        print(f"    {'freq':>6}  {'word':<18}{'default':<22}"
+              f"{'derived-first':<22}gold")
+        for freq, form, a, b, g in rows:
+            print(f"    {freq:>6}  {form:<18}{a:<22}{b:<22}{g}")
+
+
 # ── MorphoLex, the independent check ────────────────────────────────────────
 
 def read_morpholex(path):
@@ -593,7 +687,8 @@ def main(argv=None):
     parser.add_argument("--json", metavar="PATH",
                         help="write every number to this path as JSON")
     parser.add_argument("--stages", default="",
-                        help="comma separated: corpus, gold, curve, morpholex")
+                        help="comma separated: corpus, gold, curve, policy, "
+                             "morpholex")
     parser.add_argument("--all", action="store_true",
                         help="run corpus, gold and curve")
     args = parser.parse_args(argv)
@@ -607,16 +702,20 @@ def main(argv=None):
     corpus = expand(args.corpus)
     report = {"stages": sorted(stages), "derived_first": args.derived_first}
 
-    base = []
-    if args.closed_class:
-        base.append(args.closed_class)
-    base += [expand(p) for p in args.lexicon]
+    # Loaded alongside every lexicon, including every point of the curve,
+    # because no built lexicon can supply a determiner.
+    closed_class = [args.closed_class] if args.closed_class else []
+
+    # The corpus, gold, policy and morpholex stages use whatever --lexicon
+    # asked for. The curve supplies its own lexicon at each point and must not
+    # also load this one, or every point would measure the same thing.
+    base = closed_class + [expand(p) for p in args.lexicon]
 
     gold_limit = args.gold_limit or None
 
     # Gold is read once and shared by the gold and curve stages.
     inflection = derivation = None
-    if stages & {"gold", "curve"}:
+    if stages & {"gold", "curve", "policy"}:
         inflection = read_inflection_gold(expand(args.inflection))
         derivation = read_derivation_gold(expand(args.derivation))
         report["gold_inflection_stats"] = dict(inflection[1])
@@ -658,7 +757,7 @@ def main(argv=None):
             if name and not os.path.isfile(path):
                 print(f"\nnote: skipping {name}, not found in {lexicon_dir}")
                 continue
-            lexicons = list(base)
+            lexicons = list(closed_class)
             if path:
                 lexicons.append(path)
             with FstTokenizer(args.analyzer,
@@ -694,6 +793,21 @@ def main(argv=None):
                       f"derivation F1 {row['derivation_f1']:.3f}")
         print_curve(rows)
         report["curve"] = rows
+
+    if "policy" in stages:
+        print("\n=== Ranking policies: default against --derived-first ===")
+        print("    Both rank the same analyses, so every disagreement is one")
+        print("    reading winning over another, never a reading appearing.")
+        counts = corpus_counts(corpus)
+        with FstTokenizer(args.analyzer,
+                          extra_args=analyzer_args(base, False)) as standard, \
+             FstTokenizer(args.analyzer,
+                          extra_args=analyzer_args(base, True)) as derived:
+            for name, (gold, _stats) in (("Derivation", derivation),
+                                         ("Inflection", inflection)):
+                result = compare_policies(standard, derived, gold, counts)
+                print_policy(name + " gold (in distribution)", result)
+                report["policy_" + name.lower()] = result
 
     if "morpholex" in stages:
         path = expand(args.morpholex)

@@ -367,6 +367,90 @@ does not override the morphology. A derived reading of a common stem (0.9 times
 a tokenizer wants, and `--derived-first` below makes that policy explicit
 rather than a side effect of the arithmetic.
 
+## Evaluation
+
+```bash
+python3 tools/eval_lexicon.py --all --stages morpholex \
+    --lexicon ~/data/morph/lexicons/en_100k.tsv \
+    --json ~/data/morph/eval.json
+```
+
+Standard library only. It drives the analyzer through
+`tools/fst_tokenizer.py`, which keeps one process alive per configuration.
+Four stages, each runnable on its own with `--stages`:
+
+| Stage | What it measures |
+|-------|------------------|
+| `corpus` | Coverage on running text, token weighted and type weighted, plus the 100 most frequent words the analyzer fails on |
+| `gold` | Boundary precision, recall and F1 against MorphyNet, inflection and derivation separately |
+| `curve` | Both of the above at every lexicon size, as a table and as JSON |
+| `morpholex` | The independent held-out check, optional |
+
+`data/closed_class.tsv` is loaded alongside every lexicon by default, since no
+built lexicon can supply a determiner. `--closed-class ''` turns that off.
+
+### On independence
+
+MorphyNet is mined from Wiktionary, which is also what `build_lexicon.py`
+builds from. Scores against the MorphyNet gold for words that are in the
+lexicon are therefore optimistic: the gold and the lexicon are two views of
+one source, and agreeing with yourself is not evidence. Every MorphyNet
+number here is labelled in-distribution and should be read as an upper bound
+and as a regression check, not as accuracy on unseen text.
+
+MorphoLex is independent, built by psycholinguists through a different
+pipeline, and is the honest held-out number. Its licence is non-commercial,
+so it is used for evaluation only and never to build a lexicon.
+
+### The corpus
+
+`~/data/morph/corpus/sample.txt`: 5,009,526 characters of the raw train split
+of WikiText-103, saved outside the repository with the `datasets` package.
+777,416 alphabetic tokens, 40,229 types.
+
+An alphabetic token is a run of letters, which may carry an internal
+apostrophe. Requiring a letter first is what keeps a clitic out of the counts:
+WikiText writes possessives and negations with a space, as `Federer 's` and
+`do n't`, so a bare `[A-Za-z]+` pattern turns every one of them into a
+one-letter token. `s` alone came to 7,607 tokens, one percent of the corpus,
+every one of them scored as a failure on a word that was never a word.
+
+### Converting the gold to surface boundaries
+
+MorphyNet segments against the lemma, not the surface form: `microtome|ing`
+for `microtoming`. The surface boundary is the length of the longest common
+prefix of the first morph and the surface form, which puts the boundary at 8
+and gives `microtom|ing`. For a derivational suffix the boundary is the
+longest common prefix of source and target; for a prefix it is the length of
+the affix.
+
+That is the same convention the analyzer uses, by construction: its stem piece
+is the longest prefix of the surface word shared with the lemma. The two agree
+on where an alternation puts the boundary, so no tolerance for being one
+character out is needed, and `--alt-tolerant` is not used.
+
+| Gold | Rows | Usable | Distinct forms |
+|------|-----:|-------:|---------------:|
+| MorphyNet inflection | 649,593 | 219,025 | 187,083 |
+| MorphyNet derivation | 225,131 | 208,534 | 203,374 |
+| MorphoLex | 68,623 | 10,058 | 10,058 |
+
+An inflection row carries a boundary only when its segmentation has two
+morphs; the other 429,051 rows are the lemma's own row, which has nothing to
+say about a boundary.
+
+MorphoLex gives each morpheme in its canonical form rather than as a slice of
+the surface word, which its data dictionary states explicitly. A row is
+therefore kept only when its morphemes concatenate to the word exactly:
+`agreement` gives `agree` plus `ment` and concatenates, `cities` gives `city`
+plus `s` and does not. 16,189 rows are dropped for that reason and 30,309 more
+have a single morpheme and no boundary to score. Rows that do not concatenate
+are counted and excluded rather than repaired by guesswork, because guessing is
+what would stop an independent gold standard being independent. The surviving
+set is biased towards words with no orthographic alternation, and towards
+multi-root compounds like `aero|naut|ic|al`, which is worth remembering when
+reading the number.
+
 ## Decisions
 
 Judgment calls made while scaling the lexicon, and why. The decisions in

@@ -15,7 +15,7 @@ A finite-state morphological analyzer for English. Given raw text or individual 
 
 The analyzer is built on finite-state automata:
 
-- **LexiconFSA**, a trie storing ~1825 lexemes for O(n) stem lookup
+- **LexiconFSA**, a trie storing the lexemes for O(n) stem lookup: 1,825 built in, or several hundred thousand with `--lexicon` (see [docs/LEXICON.md](docs/LEXICON.md))
 - **MorphRule FSTs**, finite-state transducers encoding inflectional rules per stem class (regular, y-final, sibilant, silent-e, double-consonant, irregular)
 - **DerivationRule**, handles derivational suffixes and prefixes
 - **Scalpel**, an external FSM-based tokenizer for text segmentation (sentence splitting, word/number/punctuation classification)
@@ -98,7 +98,7 @@ Analyses use standard linguistic notation:
 
 ## Lexicon
 
-The lexicon is loaded from hardcoded entries in `LANGUAGES/english_configuration.h` and supplemented by `data/english_lexicon.tsv`. Each entry has a stem, part of speech, and stem class controlling which orthographic rules apply:
+The lexicon is loaded from hardcoded entries in `LANGUAGES/english_configuration.h`, supplemented by `data/english_lexicon.tsv`, and extended by any number of `--lexicon FILE` arguments. Each entry has a stem, part of speech, and stem class controlling which orthographic rules apply:
 
 | Stem class     | Behavior                        | Example             |
 |----------------|---------------------------------|---------------------|
@@ -111,6 +111,7 @@ The lexicon is loaded from hardcoded entries in `LANGUAGES/english_configuration
 | `IRR_CHILD`    | -ren plural                     | child → children    |
 | `IRR_SHEEP`    | Zero-marked plural              | sheep → sheep       |
 | `IRR_OX`       | -en plural                      | ox → oxen           |
+| `UNKNOWN`      | No inflection claimed           | water, abstract     |
 
 The TSV format for supplementary entries:
 
@@ -153,16 +154,39 @@ go	V	REG	PAST=went	WEIGHT=1.0
 │   ├── plural_rule.h               # Noun plurals
 │   ├── verb_rule.h                 # Verb inflection
 │   ├── adj_rule.h                  # Adjective degrees
-│   └── derivation_rule.h           # Derivational morphology
+│   ├── derivation_rule.h           # Derivational morphology
+│   ├── orthography.h               # Spelling-derived suffixation
+│   └── form_generator.h            # Lexeme to its surface forms
 ├── SYMBOLS/                        # Symbol table
 ├── LANGUAGES/                      # Language-specific config
 │   └── english_configuration.h     # English lexicon & rules
 ├── PIPELINE/                       # Scalpel bridge
 ├── OUTPUT/                         # Output formatting
-└── data/
-    └── english_lexicon.tsv         # Supplementary lexicon
+├── data/
+│   ├── english_lexicon.tsv         # Supplementary lexicon
+│   ├── closed_class.tsv            # Determiners, prepositions, pronouns
+│   └── lexicon_sample.tsv          # Sample of a generated lexicon
+└── tools/
+    ├── fst_tokenizer.py            # Long-lived analyzer client
+    ├── score_segmentation.py       # Boundary scorer
+    ├── make_freq.py                # Word frequency table
+    ├── build_lexicon.py            # Wiktionary to lexicon TSV
+    └── eval_lexicon.py             # Coverage and boundary F1
 ```
 
 ## Surface segmentation
 
 See [docs/SEGMENTATION.md](docs/SEGMENTATION.md) for the `--segment-jsonl` and `--segment-text` output formats and the scorer.
+
+## Scaling the lexicon
+
+See [docs/LEXICON.md](docs/LEXICON.md) for `--lexicon`, the closed-class list,
+building a lexicon of several hundred thousand entries from Wiktionary, the
+`--derived-first` ranking policy, and the evaluation harness.
+
+```bash
+./analyzer --selfcheck                             # gaps between the rules and the lexicon
+./analyzer --lexicon data/closed_class.tsv \
+           --lexicon ~/data/morph/lexicons/en_100k.tsv --segment-jsonl
+python3 tools/eval_lexicon.py --all                # coverage and boundary F1
+```
