@@ -171,6 +171,18 @@ The irregular reverse index did not need changing. It holds one entry per
 stored irregular form, not per lexeme, so it stays proportional to the
 irregular vocabulary rather than to the lexicon.
 
+The same measurement on the real lexicons, which share more prefixes than the
+synthetic ones and so need fewer trie nodes per entry:
+
+| Lexicon | Lexemes | Trie nodes | Load | Peak RSS |
+|---------|--------:|-----------:|-----:|---------:|
+| built-in | 1,825 | 4,740 | 5 ms | 3 MB |
+| `en_5k` | 10,561 | 14,875 | 42 ms | 6 MB |
+| `en_20k` | 31,544 | 56,975 | 145 ms | 15 MB |
+| `en_50k` | 67,110 | 146,686 | 337 ms | 35 MB |
+| `en_100k` | 120,583 | 323,373 | 671 ms | 68 MB |
+| `en_all` | 439,578 | 1,482,446 | 2,722 ms | 255 MB |
+
 What is left is inherent to a pointer-chasing trie of one-node-per-character:
 about 580 bytes per lexeme, spread across a `unique_ptr` state, a `unique_ptr`
 transition, a one-element `vector` of outgoing edges per node, and the lexeme
@@ -451,7 +463,308 @@ set is biased towards words with no orthographic alternation, and towards
 multi-root compounds like `aero|naut|ic|al`, which is worth remembering when
 reading the number.
 
-## Decisions
+### Coverage on running text
+
+Built-in lists plus `data/closed_class.tsv` plus `en_100k`, over 770,442
+alphabetic tokens and 40,235 types.
+
+| | Tokens | Types |
+|---|------:|------:|
+| source `fst` | 91.5% | 66.5% |
+| source `fallback` | 8.5% | 33.5% |
+| gate `decomposed` | 14.7% | 28.2% |
+| gate `lexicon_stem` | 74.1% | 36.8% |
+| gate `irregular` | 2.7% | 1.5% |
+| gate `no_analysis` | 8.5% | 33.5% |
+
+The gap between 91.5% of tokens and 66.5% of types is the point of the
+frequency ranking: a third of the vocabulary of a corpus is rare, and it is
+not where the tokens are.
+
+The 100 most frequent words the analyzer still fails on, in order, start:
+
+```
+th 1076   s 1033   british 576   dylan 448   american 415
+st 392    september 377   october 373   january 356   b 352
+ireland 345   km 330   november 328   april 314   december 314
+```
+
+Three kinds of thing, and none of them is a missing common noun: proper nouns
+and demonyms (`british`, `dylan`, `american`, `ireland`, `september`),
+abbreviations and units (`st`, `km`, `ft`, `mm`, `co`), and fragments left by
+the corpus, `th` from `19th` and the single letters from initials. This is the
+right residue to hand to a Unigram layer, and it is why the coverage curve
+flattens: more common vocabulary cannot reach any of it.
+
+### The lexicon size curve
+
+Each row is the built-in lists plus `data/closed_class.tsv` plus one built
+lexicon, under the default ranking. Corpus shares are over the 770,442
+alphabetic tokens and 40,235 types of the WikiText sample. F1 is over internal
+boundaries, counting only the forms the analyzer reached; the figure in
+brackets counts a form it could not reach as a miss.
+
+| Lexicon | Lexemes | Token fst | Type fst | Token decomposed | Inflection F1 | Derivation F1 |
+|---------|--------:|----------:|---------:|-----------------:|--------------:|--------------:|
+| built-in | 2,149 | 63.6% | 11.1% | 7.3% | 0.719 (0.060) | 0.852 (0.066) |
+| `en_5k` | 10,885 | 84.0% | 28.2% | 12.3% | 0.741 (0.157) | 0.845 (0.163) |
+| `en_20k` | 31,868 | 90.2% | 55.1% | 14.3% | 0.793 (0.302) | 0.810 (0.274) |
+| `en_50k` | 67,434 | 91.3% | 65.0% | 14.7% | 0.834 (0.437) | 0.749 (0.335) |
+| `en_100k` | 120,907 | 91.5% | 66.5% | 14.7% | 0.862 (0.540) | 0.661 (0.353) |
+| `en_all` | 439,902 | 91.6% | 67.6% | 14.7% | 0.921 (0.860) | 0.389 (0.373) |
+
+Gold coverage, the share of gold forms the analyzer reaches at all, rises from
+3.3% to 87.0% on inflection and from 3.7% to 94.6% on derivation.
+
+Three things to read out of this.
+
+**Token coverage saturates at about 91.6%, and most of it arrives by 20k
+words.** Going from 20k to 440k buys 1.4 points of token coverage and 12
+points of type coverage. The last 9% of tokens is not a vocabulary problem:
+the most frequent words the analyzer still fails on are `british`, `dylan`,
+`american`, `st`, `september`, `ireland`, `km`. They are proper nouns,
+abbreviations and ordinal suffixes left over from `19th`. No amount of common
+noun vocabulary reaches them, and they are the right thing to hand to a
+Unigram layer.
+
+**Inflection gets steadily better.** F1 goes from 0.719 to 0.921 as the
+lexicon grows, and the version that counts misses as errors goes from 0.060 to
+0.860. This is what the exercise was for.
+
+**Derivation gets steadily worse, from 0.852 to 0.389, and that is the finding
+that matters.** It is not a bug in the rules. A bigger lexicon means more
+derived words are listed as whole words, and a stored whole word outranks a
+derivational reading by the 0.9 factor, so the analyzer stops splitting them.
+Precision stays high on the few it does split and recall collapses. Read the
+other column and the picture inverts: counting misses as errors, derivation F1
+rises from 0.066 to 0.373, because at the small sizes the analyzer was not
+reaching these words at all.
+
+So scale buys coverage and costs decomposition, on exactly the words a
+tokenizer most wants decomposed. That is the tradeoff `--derived-first` exists
+to let you choose.
+
+## `--derived-first`
+
+```bash
+./analyzer --lexicon ~/data/morph/lexicons/en_100k.tsv \
+           --segment-jsonl --derived-first
+```
+
+A segmentation-mode flag. The default ranks candidate segmentations by the
+analyzer's weight, and since a stored whole word scores 1.0 while a
+derivational reading of the same input scores 0.9, the stored word always
+wins: `quickly` stays one piece even when `quick` is in the lexicon.
+`--derived-first` makes the number of pieces the primary key instead, so a
+reading that decomposes into a known stem plus a known affix outranks a stored
+whole word. Everything below that first key is unchanged.
+
+```
+                 default            --derived-first
+quickly          quickly            quick|ly
+slowly           slowly             slow|ly
+happiness        happiness          happ|iness
+government       government         govern|ment
+accused          accused            accuse|d
+nation           nation             nation
+```
+
+Two properties hold by construction rather than by testing:
+
+- **The lexical analysis output is identical either way.** The flag re-ranks
+  surface segmentations, which the lexical path never consults. Passing it
+  outside a segmentation mode is an error with exit status 2 rather than a
+  silent no-op, so there is no configuration in which the lexical output could
+  differ.
+- **Both policies rank the same analyses.** Every disagreement is one reading
+  winning over another, never a reading appearing or vanishing, so nothing is
+  lost: the other reading is still there under `--nbest 2`.
+
+### The tradeoff
+
+Measured with the built-in lists plus `data/closed_class.tsv` plus `en_100k`.
+
+| | Default | `--derived-first` |
+|---|---:|---:|
+| **MorphyNet inflection** (in distribution) | | |
+| exact match, analyzed only | 72.0% | 72.6% |
+| boundary precision | 0.781 | 0.781 |
+| boundary recall | 0.963 | 0.969 |
+| boundary F1 | 0.862 | **0.865** |
+| **MorphyNet derivation** (in distribution) | | |
+| exact match, analyzed only | 45.5% | 47.5% |
+| boundary precision | 0.800 | 0.802 |
+| boundary recall | 0.564 | 0.584 |
+| boundary F1 | 0.661 | **0.676** |
+| **MorphoLex** (held out, independent) | | |
+| exact match, analyzed only | 10.6% | 16.2% |
+| boundary precision | 0.946 | 0.945 |
+| boundary recall | 0.096 | 0.150 |
+| boundary F1 | 0.175 | **0.259** |
+
+Recall rises everywhere and precision barely moves: down a thousandth on
+MorphoLex, up two thousandths on MorphyNet derivation. On these three golds
+the flag is close to free.
+
+On the corpus, with the same lexicon:
+
+| | Default | `--derived-first` |
+|---|---:|---:|
+| source `fst`, tokens | 91.5% | 91.5% |
+| gate `decomposed`, tokens | 14.7% | **20.9%** |
+| gate `decomposed`, types | 28.2% | **31.0%** |
+| gate `lexicon_stem`, tokens | 74.1% | 68.1% |
+
+Coverage is identical, as it has to be: the flag re-ranks analyses rather than
+finding new ones. What changes is that 42% more tokens come out of the layer
+in pieces instead of whole, which for a hybrid tokenizer is the entire point
+of having a morphology layer in front of a Unigram model.
+
+That is a result of narrowing the rule. An earlier version ranked purely by
+piece count, which also promoted three-piece readings over correct two-piece
+ones and cost real precision: `recording` came out as `re|cord|ing`,
+`underground` as `under|gr|ound`, `designed` as `de|sign|ed`. Those readings
+were never competing with a stored whole word, which is the only competition
+this flag exists to settle. Once the test is "decomposes at all" rather than
+"has more pieces", weight decides among decompositions as it always did, and
+`record` beats `cord`.
+
+The independent gold is where it matters most. MorphoLex says the default
+policy is badly under-segmenting: precision 0.946 against recall 0.096, which
+is a layer that is almost always right about the boundaries it reports and
+almost never reports one. `--derived-first` raises recall by half, to 0.150,
+for half a point of precision. Both numbers are low in absolute terms, and the
+reason is not the policy or the lexicon.
+
+### The worst offenders in each direction
+
+`tools/eval_lexicon.py --stages policy` runs both rankings over the same gold
+and sorts the disagreements by corpus frequency, because a wrong split on a
+word nobody writes costs a tokenizer nothing and a wrong split on
+`government` costs it on every page. Over the 203,374 derivational gold
+forms:
+
+| | Forms |
+|---|------:|
+| the two policies agree | 201,524 |
+| they differ | 1,850 |
+| `--derived-first` right, default wrong | 1,639 |
+| default right, `--derived-first` wrong | **0** |
+| neither matches the gold | 211 |
+
+Zero losses is the narrowing at work. Before it, the same comparison showed
+1,619 gains against 1,225 losses.
+
+**Gains, most frequent first.** Real ones: `being`, `used`, `following`,
+`government`, `player`, `building`, `development`, `decided`, `training`,
+`does`, `writer`, `manager`, `wheeler`, `outside`.
+
+```
+   682  being         →  be|ing          646  used        →  use|d
+   550  following     →  follow|ing      414  government  →  govern|ment
+   278  player        →  play|er         262  building    →  build|ing
+   209  development   →  develop|ment    144  decided     →  decide|d
+```
+
+**The count overstates it.** Roughly a third of the top gains are the gold
+being wrong rather than the analyzer getting better. MorphyNet carries
+etymological and plainly spurious derivations, and `--derived-first` happens
+to reproduce them:
+
+```
+  5382  is      →  i|s          1621  has     →  ha|s
+  1745  its     →  it|s         1262  during  →  dur|ing
+   434  until   →  un|til        279  release →  re|lease
+   257  despite →  de|spite      215  river   →  rive|r
+```
+
+**The real cost is the same list, and the gold does not charge for it.**
+Splitting `is` into `i|s` and `has` into `ha|s` is wrong for a tokenizer
+whatever MorphyNet says, and these are among the most frequent words in
+English: `is` alone is 5,382 tokens of the sample. They split because `i` and
+`ha` are noun lexemes in Wiktionary, so a decomposition exists, and
+`--derived-first` promotes any decomposition over a whole word.
+`data/closed_class.tsv` does not protect them: its weight of 1.3 wins on the
+default ranking and is never consulted on this one, where piece count comes
+first.
+
+The fix is one line and is not taken here, because it needs the part of
+speech to reach the segmenter, which currently sees only the analysis: a
+closed-class word has no morphology by definition, so a decomposition should
+never be promoted over a `FUNCTION` reading. Until then,
+`--derived-first` is best paired with a downstream filter on the handful of
+function words, or used without `data/closed_class.tsv` and with those words
+handled by the Unigram layer.
+
+**Where neither policy matches, 211 forms, it is usually a disagreement about
+which base, not about whether to split.**
+
+```
+   252  production  default production  derived produc|tion  gold product|ion
+   145  action      default action      derived ac|tion      gold act|ion
+   112  department  default department  derived de|part|ment gold depart|ment
+    70  really      default really      derived re|ally      gold real|ly
+```
+
+`production` through `produce` and `-tion` gives `produc|tion`; MorphyNet
+derives it from `product` and `-ion` and gives `product|ion`. Both are
+defensible and the rule set only has `-tion`. `department` and `really` are
+over-stripped prefixes, `de-` and `re-`, which the default ranking hid by
+preferring the whole word.
+
+### Both policies at every lexicon size
+
+A star marks `--derived-first`.
+
+| Lexicon | Lexemes | Token dec. | Token dec.\* | Inflection F1 | Inflection F1\* | Derivation F1 | Derivation F1\* |
+|---------|--------:|-----------:|-------------:|--------------:|----------------:|--------------:|----------------:|
+| built-in | 2,149 | 7.3% | 7.8% | 0.719 | 0.719 | 0.852 | 0.855 |
+| `en_5k` | 10,885 | 12.3% | 17.2% | 0.741 | 0.742 | 0.845 | 0.851 |
+| `en_20k` | 31,868 | 14.3% | 20.0% | 0.793 | 0.795 | 0.810 | 0.822 |
+| `en_50k` | 67,434 | 14.7% | 20.8% | 0.834 | 0.837 | 0.749 | 0.764 |
+| `en_100k` | 120,907 | 14.7% | 20.9% | 0.862 | 0.865 | 0.661 | 0.676 |
+| `en_all` | 439,902 | 14.7% | 21.1% | 0.921 | 0.923 | 0.389 | 0.403 |
+
+`--derived-first` is ahead at every size on every column, and the gap in what
+actually gets decomposed widens with the lexicon: 0.5 points at the built-in
+size, 6.4 points at 440k, a 44% relative increase in the share of tokens the
+layer hands on in pieces.
+
+It does not reverse the decline in derivation F1, though, and that is worth
+being clear about. Scale still costs derivational recall even with the flag
+on, because by `en_all` most derived words have no competing decomposition for
+the flag to promote: the rule set has no `-ic`, `-ist`, `-able` or `-ism`, so
+there is only ever one reading to rank.
+
+### The ceiling is the rule inventory, not the lexicon
+
+The analyzer knows five derivational suffixes, `-ness`, `-ly`, `-er`, `-tion`
+and `-ment`, and fifteen prefixes. The MorphyNet derivational gold uses 2,302
+distinct affixes. Only 32.5% of its rows use an affix these rules have ever
+heard of, and the same is true of `-ic`, `-ist`, `-able`, `-less`, `-ism`,
+`-ity`, `-al`, `-ful` and `-ive`, each of which appears thousands of times.
+
+Counting the boundaries rather than the rows, and allowing a boundary to count
+as reachable if a known prefix starts the word or a known suffix ends it:
+
+| Gold | Boundaries | Reachable | Recall ceiling |
+|------|-----------:|----------:|---------------:|
+| MorphyNet derivation | 203,374 | 67,162 | 0.330 |
+| MorphoLex | 11,797 | 2,759 | 0.234 |
+
+Against those ceilings, and comparing like with like by using the
+all-forms recall:
+
+| | Default | `--derived-first` | Ceiling | Share of ceiling |
+|---|---:|---:|---:|---:|
+| MorphyNet derivation | 0.226 | 0.236 | 0.330 | 68% → 72% |
+| MorphoLex | 0.081 | 0.127 | 0.234 | 35% → 54% |
+
+So `--derived-first` closes a third of the remaining gap on the independent
+gold, and what is left is mostly affixes the rule set does not have, plus the
+15.6% of MorphoLex entries that need three or more pieces. Adding suffixes is
+the next thing worth doing, and it is a change to `RULES/derivation_rule.h`
+rather than to the lexicon.
 
 Judgment calls made while scaling the lexicon, and why. The decisions in
 [SEGMENTATION.md](SEGMENTATION.md) still stand; these are in addition.
@@ -628,3 +941,42 @@ Judgment calls made while scaling the lexicon, and why. The decisions in
     first version offered every class to every part of speech and labelled
     35,047 nouns `SILENT_E`, a class that made no prediction about them and
     told a reader nothing.
+
+15. **`--derived-first` is an error outside a segmentation mode, not a silent
+    no-op.** The flag re-ranks surface segmentations, and the lexical analysis
+    path never consults that ranking, so `./analyzer --derived-first cats`
+    would do exactly nothing. Accepting it there would leave a user believing
+    they had changed the output. Rejecting it with exit status 2 also makes
+    the brief's requirement structural rather than tested: there is no
+    configuration in which the lexical output differs between the policies.
+
+16. **The `--derived-first` test is "decomposes at all", not "has more
+    pieces".** Ranking purely by piece count is the obvious reading and it is
+    wrong. It promotes a three-piece reading over a correct two-piece one,
+    which turned `recording` into `re|cord|ing`, `underground` into
+    `under|gr|ound` and `designed` into `de|sign|ed`. Those readings are not
+    competing with a stored whole word, which is the only competition the flag
+    exists to settle. On the derivational gold the piece-count version scored
+    1,619 gains against 1,225 losses; the narrowed one scores 1,639 against
+    zero.
+
+17. **A clitic is not an alphabetic token.** WikiText separates them, writing
+    `Federer 's` and `do n't`, so the obvious `[A-Za-z]+` pattern reads the
+    possessive as the word `s`: 7,607 tokens, one percent of the corpus, every
+    one of them scored as the analyzer failing on something that was never a
+    word, and the single largest entry in the fallback list. The pattern now
+    refuses to start a token straight after an apostrophe. `n't` is still
+    counted and still fails, which is fair: unlike `s` it is a real piece of
+    the text.
+
+18. **MorphoLex rows whose morphemes do not concatenate to the word are
+    dropped, not repaired.** Its data dictionary says the segmentation column
+    gives each morpheme in its canonical form, so `cities` comes out as `city`
+    plus `s`, which is not a pair of surface slices and cannot be scored
+    against surface pieces. 16,189 of 68,623 rows go that way, on top of
+    30,309 with a single morpheme and no boundary at all. Recovering them
+    would mean guessing where the surface boundary fell, and guessing is
+    exactly what would stop an independent gold standard being independent.
+    The 10,058 that survive are biased towards words with no alternation and
+    towards multi-root compounds, which is worth remembering when reading the
+    number.
