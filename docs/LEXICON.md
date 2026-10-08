@@ -655,6 +655,9 @@ forms:
 Zero losses is the narrowing at work. Before it, the same comparison showed
 1,619 gains against 1,225 losses.
 
+The inflectional gold agrees: over its 187,083 forms the two policies differ
+on 465, with 452 gains, no losses and 13 where neither matches.
+
 **Gains, most frequent first.** Real ones: `being`, `used`, `following`,
 `government`, `player`, `building`, `development`, `decided`, `training`,
 `does`, `writer`, `manager`, `wheeler`, `outside`.
