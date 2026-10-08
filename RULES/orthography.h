@@ -59,14 +59,18 @@ inline bool takes_es(const std::string& stem) {
  * has_silent_e: Does the stem end in a silent e that a vowel-initial suffix
  * deletes?
  *
- * The e has to follow a consonant: "choose" gives "choosing", but "see" gives
- * "seeing" and "free" gives "freeing", where the e is part of a vowel digraph.
- * Two-letter stems are excluded for the same reason, so "be" gives "being".
+ * The e is deleted after a consonant, as in "choose" giving "choosing", and
+ * after u, as in "argue" giving "arguing" and "accrue" giving "accruing". It
+ * is kept after any other vowel, where it is part of a digraph: "see" gives
+ * "seeing", "free" gives "freeing", "canoe" gives "canoeing", "hoe" gives
+ * "hoeing". Two-letter stems are excluded for the same reason, so "be" gives
+ * "being".
  */
 inline bool has_silent_e(const std::string& stem) {
     if (stem.size() < 3) return false;
     if (stem.back() != 'e') return false;
-    return !is_vowel(stem[stem.size() - 2]);
+    const char before = stem[stem.size() - 2];
+    return !is_vowel(before) || before == 'u';
 }
 
 /**

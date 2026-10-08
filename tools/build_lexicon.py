@@ -108,8 +108,15 @@ def takes_es(stem):
 
 
 def has_silent_e(stem):
-    """Does the stem end in a consonant plus a silent e, as in "choose"?"""
-    return len(stem) >= 3 and stem[-1] == "e" and stem[-2] not in VOWELS
+    """Does the stem end in a silent e that a vowel-initial suffix deletes?
+
+    Deleted after a consonant ("choose", "choosing") and after u ("argue",
+    "arguing"); kept after any other vowel, where the e is part of a digraph
+    ("see", "seeing"). Mirrors orthography::has_silent_e.
+    """
+    if len(stem) < 3 or stem[-1] != "e":
+        return False
+    return stem[-2] not in VOWELS or stem[-2] == "u"
 
 
 def has_consonant_y(stem):
