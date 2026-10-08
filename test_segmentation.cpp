@@ -14,6 +14,9 @@
  *   1c. Extra lexicon files, as --lexicon loads them, and the closed-class
  *      list coming through as known stems.
  *
+ *   1d. The --derived-first ranking, which promotes a decomposition over a
+ *      stored whole word.
+ *
  *   2. A property test over the whole loaded lexicon. Every lexeme is expanded
  *      into its inflected and derived surface forms using the same stem-class
  *      orthography the analyzer reverses, and the output invariants are
@@ -474,6 +477,15 @@ static void test_irregular_inflection(Env& env) {
     std::cout << "  ✓ " << (sizeof(absent) / sizeof(absent[0]))
               << " blocked forms have no analysis" << std::endl;
 
+    // The silent e is deleted after u as well as after a consonant, so
+    // "argue" gives "arguing". It is kept after any other vowel, where it is
+    // part of a digraph, so "see" gives "seeing" and not "sing".
+    assert(has_analysis(env, "arguing", "argue", "+PRES_PART"));
+    assert(has_analysis(env, "seeing", "see", "+PRES_PART"));
+    assert(!has_analysis(env, "sing", "see", "+PRES_PART"));
+    assert(!has_analysis(env, "freing", "free", "+PRES_PART"));
+    std::cout << "  ✓ arguing deletes its e, seeing keeps it" << std::endl;
+
     // "riding" is the participle of "ride". "rid" would have to double its
     // consonant to reach it, so the undoubled reading must not appear.
     assert(has_analysis(env, "riding", "ride", "+PRES_PART"));
@@ -568,6 +580,78 @@ static void test_extra_lexicon(Env& plain) {
     assert(!loaded.analyzer.analyze("ofs").size());
     std::cout << "  ✓ no prefixing or inflection of function words"
               << std::endl;
+}
+
+// ── Group 1d: the --derived-first policy ─────────────────────────────────────
+
+/**
+ * test_derived_first: The flag promotes a decomposition over a stored word
+ *
+ * The default ranks by weight, and a stored whole word at 1.0 outranks a
+ * derivational reading of the same input at 0.9, so `clearly` stays one piece
+ * even though `clear` is in the lexicon. `--derived-first` makes the number of
+ * pieces the primary key instead, which flips exactly those cases and nothing
+ * else: both orders agree below the first key, and an input with only one
+ * reading has nothing to re-rank.
+ *
+ * Three things are asserted. The flag changes what it should: `clearly` and
+ * `movement` decompose. It leaves alone what it cannot reach: `quickly` and
+ * `teacher` stay whole because `quick` and `teach` are not in the built-in
+ * lexicon at all, so no second reading exists to promote. And the set of
+ * analyses is identical under both policies, which is what keeps the lexical
+ * output byte for byte the same: the flag is a reporting order over analyses
+ * the analyzer already produced.
+ */
+static void test_derived_first(Env& env) {
+    std::cout << "\nTest: the --derived-first ranking" << std::endl;
+
+    const WordSegmenter standard(&env.analyzer, &env.lexicon, false);
+    const WordSegmenter derived(&env.analyzer, &env.lexicon, true);
+
+    // Words with both a stored whole form and a derivational reading
+    const struct { const char* word; const char* decomposed; } flips[] = {
+        {"clearly",  "clear|ly"},
+        {"movement", "move|ment"},
+    };
+    for (const auto& c : flips) {
+        const auto before = standard.segment_word(c.word);
+        const auto after = derived.segment_word(c.word);
+        verify(before[0], std::string("standard:") + c.word);
+        verify(after[0], std::string("derived:") + c.word);
+        assert(before[0].pieces.size() == 1);
+        assert(before[0].gate == seg_gate::LEXICON_STEM);
+        assert(join_pieces(after[0]) == c.decomposed);
+        assert(after[0].gate == seg_gate::DECOMPOSED);
+        std::cout << "  ✓ " << c.word << ": " << join_pieces(before[0])
+                  << " → " << join_pieces(after[0]) << std::endl;
+    }
+
+    // Stored words whose stem is not in the lexicon have no second reading
+    for (const char* word : {"quickly", "slowly", "teacher"}) {
+        const auto after = derived.segment_word(word);
+        verify(after[0], std::string("derived:") + word);
+        assert(after[0].pieces.size() == 1);
+        assert(after[0].gate == seg_gate::LEXICON_STEM);
+    }
+    std::cout << "  ✓ quickly, slowly and teacher stay whole: no stem to "
+                 "decompose onto" << std::endl;
+
+    // Both policies rank the same set of analyses, so nothing is lost
+    size_t compared = 0;
+    for (const char* word : {"cats", "cities", "unhappiness", "went", "sheep",
+                             "clearly", "movement", "quickly", "stopped",
+                             "hoping", "unkind", "zxqvkj", "42", ""}) {
+        const auto before = standard.segment_word(word);
+        const auto after = derived.segment_word(word);
+        assert(before.size() == after.size());
+        std::set<std::string> a, b;
+        for (const auto& s : before) a.insert(join_pieces(s) + " " + s.lemma);
+        for (const auto& s : after) b.insert(join_pieces(s) + " " + s.lemma);
+        assert(a == b);
+        compared++;
+    }
+    std::cout << "  ✓ both policies rank the same analyses, over "
+              << compared << " inputs" << std::endl;
 }
 
 // ── Group 2: property test over the lexicon ──────────────────────────────────
@@ -928,6 +1012,7 @@ int main() {
     test_table(ws);
     test_irregular_inflection(env);
     test_extra_lexicon(env);
+    test_derived_first(env);
     test_json_escaping();
     test_nbest_records(ws);
     test_fuzz(ws);

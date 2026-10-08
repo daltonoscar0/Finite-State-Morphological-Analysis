@@ -603,6 +603,35 @@ inline bool segmentation_less(const Segmentation& a, const Segmentation& b) {
     return a.alt < b.alt;
 }
 
+/**
+ * segmentation_less_derived_first: The ranking --derived-first selects
+ *
+ * The only difference from segmentation_less is which key comes first. Here
+ * the number of pieces is primary and weight is secondary, so a reading that
+ * decomposes into a known stem plus a known affix outranks a stored whole
+ * word for the same input. `quickly` becomes `quick` plus `-ly` even though
+ * `quickly` is an adverb lexeme in its own right, and `accused` becomes
+ * `accuse` plus `-d` even though `accused` is a noun.
+ *
+ * Everything below the first key is unchanged, so two readings that decompose
+ * equally are still ordered by weight and then by the same tie-break as
+ * before. The default ranking is untouched, and so is the lexical analysis
+ * output, which never consults either of these: this is a reporting policy
+ * over analyses the analyzer already produced, not a change to what it
+ * produces.
+ *
+ * The cost is wrong splits on lexicalized words, where the decomposition
+ * exists but is not what the word means any more. docs/LEXICON.md measures
+ * the trade in both directions.
+ */
+inline bool segmentation_less_derived_first(const Segmentation& a,
+                                            const Segmentation& b) {
+    if (a.pieces.size() != b.pieces.size()) {
+        return a.pieces.size() > b.pieces.size();
+    }
+    return segmentation_less(a, b);
+}
+
 /** same_segmentation: Do two records describe the same surface split? */
 inline bool same_segmentation(const Segmentation& a, const Segmentation& b) {
     if (a.pieces.size() != b.pieces.size()) return false;

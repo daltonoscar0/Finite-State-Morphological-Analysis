@@ -365,7 +365,8 @@ void print_usage() {
         << "  analyzer --nbest K           Report K analyses per word (default 1)\n"
         << "  analyzer --selfcheck         List generated forms the analyzer cannot read back\n"
         << "  analyzer --lexicon FILE      Load an extra lexicon TSV; repeatable, merged in order\n"
-        << "  analyzer --load-stats        Print lexicon size, load time and peak RSS to stderr\n";
+        << "  analyzer --load-stats        Print lexicon size, load time and peak RSS to stderr\n"
+        << "  analyzer --derived-first     Rank a decomposed reading above a stored whole word\n";
 }
 
 /**
@@ -392,6 +393,7 @@ int main(int argc, char* argv[]) {
     bool segment_text  = false;
     bool selfcheck     = false;
     bool load_stats    = false;
+    bool derived_first = false;
     int  nbest = 1;
     std::vector<std::string> words;
     std::vector<std::string> lexicon_files;
@@ -407,6 +409,8 @@ int main(int argc, char* argv[]) {
             selfcheck = true;
         } else if (arg == "--load-stats") {
             load_stats = true;
+        } else if (arg == "--derived-first") {
+            derived_first = true;
         } else if (arg == "--lexicon") {
             if (i + 1 >= argc) {
                 std::cerr << "error: --lexicon needs a file" << std::endl;
@@ -441,6 +445,16 @@ int main(int argc, char* argv[]) {
     }
     if (selfcheck && (segment_jsonl || segment_text)) {
         std::cerr << "error: --selfcheck and the segmentation modes are exclusive"
+                  << std::endl;
+        return 2;
+    }
+    // --derived-first re-ranks surface segmentations. The lexical analysis
+    // output does not go through that ranking at all and is identical under
+    // either policy, so asking for the flag outside a segmentation mode is a
+    // mistake worth reporting rather than ignoring.
+    if (derived_first && !segment_jsonl && !segment_text && !selfcheck) {
+        std::cerr << "error: --derived-first applies to the segmentation "
+                     "modes; the lexical output is the same either way"
                   << std::endl;
         return 2;
     }
@@ -479,7 +493,7 @@ int main(int argc, char* argv[]) {
             std::cerr << "note: --selfcheck walks the lexicon, ignoring "
                       << words.size() << " command-line word(s)" << std::endl;
         }
-        WordSegmenter segmenter(&analyzer, &lexicon);
+        WordSegmenter segmenter(&analyzer, &lexicon, derived_first);
         selfcheck_mode(segmenter, lexicon, analyzer);
         return 0;
     }
@@ -489,7 +503,7 @@ int main(int argc, char* argv[]) {
             std::cerr << "note: segmentation mode reads stdin, ignoring "
                       << words.size() << " command-line word(s)" << std::endl;
         }
-        WordSegmenter segmenter(&analyzer, &lexicon);
+        WordSegmenter segmenter(&analyzer, &lexicon, derived_first);
         if (segment_jsonl) {
             segment_jsonl_mode(segmenter, nbest);
         } else {
