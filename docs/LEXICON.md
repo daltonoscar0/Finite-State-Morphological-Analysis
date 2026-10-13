@@ -600,7 +600,8 @@ Two properties hold by construction rather than by testing:
 
 ### The tradeoff
 
-Measured with the built-in lists plus `data/closed_class.tsv` plus `en_100k`.
+Measured with the built-in lists plus `data/closed_class.tsv` plus `en_100k`,
+and before the guard below. `docs/BASELINES.md` has the numbers after it.
 
 | | Default | `--derived-first` |
 |---|---:|---:|
@@ -709,18 +710,7 @@ English: `is` alone is 5,382 tokens of the sample. They split because `i` and
 default ranking and is never consulted on this one, where piece count comes
 first.
 
-The fix is small and is not taken here. A closed-class word has no morphology
-by definition, so a decomposition should never be promoted over a `FUNCTION`
-reading, but the ranking compares two `Segmentation` records and that record
-carries no part of speech: the segmenter reads one off the analysis to build
-the record and then drops it. Threading it through is a field on the record
-that nothing prints and a test in the comparator, so it changes neither the
-output contract nor the default ranking, and it belongs with a round of
-measurement of its own rather than after the tables above were taken. Until
-then,
-`--derived-first` is best paired with a downstream filter on the handful of
-function words, or used without `data/closed_class.tsv` and with those words
-handled by the Unigram layer.
+That is what the guard below fixes.
 
 **Where neither policy matches, 211 forms, it is usually a disagreement about
 which base, not about whether to split.**
@@ -738,9 +728,89 @@ defensible and the rule set only has `-tion`. `department` and `really` are
 over-stripped prefixes, `de-` and `re-`, which the default ranking hid by
 preferring the whole word.
 
+### The guard on the promotion
+
+The tables above were measured before the guard, with the flag promoting any
+reading that decomposed. A decomposition may now outrank a stored whole word
+only when four conditions hold. `Segmenter::is_promotable` in
+`ANALYSIS/segmentation.h` is the one place they live, and the record carries
+the verdict in a field, `promotable`, that nothing prints.
+
+1. **The word is not closed class.** A function word has no morphology, so a
+   decomposition of one is wrong whatever the lexicon says about its
+   substrings. `data/closed_class.tsv` is read for this independently of
+   `--lexicon`, as a list of surface strings rather than as a lexicon, because
+   the file is opt-in and the words that need protecting are the most frequent
+   in the language. See `LEXICON/closed_class.h`. A `FUNCTION` lexeme for the
+   word counts as well, for a closed-class file that was loaded as a lexicon.
+
+2. **The lemma is at least three characters.** This is where the spurious
+   readings come from: the noun `i` with a plural, the nouns `hi`, `wa` and
+   `u`. The lemma is measured rather than the stem piece, since an alternation
+   can leave the piece shorter: `flies` is `fl|ies` from the three-letter lemma
+   `fly`.
+
+3. **The lemma is a lexeme under the part of speech the affix attaches to.**
+   True by construction of every rule-derived reading, since that is how it was
+   found. Stating it in the guard rather than assuming it is what keeps
+   precision where it is: no rule fires on a stem the lexicon does not hold.
+
+4. **Where the affix is one or two characters, the whole word is not more
+   frequent than the stem.** The weight scale above is the frequency, and a
+   weight of 1.0 that was never stated counts as unknown and passes.
+
+The brief for this work stated the fourth condition as "the whole word has
+lower frequency weight than the stem", over any affix, and asked for it to be
+measured and dropped if it cost correct splits. It does, and dropping it
+outright costs more. Measured over MorphoLex with the closed class plus
+`en_100k` and the flag on:
+
+| Condition 4 | P | R | F1 | exact | boundaries found |
+|---|---:|---:|---:|---:|---:|
+| as stated, any affix, strictly lower | 0.956 | 0.118 | 0.211 | 0.130 | 1,397 |
+| dropped | 0.946 | 0.126 | 0.223 | 0.137 | 1,491 |
+| **as implemented**, affix of 1 to 2 characters, not higher | 0.955 | 0.123 | 0.217 | 0.134 | 1,446 |
+
+As stated it loses `government` and `quickly`, two of the five splits the flag
+exists to produce: `government` at weight 1.12 outweighs `govern` at 0.98, and
+`quickly` and `quick` are both 1.07, which a strict inequality rejects.
+Dropping it puts `numb|er` back, and `number` against `higher` is why frequency
+cannot simply be abandoned. The two words are the same shape, a stored noun
+whose only decomposition is an adjective plus comparative `-er`, and the only
+thing that separates them is that `number` is about 130 times more frequent
+than `numb` while `higher` is less frequent than `high`. No test the morphology
+can run tells them apart.
+
+So the condition is kept where accidental suffix matches actually live, which
+is the one and two character affixes, and the longer unambiguous ones (`-ment`,
+`-ness`, `-ity`, `-ation`) are exempt. The comparison is "not more frequent"
+rather than "less frequent", which is what keeps `quickly`. Against dropping
+condition 4, the narrowed version gives up 45 of the 94 boundaries on MorphoLex
+and takes back 16 of the 20 false ones, and on running text it changes 861 of
+the 125,852 test types, 75,347 tokens or 0.78% of them. The top of that list,
+by test frequency:
+
+```
+  7336  really    re|ally  → really      3505  mother  moth|er  → mother
+  3403  number    numb|er  → number      2763  remember  re|member → remember
+  2295  matter    matte|r  → matter      1980  paper   pap|er   → paper
+  1946  color     co|lor   → color       1629  rather  rathe|r  → rather
+  1566  sister    sist|er  → sister      1140  river   rive|r   → river
+```
+
+and the cost, the correct splits it gives up, is the same list further down:
+`actually` (2,771), `exactly` (1,007), `tired` (965), `decided` (899),
+`suddenly` (723). Fifteen of the top twenty are wrong splits it fixes and five
+are right ones it loses, about five to one by tokens, which is why it is in.
+
+Two things the guard deliberately does not do. It does not withdraw a reading:
+a blocked decomposition is ranked with the whole words, where weight decides as
+it does by default, and it is still reported under `--nbest 2`. And it does not
+touch the default ranking, which never reads the field.
+
 ### Both policies at every lexicon size
 
-A star marks `--derived-first`.
+Measured before the guard. A star marks `--derived-first`.
 
 | Lexicon | Lexemes | Token dec. | Token dec.\* | Inflection F1 | Inflection F1\* | Derivation F1 | Derivation F1\* |
 |---------|--------:|-----------:|-------------:|--------------:|----------------:|--------------:|----------------:|
@@ -1041,3 +1111,39 @@ Judgment calls made while scaling the lexicon, and why. The decisions in
     and the corpus live. Writing by default rather than only on `--json`
     means a run whose table scrolled off a terminal does not have to be done
     again; `--json ''` turns it off.
+
+21. **The guard reads `data/closed_class.tsv` as a word list, independently of
+    `--lexicon`, and only under `--derived-first`.** Loading it as a lexicon is
+    opt-in by decision 7 above, because it changes the output of inputs that
+    already have an analysis. The guard needs the same 324 words whether or not
+    anyone opted in, since they are the most frequent words in English and the
+    ones the flag used to come apart on, so the first column of the file is read
+    into a set that nothing but the ranking consults. A set of surface strings
+    cannot withdraw an analysis or change a weight, which is what makes reading
+    it by default safe where loading it as a lexicon is not. `--closed-class
+    FILE` points the guard elsewhere and `--closed-class=` turns it off.
+
+22. **Condition 4 of the guard applies to one and two character affixes only,
+    and tests "not more frequent" rather than "less frequent".** The
+    measurement is in the section above. The short version: as stated it costs
+    `government` and `quickly`, dropping it costs `number`, and nothing in the
+    morphology separates `number` from `higher`, so the frequency test is kept
+    exactly where accidental suffix matches live.
+
+23. **A reading the guard blocks is ranked down, not withdrawn.** It goes in
+    with the whole words, where weight decides as it does by default, and it is
+    still there under `--nbest 2`. The flag has always been a reporting order
+    over analyses the analyzer already produced, and the guard does not change
+    that: both policies still rank the same set, which is what keeps the
+    lexical output identical under either.
+
+24. **A weight of 1.0 that nobody stated is "unknown", not "Zipf 4".** The
+    built-in lists carry no weights, so all 1,825 of their lexemes sit at the
+    default. Reading that as evidence of frequency would make condition 4 of
+    the guard compare two numbers that mean nothing and block every promotion,
+    which would turn `--derived-first` into a no-op on the built-in lexicon.
+    `Lexeme::weight_known` records whether the weight was supplied, and an
+    unknown weight passes the condition rather than failing it: the guard is
+    there to act on evidence, and absent evidence it should not act. Comparing
+    against 1.0 would have worked almost as well and would have broken on the
+    one Zipf value that maps to exactly 1.0.

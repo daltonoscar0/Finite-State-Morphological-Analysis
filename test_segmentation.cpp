@@ -17,6 +17,9 @@
  *   1d. The --derived-first ranking, which promotes a decomposition over a
  *      stored whole word.
  *
+ *   1e. The guard on that ranking, which is what keeps `is`, `his` and
+ *      `number` whole while `government` and `quickly` still split.
+ *
  *   2. A property test over the whole loaded lexicon. Every lexeme is expanded
  *      into its inflected and derived surface forms using the same stem-class
  *      orthography the analyzer reverses, and the output invariants are
@@ -654,6 +657,234 @@ static void test_derived_first(Env& env) {
               << compared << " inputs" << std::endl;
 }
 
+// ── Group 1e: the guard on --derived-first ───────────────────────────────────
+
+/**
+ * add_weighted: Put one lexeme with a stated weight into a loaded lexicon
+ *
+ * The built-in lists state no weight, so every one of their lexemes sits at
+ * the default 1.0 and says nothing about frequency, which is exactly what
+ * Lexeme::weight_known reports. The guard's frequency test therefore cannot be
+ * exercised against them, and these entries supply the missing side of it. The
+ * weights are the ones `~/data/morph/lexicons/en_100k.tsv` carries, so the
+ * cases below are the real ones rather than invented arithmetic.
+ */
+static void add_weighted(Env& env, const std::string& stem, PartOfSpeech pos,
+                         StemClass sc, float weight) {
+    auto lex = std::make_shared<Lexeme>(stem, pos, sc);
+    lex->set_weight(weight);
+    env.lexicon.insert_lexeme(lex);
+}
+
+/**
+ * test_derived_first_guard: A decomposition may beat a stored word only when
+ * the guard allows it
+ *
+ * Ranking on "decomposes at all" alone split the most frequent words in
+ * English into a letter and a suffix: `is` became `i|s`, `his` became `hi|s`
+ * and `number` became `numb|er`, which docs/BASELINES.md measures at 1.3% of
+ * the test tokens for the first two alone. Segmenter::is_promotable states the
+ * four conditions; this checks each of them does its own job, that the words
+ * the flag exists to split still split, and that the default ranking is not
+ * touched by any of it.
+ */
+static void add_fixture(Env& env) {
+    add_weighted(env, "i",          PartOfSpeech::NOUN,      StemClass::REG, 1.23f);
+    add_weighted(env, "hi",         PartOfSpeech::NOUN,      StemClass::REG, 1.07f);
+    add_weighted(env, "wa",         PartOfSpeech::NOUN,      StemClass::REG, 1.01f);
+    add_weighted(env, "u",          PartOfSpeech::NOUN,      StemClass::REG, 1.08f);
+    add_weighted(env, "us",         PartOfSpeech::NOUN,      StemClass::REG, 1.15f);
+    add_weighted(env, "thi",        PartOfSpeech::NOUN,      StemClass::REG, 0.90f);
+    // "during" as a marginal open-class sense, which is how a mined lexicon
+    // carries a preposition (docs/LEXICON.md, decision 13), plus a verb "dur"
+    // under it. Three letters of lemma and three of affix, so the closed-class
+    // list is the only condition left to block "dur|ing".
+    add_weighted(env, "during",     PartOfSpeech::NOUN,      StemClass::REG, 1.30f);
+    add_weighted(env, "dur",        PartOfSpeech::VERB,      StemClass::REG, 0.90f);
+    add_weighted(env, "this",       PartOfSpeech::ADVERB,    StemClass::REG, 1.21f);
+    add_weighted(env, "number",     PartOfSpeech::NOUN,      StemClass::REG, 1.12f);
+    add_weighted(env, "numb",       PartOfSpeech::ADJECTIVE, StemClass::REG, 0.96f);
+    add_weighted(env, "numb",       PartOfSpeech::VERB,      StemClass::REG, 0.96f);
+    add_weighted(env, "government", PartOfSpeech::NOUN,      StemClass::REG, 1.12f);
+    add_weighted(env, "govern",     PartOfSpeech::VERB,      StemClass::REG, 0.98f);
+    add_weighted(env, "player",     PartOfSpeech::NOUN,      StemClass::REG, 1.09f);
+    add_weighted(env, "play",       PartOfSpeech::VERB,      StemClass::REG, 1.12f);
+    add_weighted(env, "quickly",    PartOfSpeech::ADVERB,    StemClass::REG, 1.07f);
+    add_weighted(env, "quick",      PartOfSpeech::ADJECTIVE, StemClass::REG, 1.07f);
+    add_weighted(env, "certainly",  PartOfSpeech::ADVERB,    StemClass::REG, 1.07f);
+    add_weighted(env, "certain",    PartOfSpeech::ADJECTIVE, StemClass::REG, 1.09f);
+    add_weighted(env, "higher",     PartOfSpeech::NOUN,      StemClass::REG, 1.09f);
+    add_weighted(env, "high",       PartOfSpeech::ADJECTIVE, StemClass::REG, 1.13f);
+    // Two synthetic pairs for the lemma length condition. They differ in
+    // nothing but the length of the stem, weights included, so the flag on the
+    // record isolates that condition exactly. No real pair does: a two-letter
+    // lemma that reaches this condition is a function word or fails the
+    // frequency test as well.
+    add_weighted(env, "zi",         PartOfSpeech::NOUN,      StemClass::REG, 1.20f);
+    add_weighted(env, "zis",        PartOfSpeech::NOUN,      StemClass::REG, 1.10f);
+    add_weighted(env, "ziq",        PartOfSpeech::NOUN,      StemClass::REG, 1.20f);
+    add_weighted(env, "ziqs",       PartOfSpeech::NOUN,      StemClass::REG, 1.10f);
+}
+
+/**
+ * promotable_of: The guard's verdict on one particular split of one word
+ *
+ * @return  1 when that split is promotable, 0 when it is blocked, and -1 when
+ *          the analyzer did not produce it at all, which would mean the test
+ *          below is asserting on a reading that no longer exists.
+ */
+static int promotable_of(const WordSegmenter& ws, const std::string& word,
+                         const std::string& split) {
+    for (const auto& seg : ws.segment_word(word)) {
+        if (join_pieces(seg) == split) return seg.promotable ? 1 : 0;
+    }
+    return -1;
+}
+
+static void test_derived_first_guard() {
+    std::cout << "\nTest: the guard on --derived-first" << std::endl;
+
+    // The closed class as a lexicon, which is what gives a function word a
+    // whole-word reading for the guard to keep, plus the frequency-weighted
+    // entries the fourth condition reads.
+    Env env({"data/closed_class.tsv"});
+    add_fixture(env);
+
+    ClosedClassSet closed_class;
+    assert(closed_class.load("data/closed_class.tsv"));
+    assert(closed_class.contains("is") && closed_class.contains("His"));
+    assert(!closed_class.contains("number"));
+
+    const WordSegmenter standard(&env.analyzer, &env.lexicon, false,
+                                 &closed_class);
+    const WordSegmenter derived(&env.analyzer, &env.lexicon, true,
+                                &closed_class);
+    const WordSegmenter unguarded(&env.analyzer, &env.lexicon, true, nullptr);
+
+    // The words the fix is for: whole under the flag, and still whole under
+    // the default ranking they were always whole under.
+    for (const char* word : {"is", "his", "number", "was", "this", "us"}) {
+        const auto after = derived.segment_word(word);
+        verify(after[0], std::string("guard:") + word);
+        if (after[0].pieces.size() != 1) {
+            std::cerr << "FAIL: " << word << " came out as "
+                      << join_pieces(after[0]) << std::endl;
+            assert(false);
+        }
+        assert(standard.segment_word(word)[0].pieces.size() == 1);
+        std::cout << "  ✓ " << word << " stays whole" << std::endl;
+    }
+
+    // The words the flag exists for: still split, with the same boundary
+    const struct { const char* word; const char* pieces; } splits[] = {
+        {"government", "govern|ment"},
+        {"player",     "play|er"},
+        {"quickly",    "quick|ly"},
+        {"certainly",  "certain|ly"},
+        {"higher",     "high|er"},
+    };
+    for (const auto& c : splits) {
+        const auto after = derived.segment_word(c.word);
+        verify(after[0], std::string("guard:") + c.word);
+        if (join_pieces(after[0]) != c.pieces) {
+            std::cerr << "FAIL: " << c.word << " came out as "
+                      << join_pieces(after[0]) << ", wanted " << c.pieces
+                      << std::endl;
+            assert(false);
+        }
+        assert(after[0].gate == seg_gate::DECOMPOSED);
+        assert(after[0].promotable);
+        std::cout << "  ✓ " << c.word << ": " << c.pieces << std::endl;
+    }
+
+    // Condition 1 on its own, over a lexicon that does NOT load the closed
+    // class as a lexicon, so the list is the only thing that knows "during" is
+    // a function word: it arrives as a marginal noun, exactly as a mined
+    // lexicon carries it, and a FUNCTION reading that the guard could read off
+    // the analysis is not there to be read.
+    Env open_env;
+    add_fixture(open_env);
+    const WordSegmenter open_guarded(&open_env.analyzer, &open_env.lexicon,
+                                     true, &closed_class);
+    const WordSegmenter open_unguarded(&open_env.analyzer, &open_env.lexicon,
+                                       true, nullptr);
+    assert(promotable_of(open_unguarded, "during", "dur|ing") == 1);
+    assert(promotable_of(open_guarded, "during", "dur|ing") == 0);
+    assert(join_pieces(open_unguarded.segment_word("during")[0]) == "dur|ing");
+    assert(join_pieces(open_guarded.segment_word("during")[0]) == "during");
+    std::cout << "  ✓ condition 1: during would be dur|ing without the list"
+              << std::endl;
+
+    // Condition 2 on its own: the two pairs differ in nothing but the length
+    // of the lemma, so the verdict differing is that condition and nothing
+    // else. Both still come out split, because the stem outweighs the whole
+    // word in both and weight decides once the guard has had its say.
+    assert(promotable_of(derived, "zis", "zi|s") == 0);
+    assert(promotable_of(derived, "ziqs", "ziq|s") == 1);
+    std::cout << "  ✓ condition 2: a two-letter lemma is not promoted, a "
+                 "three-letter one is" << std::endl;
+
+    // Condition 4 on its own: "number" is not closed class and "numb" is four
+    // letters, so the frequency test is the only thing left. "higher" is the
+    // same shape, a stored noun over an adjective plus "-er", and it is
+    // promoted because "high" is the more frequent of the two.
+    assert(promotable_of(derived, "number", "numb|er") == 0);
+    assert(promotable_of(derived, "higher", "high|er") == 1);
+    assert(join_pieces(derived.segment_word("number")[0]) == "number");
+    std::cout << "  ✓ condition 4: number outweighs numb and stays whole, "
+                 "high outweighs higher and splits" << std::endl;
+
+    // Condition 3 holds of every record the guard promotes: the lemma really
+    // is a lexeme under the part of speech the affix attached to.
+    size_t promoted = 0;
+    for (const char* word : {"government", "player", "quickly", "certainly",
+                             "higher", "cats", "cities", "stopped", "hoping",
+                             "unhappiness", "clearly", "movement"}) {
+        for (const auto& seg : derived.segment_word(word)) {
+            if (!seg.promotable) continue;
+            bool found = false;
+            for (const auto& lex : env.lexicon.lookup_all(seg.lemma)) {
+                if (lex->stem() == seg.lemma) found = true;
+            }
+            assert(found && seg.lemma.size() >= 3);
+            promoted++;
+        }
+    }
+    std::cout << "  ✓ condition 3: " << promoted
+              << " promoted records have their lemma in the lexicon"
+              << std::endl;
+
+    // Nothing the guard does reaches the default ranking: the same records
+    // come out of it whether the list is there or not.
+    const WordSegmenter standard_unguarded(&env.analyzer, &env.lexicon, false,
+                                           nullptr);
+    size_t compared = 0;
+    for (const char* word : {"is", "his", "number", "was", "this", "us", "zis",
+                             "government", "player", "quickly", "certainly",
+                             "higher", "cats", "cities", "went", "sheep",
+                             "stopped", "hoping", "unkind", "zxqvkj", "42",
+                             ""}) {
+        const auto a = standard.segment_word(word);
+        const auto b = standard_unguarded.segment_word(word);
+        assert(a.size() == b.size());
+        for (size_t i = 0; i < a.size(); i++) {
+            assert(same_segmentation(a[i], b[i]));
+        }
+        compared++;
+    }
+    std::cout << "  ✓ the default ranking is unchanged, over " << compared
+              << " inputs" << std::endl;
+
+    // A blocked reading is ranked down, not withdrawn
+    bool kept = false;
+    for (const auto& seg : derived.segment_word("number")) {
+        if (join_pieces(seg) == "numb|er") kept = true;
+    }
+    assert(kept);
+    std::cout << "  ✓ numb|er is still reported below, under --nbest 2"
+              << std::endl;
+}
+
 // ── Group 2: property test over the lexicon ──────────────────────────────────
 
 static void test_property_over_lexicon(Env& env, const WordSegmenter& ws) {
@@ -1013,6 +1244,7 @@ int main() {
     test_irregular_inflection(env);
     test_extra_lexicon(env);
     test_derived_first(env);
+    test_derived_first_guard();
     test_json_escaping();
     test_nbest_records(ws);
     test_fuzz(ws);

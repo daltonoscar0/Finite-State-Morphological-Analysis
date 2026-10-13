@@ -70,10 +70,19 @@ DEFAULT_DERIVATION = "~/data/morph/morphynet/eng.derivational.v1.tsv"
 BASELINE_ALGOS = ["bpe", "wordpiece", "unigram"]
 BASELINE_SIZES = [8000, 16000, 32000]
 
+# data/closed_class.tsv, read by the analyzer as a relative path, since the
+# child runs with the analyzer's own directory as its working directory. All
+# four settings load it. The first round of this comparison did not, on the
+# grounds that the brief named four settings and this file was not among them,
+# and the cost showed up in the worked examples: with no FUNCTION reading of
+# "is" or "his" to compete with, --derived-first promoted "i|s" and "hi|s", and
+# the guard on that ranking has nothing to keep if nothing was stored. See the
+# decisions in docs/BASELINES.md.
+CLOSED_CLASS = "data/closed_class.tsv"
+
 # The four analyzer settings, as (name, lexicon file or None, derived_first).
-# "built-in lexicon only" means no --lexicon at all: the 1,825 lexemes the
-# analyzer compiles in. data/closed_class.tsv is deliberately not loaded in
-# any of the four, see the decisions in docs/BASELINES.md.
+# "built-in lexicon only" means no --lexicon beyond the closed class above:
+# the 1,825 lexemes the analyzer compiles in.
 ANALYZER_SETTINGS = [
     ("analyzer-builtin", None, False),
     ("analyzer-en_100k", "en_100k.tsv", False),
@@ -268,9 +277,12 @@ class AnalyzerTokenizer(Tokenizer):
 
     kind = "analyzer"
 
-    def __init__(self, name, analyzer, lexicon, derived_first):
+    def __init__(self, name, analyzer, lexicon, derived_first,
+                 closed_class=CLOSED_CLASS):
         Tokenizer.__init__(self, name)
         extra = []
+        if closed_class:
+            extra += ["--lexicon", closed_class]
         if lexicon:
             extra += ["--lexicon", lexicon]
         if derived_first:
@@ -637,7 +649,8 @@ def build_alt_mask(args, words):
     """
     lexicon = os.path.join(expand(args.lexicon_dir), "en_all.tsv")
     tokenizer = FstTokenizer(args.analyzer,
-                             extra_args=["--lexicon", lexicon,
+                             extra_args=["--lexicon", CLOSED_CLASS,
+                                         "--lexicon", lexicon,
                                          "--derived-first"])
     mask = {}
     ordered = sorted(words)

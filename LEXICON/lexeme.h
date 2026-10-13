@@ -154,6 +154,8 @@ private:
     PartOfSpeech pos_;                      // Grammatical category
     StemClass stem_class_;                  // Morphological behavior class
     float weight_ = 1.0f;                   // Ambiguity ranking weight
+    bool weight_known_ = false;             // Was the weight supplied, or is
+                                            // 1.0 just the default?
 
     // Map: Feature -> Irregular surface form
     std::unordered_map<Feature, std::string> irregular_forms_;
@@ -178,7 +180,20 @@ public:
     PartOfSpeech pos() const { return pos_; }
     StemClass stem_class() const { return stem_class_; }
     float weight() const { return weight_; }
-    void set_weight(float w) { weight_ = w; }
+    void set_weight(float w) { weight_ = w; weight_known_ = true; }
+
+    /**
+     * weight_known: Did this entry state a weight, or is 1.0 the default?
+     *
+     * The hard-coded lists in LANGUAGES/english_configuration.h state none, so
+     * every one of their lexemes sits at the default 1.0 and says nothing about
+     * frequency. A built lexicon states a frequency-derived weight for every
+     * entry (docs/LEXICON.md has the scale). The two cases have to be told
+     * apart wherever a weight is read as evidence rather than as a tie-break:
+     * "1.0 because nobody measured it" is not the same claim as "1.0 because
+     * this is a Zipf 4 word".
+     */
+    bool weight_known() const { return weight_known_; }
 
     // Expose irregular forms map for building reverse index
     const std::unordered_map<Feature, std::string>& irregular_forms_map() const {

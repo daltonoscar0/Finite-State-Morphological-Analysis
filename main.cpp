@@ -31,6 +31,7 @@
  *   ./analyzer --lexicon FILE     # Load an extra lexicon TSV, repeatable
  *   ./analyzer --selfcheck        # Forms the rules generate but cannot read back
  *   ./analyzer --derived-first    # Rank a decomposition above a stored word
+ *   ./analyzer --closed-class F   # Words --derived-first never splits
  *
  * See docs/SEGMENTATION.md for the surface-piece format and docs/LEXICON.md
  * for the lexicon flags and the evaluation.
@@ -373,7 +374,9 @@ void print_usage() {
         << "  analyzer --selfcheck         List generated forms the analyzer cannot read back\n"
         << "  analyzer --lexicon FILE      Load an extra lexicon TSV; repeatable, merged in order\n"
         << "  analyzer --load-stats        Print lexicon size, load time and peak RSS to stderr\n"
-        << "  analyzer --derived-first     Rank a decomposed reading above a stored whole word\n";
+        << "  analyzer --derived-first     Rank a decomposed reading above a stored whole word\n"
+        << "  analyzer --closed-class FILE Words --derived-first never splits;"
+           " default data/closed_class.tsv, empty to turn the list off\n";
 }
 
 /**
@@ -404,6 +407,7 @@ int main(int argc, char* argv[]) {
     int  nbest = 1;
     std::vector<std::string> words;
     std::vector<std::string> lexicon_files;
+    std::string closed_class_file = ClosedClassSet::default_path();
 
     for (int i = 1; i < argc; i++) {
         const std::string arg = argv[i];
@@ -426,6 +430,14 @@ int main(int argc, char* argv[]) {
             lexicon_files.push_back(argv[++i]);
         } else if (arg.rfind("--lexicon=", 0) == 0) {
             lexicon_files.push_back(arg.substr(10));
+        } else if (arg == "--closed-class") {
+            if (i + 1 >= argc) {
+                std::cerr << "error: --closed-class needs a file" << std::endl;
+                return 2;
+            }
+            closed_class_file = argv[++i];
+        } else if (arg.rfind("--closed-class=", 0) == 0) {
+            closed_class_file = arg.substr(15);
         } else if (arg == "--nbest") {
             if (i + 1 >= argc) {
                 std::cerr << "error: --nbest needs a value" << std::endl;
@@ -508,12 +520,27 @@ int main(int argc, char* argv[]) {
                   << std::endl;
     }
 
+    // The guard on --derived-first declines to promote a decomposition of a
+    // closed-class word. The list is read independently of --lexicon, since
+    // that file is opt-in and the most frequent words in English are the ones
+    // that need protecting; see LEXICON/closed_class.h. Nothing else consults
+    // it, so it is only read when the flag is on.
+    ClosedClassSet closed_class;
+    if (derived_first && !closed_class_file.empty()) {
+        if (!closed_class.load(closed_class_file)) {
+            std::cerr << "note: cannot open " << closed_class_file
+                      << "; --derived-first will rely on its other conditions"
+                      << std::endl;
+        }
+    }
+
     if (selfcheck) {
         if (!words.empty()) {
             std::cerr << "note: --selfcheck walks the lexicon, ignoring "
                       << words.size() << " command-line word(s)" << std::endl;
         }
-        WordSegmenter segmenter(&analyzer, &lexicon, derived_first);
+        WordSegmenter segmenter(&analyzer, &lexicon, derived_first,
+                                &closed_class);
         selfcheck_mode(segmenter, lexicon, analyzer);
         return 0;
     }
@@ -523,7 +550,8 @@ int main(int argc, char* argv[]) {
             std::cerr << "note: segmentation mode reads stdin, ignoring "
                       << words.size() << " command-line word(s)" << std::endl;
         }
-        WordSegmenter segmenter(&analyzer, &lexicon, derived_first);
+        WordSegmenter segmenter(&analyzer, &lexicon, derived_first,
+                                &closed_class);
         if (segment_jsonl) {
             segment_jsonl_mode(segmenter, nbest);
         } else {
