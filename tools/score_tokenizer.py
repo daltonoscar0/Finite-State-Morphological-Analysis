@@ -556,9 +556,12 @@ def score_system(system, word_rows, unit_rows, gold, alt_mask, raw_bytes,
         }
 
     if examples_for is not None:
+        # Surfaces, not pieces: a word start marker is not part of a
+        # segmentation and would only make the dump harder to read.
         examples_for[system.name] = {
-            word: pieces_by_word[word] for word in examples_for["__words__"]
-            if word in pieces_by_word
+            word: [piece for piece in system.surfaces(pieces_by_word[word])
+                   if piece]
+            for word in examples_for["__words__"] if word in pieces_by_word
         }
 
     result["seconds"] = round(time.time() - started, 1)
