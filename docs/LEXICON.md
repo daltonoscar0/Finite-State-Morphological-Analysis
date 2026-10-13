@@ -865,6 +865,17 @@ Judgment calls made while scaling the lexicon, and why. The decisions in
      plural of `leaf`; `outcomes` and `outputs` follow `outcome` and `output`,
      which the baseline already split as `out|come` and `out|put`.
 
+   The reference the diff is taken against lives outside the repository, in
+   `~/data/morph/results/baseline/`, with the word list that produced it and a
+   note on how it was built: every form either generator produces, plus 500
+   words sampled from the corpus with a fixed seed, run through the build this
+   work started from. Re-measured against it, the default ranking leaves 9,701
+   of 10,036 records byte identical, analyzes 305 that had no analysis, and
+   changes the 30 above, counting `Maps` and `maps` separately.
+   `--derived-first` leaves 9,662 identical, analyzes the same 305, and changes
+   69: the 30 plus 39 adverbs and agent nouns the flag exists to split, such as
+   `actually` and `farmer`.
+
    This is the same stored-versus-derived question Stage 5 below turns into a
    flag. Nothing about the record format changed, and no input lost an
    analysis.
