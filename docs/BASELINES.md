@@ -78,7 +78,7 @@ reads:
 | `~/data/tok/splits/test_types.tsv` | the same tokens as a type list with counts |
 | `~/data/tok/splits/test_units.tsv` | every test unit with counts, punctuation and digits included |
 
-The baselines are trained on `train_pretok.txt` with their own pre-tokenizers
+The baselines are trained on `train_pretok.txt.gz` with their own pre-tokenizers
 set to plain whitespace splitting, which is the only way to be certain all
 three saw the same units.
 
@@ -104,7 +104,7 @@ tokens `<unk>`, `<s>`, `</s>`, `<pad>` at ids 0 to 3, and full byte coverage.
 |---|---|---|---|
 | library | `tokenizers` | `tokenizers` | `sentencepiece` |
 | byte coverage | `byte_fallback=True`, with the 256 `<0xXX>` pieces forced into the vocabulary | byte level pre-tokenizer, `initial_alphabet` the 256 byte symbols, both forms of each filled in after training | `byte_fallback=True` |
-| marker | none | `##` on continuations | `_` on the first piece |
+| marker | none | `##` on continuations | `▁` on the first piece |
 | normalization | none | none | `normalization_rule_name=identity`, `remove_extra_whitespaces=False` |
 | input | all 11,588,684 lines | all 11,588,684 lines | a fixed random sample of 5,000,000 lines, seed 20251013 |
 
@@ -143,7 +143,7 @@ decision 4.
 `encode(word) -> list[str]`, and computes every metric the same way for each.
 
 A piece is a vocabulary entry. Its **surface** is the text it contributes to
-the word: `##iness` contributes `iness`, `_cit` contributes `cit`, and a byte
+the word: `##iness` contributes `iness`, `▁cit` contributes `cit`, and a byte
 fallback piece contributes part of a character. Surfaces are what every metric
 is computed on, so a marker never counts as a character and never moves a
 boundary. Each system's surfaces are checked against its library's own decoder

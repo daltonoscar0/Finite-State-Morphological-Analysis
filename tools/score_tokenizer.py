@@ -24,7 +24,7 @@ What is reported, on the alphabetic word tokens of `test.txt`:
 Pieces and surfaces
 -------------------
 A piece is a vocabulary entry. Its *surface* is the text it contributes to the
-word: `##iness` contributes `iness`, sentencepiece's `_cit` contributes `cit`,
+word: `##iness` contributes `iness`, sentencepiece's `▁cit` contributes `cit`,
 and a byte fallback piece contributes part of a character. Surfaces are what
 every metric is computed on, so a marker never counts as a character and never
 moves a boundary. Surfaces always concatenate back to the word, which is what
