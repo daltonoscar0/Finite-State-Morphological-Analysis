@@ -624,6 +624,8 @@ private:
      * @param lower   The lowercased input word
      * @param a       The analysis the record was built from
      * @param pieces  The pieces of the record
+     * @param alt     The alternation at the stem seam, which decides whether
+     *                the piece after the stem overstates the affix by one
      */
     bool is_promotable(const std::string& lower, const Analysis& a,
                        const std::vector<SurfacePiece>& pieces,
