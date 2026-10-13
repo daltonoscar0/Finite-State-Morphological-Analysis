@@ -358,9 +358,8 @@ private:
         return false;
     }
 
-    /** suffix_label: Map an analysis to the label for its suffix piece */
+    /** suffix_label: Map an analysis to the label for its inflectional piece */
     static std::string suffix_label(const Analysis& a) {
-        if (a.is_derivational())            return piece_label::SUFFIX_DERIV;
         if (has_feature(a, "+PL"))          return piece_label::SUFFIX_PL;
         if (has_feature(a, "+PAST") ||
             has_feature(a, "+PAST_PART"))   return piece_label::SUFFIX_PAST;
@@ -368,7 +367,60 @@ private:
         if (has_feature(a, "+3SG"))         return piece_label::SUFFIX_3SG;
         if (has_feature(a, "+COMP"))        return piece_label::SUFFIX_COMP;
         if (has_feature(a, "+SUP"))         return piece_label::SUFFIX_SUP;
+        if (a.features().empty())           return piece_label::SUFFIX_DERIV;
         return piece_label::SUFFIX_INFL;
+    }
+
+    /**
+     * split_suffixes: Cut the material after the stem into one piece per morph
+     *
+     * `tail` is everything after the stem piece, and the analysis says which
+     * derivational suffixes are stacked in it, innermost first: "alities" for
+     * "nationalities", carrying -al and -ity, with the plural still to come.
+     *
+     * Each piece is the longest prefix of what is left that the next suffix
+     * accounts for, which is the same rule the stem piece follows, so the
+     * altered material at a seam goes to the piece after it: "nationality"
+     * before a plural gives "it" and then "ies", exactly as "city" gives "cit"
+     * and then "ies". The one exception is the first piece, which also carries
+     * whatever the stem's own alternation displaced: "happiness" is "happ" and
+     * then "iness", not "happ", "i", "ness".
+     *
+     * A suffix that cannot be found is not forced. The rest of the tail
+     * becomes a single piece, which is what the output has always done, so a
+     * suffix whose surface form this does not predict costs a boundary rather
+     * than inventing one in the wrong place.
+     */
+    static std::vector<SurfacePiece> split_suffixes(const std::string& tail,
+                                                    const Analysis& a) {
+        std::vector<SurfacePiece> out;
+        size_t at = 0;
+
+        const auto& suffixes = a.deriv_suffixes();
+        for (size_t i = 0; i < suffixes.size() && at < tail.size(); i++) {
+            // The stored form carries a leading hyphen: "-ness"
+            const std::string suffix = suffixes[i].substr(1);
+            const std::string rest = tail.substr(at);
+
+            // Only the first piece may absorb a displaced character
+            size_t skip = 0;
+            if (!suffix.empty() && rest[0] != suffix[0] && i == 0 &&
+                rest.size() > 1 && rest[1] == suffix[0]) {
+                skip = 1;
+            }
+            const size_t matched =
+                shared_prefix_length(rest.substr(skip), suffix);
+            if (matched == 0) break;
+
+            out.emplace_back(tail.substr(at, skip + matched),
+                             piece_label::SUFFIX_DERIV);
+            at += skip + matched;
+        }
+
+        if (at < tail.size()) {
+            out.emplace_back(tail.substr(at), suffix_label(a));
+        }
+        return out;
     }
 
     /**
@@ -693,7 +745,9 @@ public:
                                 piece_label::STEM);
 
         if (stem_end < word.size()) {
-            seg.pieces.emplace_back(word.substr(stem_end), suffix_label(a));
+            for (auto& piece : split_suffixes(word.substr(stem_end), a)) {
+                seg.pieces.push_back(piece);
+            }
         }
 
         seg.alt  = detect_alt(region, lemma, lcp);

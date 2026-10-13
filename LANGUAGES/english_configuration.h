@@ -632,12 +632,10 @@ public:
         analyzer.add_rule(std::make_shared<YFinalCompRule>());
         analyzer.add_rule(std::make_shared<YFinalSupRule>());
 
-        // Derivational rules
-        analyzer.add_derivation_rule(std::make_shared<NessRule>());
-        analyzer.add_derivation_rule(std::make_shared<LyRule>());
-        analyzer.add_derivation_rule(std::make_shared<AgentiveRule>());
-        analyzer.add_derivation_rule(std::make_shared<TionRule>());
-        analyzer.add_derivation_rule(std::make_shared<MentRule>());
+        // Derivational rules, in the order RULES/derivation_rule.h lists them
+        for (const auto& rule : english_derivation_rules()) {
+            analyzer.add_derivation_rule(rule);
+        }
     }
 
     /**
