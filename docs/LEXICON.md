@@ -77,6 +77,15 @@ Before this work, 458 of the 10,866 forms generated from the lexicon came back
 | 10 | The generator invented forms that are not English: `delaier` (from `delay`), `lightd` and `lighing` (from a wrong lexicon entry) |
 | 6 | `light` was listed as `VERB SILENT_E` but has no final e |
 
+The 458 do not all become analyses. 304 of them do; the other 154, over 151
+distinct strings, are forms the generator stopped producing, because the
+lexicon does not determine their spelling or because the lexeme stores that
+feature itself: `goed`, `haves`, `chooseing`, `puting`, `delaier`, `lightd`.
+Not one of them is an English word, and the analyzer still declines all 154,
+which is the right answer rather than a remaining gap. The count that has to
+reach zero is the one over the forms the generator actually claims, and it
+does.
+
 Four fixes, and the remainder is zero:
 
 1. **The stem class says how a suffix attaches, not whether the feature
@@ -172,16 +181,18 @@ stored irregular form, not per lexeme, so it stays proportional to the
 irregular vocabulary rather than to the lexicon.
 
 The same measurement on the real lexicons, which share more prefixes than the
-synthetic ones and so need fewer trie nodes per entry:
+synthetic ones and so need fewer trie nodes per entry. Each row is the built-in
+lists plus `data/closed_class.tsv` plus that file, which is the configuration
+every evaluation below uses:
 
 | Lexicon | Lexemes | Trie nodes | Load | Peak RSS |
 |---------|--------:|-----------:|-----:|---------:|
 | built-in | 1,825 | 4,740 | 5 ms | 3 MB |
-| `en_5k` | 10,561 | 14,875 | 42 ms | 6 MB |
-| `en_20k` | 31,544 | 56,975 | 145 ms | 15 MB |
-| `en_50k` | 67,110 | 146,686 | 337 ms | 35 MB |
-| `en_100k` | 120,583 | 323,373 | 671 ms | 68 MB |
-| `en_all` | 439,578 | 1,482,446 | 2,722 ms | 255 MB |
+| `en_5k` | 10,885 | 15,066 | 44 ms | 6 MB |
+| `en_20k` | 31,868 | 57,099 | 145 ms | 15 MB |
+| `en_50k` | 67,434 | 146,789 | 340 ms | 34 MB |
+| `en_100k` | 120,907 | 323,465 | 667 ms | 66 MB |
+| `en_all` | 439,902 | 1,482,518 | 2,716 ms | 255 MB |
 
 What is left is inherent to a pointer-chasing trie of one-node-per-character:
 about 580 bytes per lexeme, spread across a `unique_ptr` state, a `unique_ptr`
@@ -274,19 +285,19 @@ more entries than words.
 
 | Stem class | Entries | Share |
 |------------|--------:|------:|
-| `NOUN REG` | 158,588 | 36.2% |
+| `NOUN REG` | 158,502 | 36.2% |
 | `ADJECTIVE UNKNOWN` | 122,177 | 27.9% |
 | `NOUN UNKNOWN` | 79,235 | 18.1% |
 | `ADVERB REG` | 21,875 | 5.0% |
-| `VERB SILENT_E` | 13,628 | 3.1% |
-| `VERB REG` | 13,167 | 3.0% |
-| `NOUN Y_FINAL` | 10,603 | 2.4% |
-| `NOUN SIBILANT` | 9,941 | 2.3% |
-| `VERB DOUBLE_CONS` | 2,491 | 0.6% |
-| `VERB SIBILANT` | 1,834 | 0.4% |
+| `VERB SILENT_E` | 13,794 | 3.2% |
+| `VERB REG` | 13,001 | 3.0% |
+| `NOUN Y_FINAL` | 10,605 | 2.4% |
+| `NOUN SIBILANT` | 10,025 | 2.3% |
+| `VERB DOUBLE_CONS` | 2,490 | 0.6% |
+| `VERB SIBILANT` | 1,835 | 0.4% |
 | `ADJECTIVE Y_FINAL` | 1,778 | 0.4% |
 | `VERB Y_FINAL` | 1,342 | 0.3% |
-| the rest | 1,183 | 0.3% |
+| the rest | 1,094 | 0.3% |
 
 `ADJECTIVE UNKNOWN` is the second largest group because most English
 adjectives form their comparative with "more" rather than with `-er`, and the
@@ -324,7 +335,7 @@ listed forms checked:          313,207
 reproduced:                    313,207
 mismatched:                          0  (0.0000%)
 forms the format cannot hold:    8,368  (2.7%)
-entries with explicit forms:    11,567
+entries with explicit forms:    11,396
 entries with no forms listed:  223,518
 ```
 
@@ -384,7 +395,7 @@ rather than a side effect of the arithmetic.
 ```bash
 python3 tools/eval_lexicon.py --all --stages morpholex \
     --lexicon ~/data/morph/lexicons/en_100k.tsv \
-    --json ~/data/morph/eval.json
+    --json ~/data/morph/results/eval.json
 ```
 
 Standard library only. It drives the analyzer through
@@ -400,6 +411,13 @@ Four stages, each runnable on its own with `--stages`:
 
 `data/closed_class.tsv` is loaded alongside every lexicon by default, since no
 built lexicon can supply a determiner. `--closed-class ''` turns that off.
+
+Every run writes its numbers to `~/data/morph/results/`, outside the
+repository and next to the data they were measured on, because a table printed
+to a terminal and then lost is a run that has to be done again.
+`--json ''` turns that off. The runs behind the tables below are
+`eval_default.json`, `eval_derived.json`, `eval_policy.json`,
+`eval_curve.json` and `eval_curve_derived.json`.
 
 ### On independence
 
@@ -769,6 +787,8 @@ gold, and what is left is mostly affixes the rule set does not have, plus the
 the next thing worth doing, and it is a change to `RULES/derivation_rule.h`
 rather than to the lexicon.
 
+## Decisions
+
 Judgment calls made while scaling the lexicon, and why. The decisions in
 [SEGMENTATION.md](SEGMENTATION.md) still stand; these are in addition.
 
@@ -983,3 +1003,25 @@ Judgment calls made while scaling the lexicon, and why. The decisions in
     The 10,058 that survive are biased towards words with no alternation and
     towards multi-root compounds, which is worth remembering when reading the
     number.
+
+19. **`--derived-first` promotes an inflected reading as well as a derived
+    one, despite the name.** The flag's test is whether a reading decomposes,
+    and an inflectional suffix decomposes a word exactly as a derivational one
+    does: `used` becomes `use|d` and `being` becomes `be|ing` under the same
+    rule that turns `quickly` into `quick|ly`. Restricting it to the five
+    derivational suffixes would need the ranking to read the piece labels, and
+    it would leave the policy half applied, because a stored whole word
+    outranks an inflected reading for the same reason it outranks a derived
+    one: the 0.9 factor is not the only thing in play, a frequency-derived
+    weight above 1.0 is. The inflectional gold is measured alongside the
+    derivational one above and agrees, 452 gains against no losses, so the
+    wider rule is reported rather than narrowed. The name is kept because the
+    stored-versus-derived question is what the flag exists for.
+
+20. **Evaluation results are written outside the repository, to
+    `~/data/morph/results/`, and every run writes them without being asked.**
+    They are measurement output, not source, and they sit next to the data
+    that produced them, which is also where the lexicons, the frequency table
+    and the corpus live. Writing by default rather than only on `--json`
+    means a run whose table scrolled off a terminal does not have to be done
+    again; `--json ''` turns it off.
