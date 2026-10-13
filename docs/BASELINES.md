@@ -572,3 +572,18 @@ Judgment calls made while building this, and why.
    of `~/data/tok` to a few hundred megabytes. All nine baselines were
    retrained after this change so that the times and memory figures below
    come from the code as it stands.
+
+10. **A piece spelled `##` at the start of a word is the text `##`, not a
+    continuation marker.** The WordPiece format does not escape its marker,
+    so the vocabulary entry for a word-internal `#` is spelled exactly like
+    the word `##`, which occurs in the test text as a unit of the shared
+    pretokenizer. Reading it as a marker and stripping it loses the word, and
+    that is what `tokenizers` own decoder does: `##` was the one string out of
+    490,133 that would not round-trip for WordPiece 16k and 32k.
+
+    The scorer strips the prefix only from a piece after the first, since the
+    first piece of a word is never a continuation by construction. That makes
+    round trip exact for all thirteen systems and leaves the scorer's reading
+    of the pieces slightly more careful than the library's. Both readings are
+    computed and compared on every string encoded, and `##` is the only place
+    they ever differed.
