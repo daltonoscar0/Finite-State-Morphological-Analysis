@@ -89,7 +89,7 @@ long strings.
 | `SUFFIX_COMP` | Comparative |
 | `SUFFIX_SUP` | Superlative |
 | `SUFFIX_INFL` | An inflectional suffix with no more specific tag |
-| `SUFFIX_DERIV` | A derivational suffix: `-ness`, `-ly`, `-er`, `-tion`, `-ment` |
+| `SUFFIX_DERIV` | A derivational suffix: `-ness`, `-ly`, `-er`, `-ity`, `-able` and the rest of the inventory in `RULES/derivation_rule.h`. A word can carry two of them, as `care\|less\|ness` does |
 | `IRREGULAR` | A whole irregular or suppletive form |
 | `UNK` | A fallback or passthrough piece |
 
@@ -175,6 +175,31 @@ darkness      dark | ness                STEM   | SUFFIX_DERIV
 happiness     happ | iness               STEM   | SUFFIX_DERIV   alt "y_to_i"
 unhappiness   un | happ | iness          PREFIX | STEM | SUFFIX_DERIV
 ```
+
+**Two derivational suffixes, and an inflection outside them.** The rule above
+applies again to what is left after each piece: every piece is the longest
+prefix of the remaining material that the next suffix accounts for, so an
+altered character goes to the piece after it, exactly as it does at the stem
+seam. The one exception is the first suffix piece, which also carries whatever
+the stem's own alternation displaced, which is why `happiness` is `happ` and
+then `iness` rather than `happ`, `i`, `ness`.
+
+```
+careless      care | less                STEM | SUFFIX_DERIV
+carelessness  care | less | ness         STEM | SUFFIX_DERIV | SUFFIX_DERIV
+thankfully    thank | ful | ly           STEM | SUFFIX_DERIV | SUFFIX_DERIV
+governments   govern | ment | s          STEM | SUFFIX_DERIV | SUFFIX_PL
+nationalities nation | al | it | ies     STEM | SUFFIX_DERIV | SUFFIX_DERIV | SUFFIX_PL
+```
+
+The last of those is the shape of a four-piece record, not what the ranking
+reports: `nationality` is a lexeme of its own, so `nationalit|ies` outranks it
+and the deeper readings sit under it in `--nbest 3`. See the weight scale in
+[LEXICON.md](LEXICON.md).
+
+A suffix the rule cannot find in the surface is not forced. Whatever is left of
+the tail becomes a single piece, which costs a boundary rather than inventing
+one in the wrong place.
 
 **Irregular and suppletive forms.** One piece, labelled `IRREGULAR`, with the
 lemma still reported.
