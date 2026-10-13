@@ -36,6 +36,7 @@ Standard library only.
 """
 
 import argparse
+import gzip
 import re
 import sys
 
@@ -46,6 +47,21 @@ UNIT_RE = re.compile(r"[^\W\d_]+|\d+|(?:[^\s\w]|_)+")
 
 # The letters branch on its own, for asking whether a unit is a word.
 WORD_RE = re.compile(r"[^\W\d_]+\Z")
+
+
+def open_text(path, mode="r"):
+    """Open a UTF-8 text file, compressed if the name ends in `.gz`.
+
+    The pretokenized training text is 577 MB and the test word list is 48 MB.
+    Both are written compressed, both because housekeeping on this machine
+    compresses large plain files under the home directory out from under a
+    running job, and because the whole of `~/data/tok` then fits in a few
+    hundred megabytes. Every tool here reads through this, so the choice is
+    one line in one place.
+    """
+    if path.endswith(".gz"):
+        return gzip.open(path, mode + "t", encoding="utf-8", newline="")
+    return open(path, mode, encoding="utf-8")
 
 
 def pretokenize(text):

@@ -15,10 +15,11 @@ run is skipped unless `--force` is given.
 
 Settings shared by all three
 ----------------------------
-* Input is `~/data/tok/splits/train_pretok.txt`, written by
+* Input is `~/data/tok/splits/train_pretok.txt.gz`, written by
   `tools/make_splits.py`: one line per training line, units of the shared
   pretokenizer joined by single spaces. Each library's own splitting is set to
-  plain whitespace, so all three see exactly those units.
+  plain whitespace, so all three see exactly those units. The file is
+  compressed, so all three are fed from a line iterator rather than by path.
 * No normalization. Nothing is lowercased, stripped or NFKC folded.
 * Special tokens `<unk>`, `<s>`, `</s>`, `<pad>`, in that order, ids 0 to 3.
 * Full byte coverage, so that any input at all can be encoded and decoded
@@ -40,6 +41,10 @@ import subprocess
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from pretokenize import open_text  # noqa: E402
+
 SPECIAL_TOKENS = ["<unk>", "<s>", "</s>", "<pad>"]
 UNK, BOS, EOS, PAD = SPECIAL_TOKENS
 
@@ -53,13 +58,20 @@ SP_SENTENCES = 5000000
 SP_SEED = 20251013
 
 # No training line is to be dropped for length. The longest in
-# train_pretok.txt is 20,857 bytes, against a sentencepiece default limit of
+# train_pretok.txt.gz is 20,857 bytes, against a sentencepiece default limit of
 # 4,192 that would have silently discarded 382 lines.
 SP_MAX_SENTENCE_LENGTH = 24000
 
 
 def expand(path):
     return os.path.expanduser(path)
+
+
+def lines_of(path):
+    """Yield the training lines, without their terminators."""
+    with open_text(path) as handle:
+        for line in handle:
+            yield line.rstrip("\n")
 
 
 # ── The three builders ────────────────────────────────────────────────────
@@ -83,7 +95,7 @@ def build_bpe(train_file, vocab_size, out_dir):
         special_tokens=SPECIAL_TOKENS + byte_tokens,
         show_progress=False,
     )
-    tokenizer.train([train_file], trainer)
+    tokenizer.train_from_iterator(lines_of(train_file), trainer)
     tokenizer.save(os.path.join(out_dir, "tokenizer.json"))
     return {"vocab_size": tokenizer.get_vocab_size()}
 
@@ -131,7 +143,7 @@ def build_wordpiece(train_file, vocab_size, out_dir):
         limit_alphabet=len(alphabet),
         show_progress=False,
     )
-    tokenizer.train([train_file], trainer)
+    tokenizer.train_from_iterator(lines_of(train_file), trainer)
 
     vocab = tokenizer.get_vocab()
     trained_size = len(vocab)
@@ -161,7 +173,7 @@ def build_unigram(train_file, vocab_size, out_dir):
 
     prefix = os.path.join(out_dir, "spm")
     spm.SentencePieceTrainer.train(
-        input=train_file,
+        sentence_iterator=iter(lines_of(train_file)),
         model_prefix=prefix,
         model_type="unigram",
         vocab_size=vocab_size,
@@ -194,7 +206,7 @@ def sample_lines(source, target, count, seed):
     and the same lines on every run for a given seed.
     """
     total = 0
-    with open(source, encoding="utf-8") as handle:
+    with open_text(source) as handle:
         for _ in handle:
             total += 1
     if count >= total:
@@ -203,8 +215,7 @@ def sample_lines(source, target, count, seed):
     rng = random.Random(seed)
     wanted = count
     remaining = total
-    with open(source, encoding="utf-8") as handle, \
-            open(target, "w", encoding="utf-8") as out:
+    with open_text(source) as handle, open_text(target, "w") as out:
         for line in handle:
             if rng.random() * remaining < wanted:
                 out.write(line)
@@ -217,11 +228,11 @@ def sample_lines(source, target, count, seed):
 
 def ensure_sample(splits_dir, sentences=SP_SENTENCES):
     """Return the sentencepiece input path, drawing the sample if needed."""
-    target = os.path.join(splits_dir, "train_pretok_sample.txt")
+    target = os.path.join(splits_dir, "train_pretok_sample.txt.gz")
     meta_path = target + ".json"
     if os.path.exists(target) and os.path.exists(meta_path):
         return target
-    source = os.path.join(splits_dir, "train_pretok.txt")
+    source = os.path.join(splits_dir, "train_pretok.txt.gz")
     print("sampling %d lines for sentencepiece" % sentences, file=sys.stderr)
     meta = sample_lines(source, target, sentences, SP_SEED)
     with open(meta_path, "w", encoding="utf-8") as out:
@@ -295,7 +306,8 @@ def main(argv=None):
         algo, size = args.one[0], int(args.one[1])
         train_file = (ensure_sample(splits_dir, args.sp_sentences)
                       if algo == "unigram"
-                      else os.path.join(splits_dir, "train_pretok.txt"))
+                      else os.path.join(splits_dir,
+                                        "train_pretok.txt.gz"))
         out_dir = os.path.join(models_dir, "%s_%d" % (algo, size))
         record = run_one(algo, size, train_file, out_dir)
         print("  %s %d: %.1f s, peak %s, vocab %d"

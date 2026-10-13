@@ -6,7 +6,7 @@ the units every system sees are fixed here.
 
 Test side, from `test.txt`:
 
-    test_words.txt    the alphabetic word tokens, in order, one per line
+    test_words.txt.gz the alphabetic word tokens, in order, one per line
     test_types.tsv    word, count: the same tokens as a type list
     test_units.tsv    unit, count: every unit including punctuation and
                       digits, which is what the pieces per 1000 bytes
@@ -15,7 +15,8 @@ Test side, from `test.txt`:
 
 Train side, from `train_100M.txt`:
 
-    train_pretok.txt  one line per input line, units joined by single spaces
+    train_pretok.txt.gz  one line per input line, units joined by single
+                      spaces
     train_stats.json  line and unit counts, alphabet
 
 The training file exists because the tokenizer libraries each bring their own
@@ -28,6 +29,9 @@ training runs: whether a character can appear in the test text that the
 training text never showed, which is what decides whether a tokenizer without
 byte fallback can round-trip.
 
+The two large outputs are gzip compressed, see `open_text` in
+tools/pretokenize.py for why.
+
 Standard library only.
 """
 
@@ -39,7 +43,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from pretokenize import UNIT_RE, WORD_RE  # noqa: E402
+from pretokenize import UNIT_RE, WORD_RE, open_text  # noqa: E402
 
 REPORT_EVERY = 1000000
 
@@ -60,9 +64,9 @@ def build_test(path, out_dir):
     word_tokens = 0
     unit_tokens = 0
 
-    words_path = os.path.join(out_dir, "test_words.txt")
+    words_path = os.path.join(out_dir, "test_words.txt.gz")
     with open(path, encoding="utf-8", errors="replace") as source, \
-            open(words_path, "w", encoding="utf-8") as words_out:
+            open_text(words_path, "w") as words_out:
         for line in source:
             lines += 1
             alphabet.update(line)
@@ -102,9 +106,9 @@ def build_train(path, out_dir):
     unit_tokens = 0
     types = set()
 
-    out_path = os.path.join(out_dir, "train_pretok.txt")
+    out_path = os.path.join(out_dir, "train_pretok.txt.gz")
     with open(path, encoding="utf-8", errors="replace") as source, \
-            open(out_path, "w", encoding="utf-8") as out:
+            open_text(out_path, "w") as out:
         for line in source:
             lines += 1
             alphabet.update(line)

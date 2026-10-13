@@ -59,8 +59,8 @@ reads:
 
 | File | Contents |
 |------|----------|
-| `~/data/tok/splits/train_pretok.txt` | one line per training line, units joined by single spaces |
-| `~/data/tok/splits/test_words.txt` | the alphabetic word tokens of `test.txt`, in order |
+| `~/data/tok/splits/train_pretok.txt.gz` | one line per training line, units joined by single spaces |
+| `~/data/tok/splits/test_words.txt.gz` | the alphabetic word tokens of `test.txt`, in order |
 | `~/data/tok/splits/test_types.tsv` | the same tokens as a type list with counts |
 | `~/data/tok/splits/test_units.tsv` | every test unit with counts, punctuation and digits included |
 
@@ -98,6 +98,56 @@ Judgment calls made while building this, and why.
    the token stream.** Every tokenizer here encodes a unit independently of
    its context, so encoding the 125,852 test word types once and multiplying
    by their counts gives numerically identical token-weighted figures to
-   encoding all 9.6M tokens, at a seventy-fifth of the cost. `test_words.txt`
-   is still written in order, because the brief asks for it and because it is
-   the artifact a later experiment would stream.
+   encoding all 9.6M tokens, at a seventy-fifth of the cost.
+   `test_words.txt.gz` is still written in order, because the brief asks for
+   it and because it is the artifact a later experiment would stream.
+
+4. **WordPiece is run over a byte level pre-tokenizer, because `tokenizers`
+   has no byte fallback for it.** BPE and Unigram both take `byte_fallback`,
+   so an input character the model never saw is spelled out as `<0xXX>`
+   pieces and decodes back exactly. WordPiece has no such option: a word
+   holding one unknown character becomes a single `<unk>` and is lost. The
+   test text contains 36 characters the training text never shows, two of
+   them letters, so round trip would not have been 100%.
+
+   Running WordPiece over a byte level pre-tokenizer gives it the same
+   property by another route. Its alphabet becomes the 256 byte symbols
+   rather than the 702 characters of the training text, so any input at all
+   can be spelled, and the byte level decoder puts the characters back. For
+   ASCII, which is every word scored against a gold standard here, the pieces
+   are identical to what plain WordPiece would have produced.
+
+   One gap had to be closed by hand. The trainer adds an alphabet symbol in
+   word initial form but adds the `##` continuation form only for symbols it
+   saw inside a word, and a byte symbol missing its continuation form still
+   forces an `<unk>`. Both forms of all 256 are filled in after training,
+   which puts WordPiece a few dozen entries above its nominal size. The exact
+   sizes are in the table.
+
+5. **An alternation is a property of the word, so the alternation tolerant
+   variant uses one mask for all thirteen systems.** The tolerance is meant
+   to forgive a boundary one character off where the stem changed spelling,
+   and whether `cities` involves a change of spelling does not depend on
+   which tokenizer is reading it. The analyzer is the only system here that
+   reports alternations, so the mask is taken once from its richest setting,
+   `en_all` with `--derived-first`, and then applied unchanged to every row
+   of the table, baselines included. Taking each analyzer setting's own mask
+   would have given the four analyzer rows four different metrics and left
+   the baselines with none.
+
+6. **The four analyzer settings load no `data/closed_class.tsv`.** The
+   lexicon evaluation in `docs/LEXICON.md` loads it alongside every built
+   lexicon, since no mined lexicon supplies a determiner. The brief for this
+   comparison names four settings and that file is not among them, so it is
+   left out and the function words fall through to `no_analysis`. That costs
+   the analyzer coverage on the most frequent tokens in the corpus, and the
+   coverage column should be read with that in mind.
+
+7. **The large intermediates are gzip compressed.** Housekeeping on this
+   machine compressed `train_pretok.txt` and `test_words.txt` in place while
+   a training run was reading them, which killed the run. Writing them
+   compressed in the first place removes the failure mode, and the libraries
+   are fed from a line iterator rather than by path. It also keeps the whole
+   of `~/data/tok` to a few hundred megabytes. All nine baselines were
+   retrained after this change so that the times and memory figures below
+   come from the code as it stands.
