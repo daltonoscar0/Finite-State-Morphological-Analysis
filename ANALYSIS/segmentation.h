@@ -523,17 +523,41 @@ private:
     }
 
     /**
-     * shortest_affix_bytes: Length of the smallest non-stem piece
+     * shortest_affix_bytes: Length of the smallest affix in the reading
      *
-     * Returns 0 when the reading has no affix piece at all. Used only by the
-     * fourth condition of the guard below, which applies to the readings whose
-     * affix is one or two characters long.
+     * The affix, not the piece. Three of the alternations move a character out
+     * of the stem and into the piece after it, so the piece overstates the
+     * affix by one: `bet|ter` is the two-letter `-er` with a doubled
+     * consonant in front of it, `cit|ies` is the one-letter `-s`, and
+     * `happ|iness` is `-ness`. Measuring the piece instead let `better`,
+     * `matter` and `dinner` past the fourth condition of the guard below,
+     * which is the one that was supposed to catch them.
+     *
+     * e_deletion is not one of the three: it takes a character out of the stem
+     * without adding one to the suffix.
+     *
+     * Returns 0 when the reading has no affix piece at all.
      */
-    static size_t shortest_affix_bytes(const std::vector<SurfacePiece>& pieces) {
+    static size_t shortest_affix_bytes(const std::vector<SurfacePiece>& pieces,
+                                       const std::string& alt) {
+        const bool displaced = alt == seg_alt::Y_TO_I ||
+                               alt == seg_alt::CONSONANT_DOUBLING ||
+                               alt == seg_alt::EPENTHESIS;
         size_t shortest = 0;
+        bool after_stem = false;
         for (const auto& p : pieces) {
-            if (p.label == piece_label::STEM) continue;
-            if (shortest == 0 || p.text.size() < shortest) shortest = p.text.size();
+            if (p.label == piece_label::STEM) {
+                after_stem = true;
+                continue;
+            }
+            size_t length = p.text.size();
+            // Only the piece right after the stem carries the displaced
+            // character, and only when the stem is where it came from.
+            if (displaced && after_stem && length > 1) {
+                length--;
+                after_stem = false;
+            }
+            if (shortest == 0 || length < shortest) shortest = length;
         }
         return shortest;
     }
@@ -584,8 +608,8 @@ private:
      *      test is made again here so the guard states it rather than assuming
      *      it, and so a reading that ever arrives another way is held to it.
      *
-     *   4. Where the affix is one or two characters, the whole word is not more
-     *      frequent than the stem. This is the frequency test, and it is the
+     *   4. Where the affix is one or two characters, the whole word is not
+     *      more frequent than the stem. This is the frequency test, and it is the
      *      only thing that separates "number" from "higher": both are stored
      *      nouns whose only decomposition is an adjective plus comparative
      *      "-er", and the difference is that "number" is far more frequent than
@@ -602,7 +626,8 @@ private:
      * @param pieces  The pieces of the record
      */
     bool is_promotable(const std::string& lower, const Analysis& a,
-                       const std::vector<SurfacePiece>& pieces) const {
+                       const std::vector<SurfacePiece>& pieces,
+                       const std::string& alt) const {
         if (pieces.size() < 2) return false;
 
         // 1. Closed class, either by the guard's own list or by a FUNCTION
@@ -624,7 +649,7 @@ private:
         if (!stem_lex) return false;
 
         // 4. The frequency test, for one and two character affixes only
-        const size_t affix = shortest_affix_bytes(pieces);
+        const size_t affix = shortest_affix_bytes(pieces, alt);
         if (affix == 0 || affix > 2) return true;
         if (!stem_lex->weight_known()) return true;
         const auto whole_lex = best_lexeme(lower, nullptr);
@@ -753,7 +778,7 @@ public:
         seg.alt  = detect_alt(region, lemma, lcp);
         seg.gate = seg.pieces.size() >= 2 ? seg_gate::DECOMPOSED
                                           : seg_gate::LEXICON_STEM;
-        seg.promotable = is_promotable(lower, a, seg.pieces);
+        seg.promotable = is_promotable(lower, a, seg.pieces, seg.alt);
         fill_offsets(seg);
         return seg;
     }

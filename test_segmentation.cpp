@@ -17,8 +17,11 @@
  *   1d. The --derived-first ranking, which promotes a decomposition over a
  *      stored whole word.
  *
- *   1e. The guard on that ranking, which is what keeps `is`, `his` and
- *      `number` whole while `government` and `quickly` still split.
+ *   1e. The derivational suffix inventory, one case per suffix, with the
+ *      stacking and the readings the rules decline.
+ *
+ *   1f. The guard on the --derived-first ranking, which is what keeps `is`,
+ *      `his` and `number` whole while `government` and `quickly` still split.
  *
  *   2. A property test over the whole loaded lexicon. Every lexeme is expanded
  *      into its inflected and derived surface forms using the same stem-class
@@ -657,7 +660,169 @@ static void test_derived_first(Env& env) {
               << compared << " inputs" << std::endl;
 }
 
-// ── Group 1e: the guard on --derived-first ───────────────────────────────────
+// ── Group 1e: the derivational suffix inventory ──────────────────────────────
+
+/** add_lexeme: Put one lexeme into an already loaded lexicon */
+static void add_lexeme(Env& env, const std::string& stem, PartOfSpeech pos,
+                       StemClass sc) {
+    env.lexicon.insert_lexeme(std::make_shared<Lexeme>(stem, pos, sc));
+}
+
+/**
+ * test_derivational_suffixes: One case per suffix in the inventory
+ *
+ * The stems are inserted here rather than taken from the built-in lists, so
+ * that the test says which lexeme each reading needs and does not quietly
+ * change meaning when the lists do. Every one of them is the only reading of
+ * its word, so the default ranking reports it and the test does not depend on
+ * --derived-first either.
+ *
+ * The negative cases are the point as much as the positive ones. A suffix the
+ * measurement dropped has to stay dropped, a restriction has to keep
+ * restricting, and the three things the rules decline to do are what keeps
+ * precision at 0.97 on the independent gold.
+ */
+static void test_derivational_suffixes() {
+    std::cout << "\nTest: the derivational suffix inventory" << std::endl;
+
+    Env env;
+    const PartOfSpeech N = PartOfSpeech::NOUN;
+    const PartOfSpeech V = PartOfSpeech::VERB;
+    const PartOfSpeech ADJ = PartOfSpeech::ADJECTIVE;
+
+    add_lexeme(env, "read",     V,   StemClass::REG);
+    add_lexeme(env, "nation",   N,   StemClass::REG);
+    add_lexeme(env, "hope",     N,   StemClass::REG);
+    add_lexeme(env, "care",     N,   StemClass::REG);
+    add_lexeme(env, "nerve",    N,   StemClass::REG);
+    add_lexeme(env, "base",     N,   StemClass::REG);
+    add_lexeme(env, "act",      V,   StemClass::REG);
+    add_lexeme(env, "fool",     N,   StemClass::REG);
+    add_lexeme(env, "national", ADJ, StemClass::UNKNOWN);
+    add_lexeme(env, "pure",     ADJ, StemClass::SILENT_E);
+    add_lexeme(env, "real",     ADJ, StemClass::REG);
+    add_lexeme(env, "inform",   V,   StemClass::REG);
+    add_lexeme(env, "comply",   V,   StemClass::Y_FINAL);
+    add_lexeme(env, "differ",   V,   StemClass::REG);
+    add_lexeme(env, "child",    N,   StemClass::IRR_CHILD);
+    add_lexeme(env, "friend",   N,   StemClass::REG);
+    add_lexeme(env, "free",     ADJ, StemClass::REG);
+    add_lexeme(env, "modern",   ADJ, StemClass::REG);
+    add_lexeme(env, "class",    N,   StemClass::SIBILANT);
+    add_lexeme(env, "wide",     ADJ, StemClass::SILENT_E);
+    add_lexeme(env, "run",      V,   StemClass::DOUBLE_CONS);
+    add_lexeme(env, "govern",   V,   StemClass::REG);
+    add_lexeme(env, "thank",    V,   StemClass::REG);
+    add_lexeme(env, "arm",      N,   StemClass::REG);
+    add_lexeme(env, "pet",      N,   StemClass::REG);
+    add_lexeme(env, "vise",     V,   StemClass::SILENT_E);
+    add_lexeme(env, "emul",     V,   StemClass::REG);
+    add_lexeme(env, "drunk",    N,   StemClass::REG);
+    add_lexeme(env, "cloud",    N,   StemClass::REG);
+    add_lexeme(env, "risk",     N,   StemClass::REG);
+    add_lexeme(env, "select",   V,   StemClass::REG);
+
+    const WordSegmenter ws(&env.analyzer, &env.lexicon);
+
+    // One row per suffix: the surface word, the pieces, and the lemma
+    const struct { const char* word; const char* pieces; const char* lemma; } table[] = {
+        {"readable",    "read|able",    "read"},
+        {"purity",      "pur|ity",      "pure"},      // silent e deleted
+        {"hopeful",     "hope|ful",     "hope"},
+        {"careless",    "care|less",    "care"},
+        {"nervous",     "nerv|ous",     "nerve"},     // silent e deleted
+        {"basic",       "bas|ic",       "base"},      // silent e, a regular noun
+        {"selective",   "select|ive",   "select"},
+        {"foolish",     "fool|ish",     "fool"},
+        {"risky",       "risk|y",       "risk"},
+        {"realism",     "real|ism",     "real"},
+        {"realist",     "real|ist",     "real"},
+        {"action",      "act|ion",      "act"},
+        {"information", "inform|ation", "inform"},
+        {"compliance",  "compl|iance",  "comply"},    // y to i
+        {"difference",  "differ|ence",  "differ"},
+        {"childhood",   "child|hood",   "child"},     // an irregular stem
+        {"friendship",  "friend|ship",  "friend"},
+        {"freedom",     "free|dom",     "free"},
+        {"modernize",   "modern|ize",   "modern"},
+        {"realise",     "real|ise",     "real"},
+        {"purify",      "pur|ify",      "pure"},      // silent e deleted
+        {"widen",       "wide|n",       "wide"},
+        {"runner",      "run|ner",      "run"},       // consonant doubled
+        {"governments", "govern|ment|s", "govern"},   // inflection outside
+    };
+    for (const auto& row : table) {
+        const auto ranked = ws.segment_word(row.word);
+        verify(ranked[0], std::string("suffix:") + row.word);
+        if (join_pieces(ranked[0]) != row.pieces ||
+            ranked[0].lemma != row.lemma) {
+            std::cerr << "FAIL: " << row.word << " gave "
+                      << join_pieces(ranked[0]) << " from " << ranked[0].lemma
+                      << ", wanted " << row.pieces << " from " << row.lemma
+                      << std::endl;
+            assert(false);
+        }
+    }
+    std::cout << "  ✓ " << (sizeof(table) / sizeof(table[0]))
+              << " suffixes split as documented" << std::endl;
+
+    // Two derivational suffixes, plus an inflection outside them
+    const struct { const char* word; const char* pieces; } stacked[] = {
+        {"carelessness", "care|less|ness"},
+        {"thankfully",   "thank|ful|ly"},
+    };
+    for (const auto& row : stacked) {
+        const auto ranked = ws.segment_word(row.word);
+        verify(ranked[0], std::string("stacked:") + row.word);
+        assert(join_pieces(ranked[0]) == row.pieces);
+        assert(ranked[0].pieces.size() == 3);
+    }
+    // "nationality" has the two-layer reading as well, ranked below the
+    // one-layer one because a stored "national" costs only one 0.9 factor
+    bool deep = false;
+    for (const auto& seg : ws.segment_word("nationality")) {
+        if (join_pieces(seg) == "nation|al|ity") deep = true;
+    }
+    assert(deep);
+    std::cout << "  ✓ care|less|ness, thank|ful|ly, nation|al|ity"
+              << std::endl;
+
+    // Suffixes the MorphoLex measurement dropped, and the restrictions it
+    // added. See the per-suffix table in docs/LEXICON.md.
+    const struct { const char* word; const char* why; } declined[] = {
+        {"visible",     "-ible was dropped: no free base in English"},
+        {"emulsion",    "-sion was dropped: -ion covers the family"},
+        {"drunkard",    "-ard was dropped: it only mis-split compounds"},
+        {"army",        "-y needs a stem of four letters"},
+        {"petitious",   "two suffixes need a root of four letters"},
+        {"nationaler",  "a derived adjective has no comparative"},
+    };
+    for (const auto& row : declined) {
+        const auto ranked = ws.segment_word(row.word);
+        verify(ranked[0], std::string("declined:") + row.word);
+        if (ranked[0].pieces.size() != 1) {
+            std::cerr << "FAIL: " << row.word << " gave "
+                      << join_pieces(ranked[0]) << ", " << row.why
+                      << std::endl;
+            assert(false);
+        }
+    }
+    std::cout << "  ✓ " << (sizeof(declined) / sizeof(declined[0]))
+              << " readings the rules decline" << std::endl;
+
+    // No rule fires on a stem the lexicon does not hold, which is what keeps
+    // precision where it is. None of these stems is in the lexicon.
+    for (const char* word : {"zorbable", "zorbness", "zorbity", "zorbism",
+                             "zorbation", "zorbhood", "zorbify"}) {
+        const auto ranked = ws.segment_word(word);
+        verify(ranked[0], std::string("unknown-stem:") + word);
+        assert(ranked[0].source == seg_source::FALLBACK);
+    }
+    std::cout << "  ✓ no suffix fires without the stem in the lexicon"
+              << std::endl;
+}
+
+// ── Group 1f: the guard on --derived-first ───────────────────────────────────
 
 /**
  * add_weighted: Put one lexeme with a stated weight into a loaded lexicon
@@ -1244,6 +1409,7 @@ int main() {
     test_irregular_inflection(env);
     test_extra_lexicon(env);
     test_derived_first(env);
+    test_derivational_suffixes();
     test_derived_first_guard();
     test_json_escaping();
     test_nbest_records(ws);

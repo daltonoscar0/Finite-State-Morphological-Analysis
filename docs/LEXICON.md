@@ -834,6 +834,9 @@ there is only ever one reading to rank.
 
 ### The ceiling is the rule inventory, not the lexicon
 
+This section is what the next one acts on. It was measured when the analyzer
+knew five derivational suffixes; it now knows twenty-eight.
+
 The analyzer knows five derivational suffixes, `-ness`, `-ly`, `-er`, `-tion`
 and `-ment`, and fifteen prefixes. The MorphyNet derivational gold uses 2,302
 distinct affixes. Only 32.5% of its rows use an affix these rules have ever
@@ -861,6 +864,136 @@ gold, and what is left is mostly affixes the rule set does not have, plus the
 15.6% of MorphoLex entries that need three or more pieces. Adding suffixes is
 the next thing worth doing, and it is a change to `RULES/derivation_rule.h`
 rather than to the lexicon.
+
+## The derivational suffix inventory
+
+Twenty-eight suffixes, in `RULES/derivation_rule.h`. The five the analyzer
+started with are listed first and unchanged, except that each now also accepts
+a stem whose class is `UNKNOWN`; the rest were added here.
+
+| Suffix | Attaches to | Produces | Example |
+|--------|-------------|----------|---------|
+| `-ness` | ADJ | N | `dark\|ness`, `happ\|iness` |
+| `-ly` | ADJ | ADV | `quick\|ly`, `certain\|ly` |
+| `-er` | V | N | `play\|er`, `run\|ner` |
+| `-tion` | V | N | `ac\|tion` |
+| `-ment` | V | N | `govern\|ment` |
+| `-able` | V | ADJ | `read\|able`, `us\|able` |
+| `-al` | N | ADJ | `nation\|al`, `person\|al` |
+| `-ful` | N, V | ADJ | `hope\|ful`, `thank\|ful` |
+| `-less` | N | ADJ | `care\|less` |
+| `-ous` | N | ADJ | `nerv\|ous` |
+| `-ic` | N | ADJ | `bas\|ic` |
+| `-ive` | V | ADJ | `select\|ive` |
+| `-ish` | N, ADJ | ADJ | `fool\|ish`, `red\|dish` |
+| `-y` | N | ADJ | `cloud\|y`, `risk\|y` |
+| `-ity` | ADJ | N | `pur\|ity`, `national\|ity` |
+| `-ism` | N, ADJ | N | `real\|ism` |
+| `-ist` | N, ADJ | N | `real\|ist` |
+| `-ion` | V | N | `act\|ion`, `creat\|ion` |
+| `-ation` | V | N | `inform\|ation` |
+| `-ance` | V | N | `compl\|iance` |
+| `-ence` | V | N | `differ\|ence` |
+| `-hood` | N, ADJ | N | `child\|hood` |
+| `-ship` | N | N | `friend\|ship` |
+| `-dom` | N, ADJ | N | `free\|dom`, `wis\|dom` |
+| `-ize` | ADJ, N | V | `modern\|ize` |
+| `-ise` | ADJ, N | V | `real\|ise` |
+| `-ify` | ADJ, N | V | `class\|ify`, `pur\|ify` |
+| `-en` | ADJ | V | `wide\|n` |
+
+Every one of them requires the stem to be a lexeme in the loaded lexicon,
+under a part of speech the suffix attaches to. That is the whole of why
+precision holds up: `zorbable` and `zorbness` have no analysis, and the
+per-suffix table in [BASELINES.md](BASELINES.md) is what the inventory was
+measured against.
+
+### What the stem class does and does not decide
+
+A stem class answers an inflectional question: is the plural `-s` or `-es`,
+does the past double a consonant, is the comparative `-er`. The new rules
+therefore accept every class, including `UNKNOWN`, which a built lexicon
+writes when the source lists no inflection at all, and the `IRR_*` classes,
+whose field is spent on stored forms. Without that, `nation|al` would not work
+(`national` is `ADJECTIVE UNKNOWN`, and so are 28% of the adjectives in
+`en_100k`) and neither would `child|hood`.
+
+The orthography a derivational suffix does need is read off the spelling, by
+`orthography::derivational_class` and by the candidate tests in
+`Analyzer::candidate_fits`. `bas|ic` is the case that makes the point: `base`
+is listed as a regular noun, because its plural is `bases` and nothing about
+the plural involves the silent e, and the e still has to come back before
+`-ic`. The test is the union of the spelling and the stated class, so no
+reading the old narrower test produced is withdrawn.
+
+Three alternations apply, the same three inflection uses:
+
+```
+happy  + -ness   happ | iness     y to i
+use    + -able   us   | able      e deletion
+run    + -er     run  | ner       consonant doubling
+```
+
+Consonant doubling is the only one that needs the class rather than the
+spelling, for the reason in decision 1 below: stress decides whether a stem
+doubles and the spelling does not show it. So `run` doubles because the
+lexicon says `DOUBLE_CONS`, and `open` does not give `openner`.
+
+### Stacking
+
+Two derivational suffixes, and an inflection outside them:
+
+```
+care   + -less + -ness    care | less | ness
+thank  + -ful  + -ly      thank | ful | ly
+nation + -al   + -ity     nation | al | ity
+govern + -ment + -s       govern | ment | s
+```
+
+Each layer multiplies the weight by 0.9, so a chain loses to a shallower
+reading of the same word whenever the intermediate form is a lexeme of its
+own: `nationality` is reported as `national|ity` at 0.999, with
+`nation|al|ity` at 0.867 ranked below it and available under `--nbest 3`. The
+chain surfaces as the primary reading where the intermediate is not stored, or
+where it is stored under a part of speech the next suffix does not take, which
+is what happens with `careless`.
+
+Three limits keep stacking from spelling nonsense, and all three were put in
+because it did:
+
+- **At most two layers.** A third would score 0.73 and lose to almost
+  anything, and each layer multiplies the chance of an accident.
+- **A root of at least four letters.** `repetitious` came out as
+  `re|pet|it|ious`, because `pet` plus `-ity` plus `-ous` happens to spell it.
+- **No one-letter suffix in a chain.** `family` came out as `fam|ily`, from
+  `fame` plus `-y` plus `-ly`, which is orthographically perfect and
+  morphologically absurd. `-y` is the only suffix of one letter, and it still
+  gives `cloud|y` on its own.
+
+### What the inventory costs
+
+The per-suffix measurement in [BASELINES.md](BASELINES.md) dropped three
+suffixes and restricted two more. What remains wrong is mostly the agentive
+`-er` on a doubling stem, where the decomposition is real but lexicalized:
+
+```
+let  + -er   let | ter      1,298 test tokens
+man  + -er   man | ner        516
+ham  + -er   ham | mer        399
+but  + -er   but | ter        322
+```
+
+The guard's frequency test does not catch these, because `let`, `man`, `ham`
+and `but` are each more frequent than the word they are inside, which is the
+same test that correctly promotes `win|ner`, `dig|ger` and `run|ner`. Nothing
+in the morphology separates the two groups. Over the whole test split, adding
+the doubling candidate changes 326 of the 125,852 types and 6,932 of the
+9,647,333 tokens, 0.07%, and by inspection of the top forty it runs about two
+to one against. It is kept because the gold is indifferent to it (three false
+boundaries out of 4,445 on MorphoLex) and because the readings it gets right,
+`win|ner`, `swim|mer`, `travel|ler`, `transmit|ter`, `occur|rence`,
+`flat|ten`, `red|dish`, are ones a morphological analyzer should get right.
+Dropping it is the four-line candidate in `Analyzer::stem_candidates`.
 
 ## Decisions
 
@@ -1137,7 +1270,80 @@ Judgment calls made while scaling the lexicon, and why. The decisions in
     that: both policies still rank the same set, which is what keeps the
     lexical output identical under either.
 
-24. **A weight of 1.0 that nobody stated is "unknown", not "Zipf 4".** The
+24. **The guard's fourth condition measures the affix, not the piece.** Three
+    of the alternations move a character out of the stem and into the piece
+    after it, so `bet|ter` is the two-letter `-er` with a doubled consonant in
+    front of it and `cit|ies` is the one-letter `-s`. Measuring the piece let
+    `better`, `matter`, `dinner` and `summer` past the condition that exists to
+    catch them: `better` alone is 4,750 test tokens. `e_deletion` is not one of
+    the three, since it takes a character out of the stem without adding one to
+    the suffix.
+
+25. **The derivational rules are a table, not a class each.** Five suffixes as
+    five classes is reasonable; twenty-eight would be twenty-eight copies of
+    the same twelve lines with four values changed, and a reader would have to
+    diff them to see what each rule claims. `SuffixDerivation` holds the four
+    values and `english_derivation_rules()` is the inventory, so the table is
+    the documentation. The five original rules are the first five rows, with
+    the stem classes they always had.
+
+26. **A derived adjective gets no comparative or superlative.** English uses
+    "more" and "most" once a suffix is involved: not `nationaler`, not
+    `basicer`, not `carefuler`. This is also why a built lexicon classes 28% of
+    its adjectives `UNKNOWN`, with no synthetic comparative listed. Where a
+    derived adjective does take `-er`, as `cloudy` gives `cloudier`, the derived
+    form is a lexeme of its own and the ordinary inflectional path reaches it.
+    Leaving the two in cost three readings on the regression baseline, each a
+    tie at 0.9 that the piece-count tie-break then settled the wrong way:
+    `noticer` came out as `not|ic|er` and `signaler` as `sign|al|er`.
+
+27. **`-ful` takes a verb as well as a noun, and `-hood` and `-dom` take an
+    adjective as well.** `care|ful` and `thank|ful` are the same suffix, and
+    `thank` is a verb and nothing else in every lexicon this project builds, so
+    a noun-only `-ful` cannot reach it. `free|dom` and `wis|dom` are adjectives
+    under `-dom`, and `likeli|hood` is one under `-hood`. The brief for this
+    work named one part of speech for each; the words need two.
+
+28. **Three suffixes were dropped on the measurement and two were restricted.**
+    The per-suffix precision table is in [BASELINES.md](BASELINES.md). `-ible`
+    goes because English has no free base for it: `visible` came out as
+    `vis|ible` off the verb `vise`. `-sion` goes because `-ion` reaches the
+    same words through a better cut, `confus|ion` and `tens|ion` rather than
+    `ten|sion`, and the only thing `-sion` added was `emul|sion`. `-ard` goes
+    because its three measurable splits were all compounds in `-yard`:
+    `churchy|ard`, `woody|ard`, `bricky|ard`. `-ise` is restricted to a stem of
+    four letters, which keeps `real|ise` and drops `now|ise`, and `-y` to a
+    stem of four, which keeps `cloud|y` and drops `arm|y`.
+
+29. **`-tion` is the one suffix below 0.80 that is kept.** Its four remaining
+    MorphoLex splits are all the boundary one character early, `fac|tion` where
+    the gold says `fact|ion`, so by the rule it should go. It predates this
+    work, and dropping it would withdraw the analysis of every form the
+    generator ever produced through it, which the output contract fixes in
+    place. The new `-ion` rule takes over wherever the base is a verb, which is
+    where the gold agrees: `act|ion`, `creat|ion`, `select|ion`. Widening
+    `-ion` to nouns would reproduce the gold on all four and cost `mill|ion`,
+    `bill|ion`, `leg|ion`, `champ|ion`, `stat|ion` and `quest|ion`, so it was
+    not done.
+
+30. **Silent e is restored for every suffix, not only the vowel-initial ones.**
+    `-ness` does not really delete an e, so "hopness" is not a word and the
+    pass accepts it anyway, as it always has. Narrowing the candidate to the
+    suffixes that do delete an e would withdraw that reading from every form
+    the generator produces for a silent-e stem, and those forms are in the
+    regression baseline. Consonant doubling is new and is restricted properly,
+    to the vowel-initial suffixes, where it is the only place it happens.
+
+31. **The one field that moves on the regression baseline is `n_analyses`.**
+    Of the 10,036 records, 9,880 are byte identical, 17 gained an analysis
+    where there was none, and 139 report a different number of analyses with
+    every other field unchanged, pieces and weight included. That field counts
+    the analyses the analyzer returned, so it cannot hold still while suffixes
+    are added: `active` now has `act` plus `-ive` as a second reading, ranked
+    below the stored adjective and not reported. No record changed its
+    segmentation.
+
+32. **A weight of 1.0 that nobody stated is "unknown", not "Zipf 4".** The
     built-in lists carry no weights, so all 1,825 of their lexemes sit at the
     default. Reading that as evidence of frequency would make condition 4 of
     the guard compare two numbers that mean nothing and block every promotion,

@@ -153,12 +153,13 @@ inline std::vector<std::shared_ptr<DerivationRule>> english_derivation_rules() {
 
     // The classes the original five accept, kept exactly as they were
     const std::vector<StemClass> ORIGINAL = {
-        StemClass::REG, StemClass::Y_FINAL, StemClass::SILENT_E};
+        StemClass::REG, StemClass::Y_FINAL, StemClass::SILENT_E,
+        StemClass::UNKNOWN};
     const std::vector<StemClass> ORIGINAL_ER = {
         StemClass::REG, StemClass::SILENT_E, StemClass::DOUBLE_CONS,
-        StemClass::Y_FINAL};
+        StemClass::Y_FINAL, StemClass::UNKNOWN};
     const std::vector<StemClass> ORIGINAL_NO_Y = {
-        StemClass::REG, StemClass::SILENT_E};
+        StemClass::REG, StemClass::SILENT_E, StemClass::UNKNOWN};
     const std::vector<StemClass> ANY = {};
 
     auto rule = [](const std::string& suffix,
@@ -183,10 +184,32 @@ inline std::vector<std::shared_ptr<DerivationRule>> english_derivation_rules() {
 
         // Adjective-forming
         rule("able",  {V},        ADJ, ANY, true,  3),
-        rule("ible",  {V},        ADJ, ANY, true,  3),
         rule("al",    {N},        ADJ, ANY, true,  3),
         rule("ful",   {N, V},     ADJ, ANY, true,  3),
         rule("less",  {N},        ADJ, ANY, true,  3),
+        rule("ous",   {N},        ADJ, ANY, true,  3),
+        rule("ic",    {N},        ADJ, ANY, true,  3),
+        rule("ive",   {V},        ADJ, ANY, true,  3),
+        rule("ish",   {N, ADJ},   ADJ, ANY, true,  3),
+        rule("y",     {N},        ADJ, ANY, true,  4),
+
+        // Noun-forming
+        rule("ity",   {ADJ},      N,   ANY, true,  3),
+        rule("ism",   {N, ADJ},   N,   ANY, true,  3),
+        rule("ist",   {N, ADJ},   N,   ANY, true,  3),
+        rule("ion",   {V},        N,   ANY, true,  3),
+        rule("ation", {V},        N,   ANY, true,  3),
+        rule("ance",  {V},        N,   ANY, true,  3),
+        rule("ence",  {V},        N,   ANY, true,  3),
+        rule("hood",  {N, ADJ},   N,   ANY, true,  3),
+        rule("ship",  {N},        N,   ANY, true,  3),
+        rule("dom",   {N, ADJ},   N,   ANY, true,  3),
+
+        // Verb-forming
+        rule("ize",   {ADJ, N},   V,   ANY, true,  3),
+        rule("ise",   {ADJ, N},   V,   ANY, true,  4),
+        rule("ify",   {ADJ, N},   V,   ANY, true,  3),
+        rule("en",    {ADJ},      V,   ANY, true,  3),
     };
 }
 

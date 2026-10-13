@@ -348,6 +348,28 @@ private:
      */
     static const size_t MAX_DERIV_LAYERS = 2;
 
+    /**
+     * MIN_STACK_ROOT: Shortest root a second derivational suffix may sit on
+     *
+     * Two suffixes on a three-letter root is where stacking stops being
+     * morphology: "repetitious" came out as re|pet|it|ious, because "pet" plus
+     * -ity plus -ous happens to spell it. Four letters keeps every real case
+     * (care|less|ness, thank|ful|ly, nation|al|ity) and costs the nonsense.
+     */
+    static const size_t MIN_STACK_ROOT = 4;
+
+    /**
+     * MIN_STACK_SUFFIX: Shortest suffix that may take part in a chain
+     *
+     * -y is the only suffix of one letter, and in a chain it spells almost
+     * anything: "family" came out as fame plus -y plus -ly, which is
+     * orthographically perfect and morphologically nonsense. Chains of two
+     * real suffixes are all two letters or longer (-al -ity, -less -ness,
+     * -ful -ly), so -y is kept to a single layer, where it still gives
+     * `cloud|y` and `risk|y`.
+     */
+    static const size_t MIN_STACK_SUFFIX = 2;
+
     /** DerivedBase: a lexeme plus the derivational suffixes stacked on it */
     struct DerivedBase {
         std::shared_ptr<Lexeme> root;
@@ -488,6 +510,7 @@ private:
                 // its spelling, and its final consonant does not double,
                 // because the suffix it already carries holds the stress.
                 if (cand.required == StemClass::DOUBLE_CONS) continue;
+                if (suf.size() < MIN_STACK_SUFFIX) continue;
                 if (cand.required != StemClass::UNKNOWN &&
                     orthography::implied_class(cand.stem) != cand.required) {
                     continue;
@@ -495,6 +518,14 @@ private:
                 if (cand.stem.size() < drule->min_stem_length()) continue;
                 for (auto& inner : derive_bases(cand.stem, depth + 1)) {
                     if (!drule->accepts_pos(inner.derived_pos())) continue;
+                    if (inner.root->stem().size() < MIN_STACK_ROOT) continue;
+                    bool short_layer = false;
+                    for (const auto& layer : inner.layers) {
+                        if (layer.first.size() < MIN_STACK_SUFFIX) {
+                            short_layer = true;
+                        }
+                    }
+                    if (short_layer) continue;
                     DerivedBase db;
                     db.root = inner.root;
                     db.layers = inner.layers;
