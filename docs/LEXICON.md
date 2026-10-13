@@ -709,10 +709,15 @@ English: `is` alone is 5,382 tokens of the sample. They split because `i` and
 default ranking and is never consulted on this one, where piece count comes
 first.
 
-The fix is one line and is not taken here, because it needs the part of
-speech to reach the segmenter, which currently sees only the analysis: a
-closed-class word has no morphology by definition, so a decomposition should
-never be promoted over a `FUNCTION` reading. Until then,
+The fix is small and is not taken here. A closed-class word has no morphology
+by definition, so a decomposition should never be promoted over a `FUNCTION`
+reading, but the ranking compares two `Segmentation` records and that record
+carries no part of speech: the segmenter reads one off the analysis to build
+the record and then drops it. Threading it through is a field on the record
+that nothing prints and a test in the comparator, so it changes neither the
+output contract nor the default ranking, and it belongs with a round of
+measurement of its own rather than after the tables above were taken. Until
+then,
 `--derived-first` is best paired with a downstream filter on the handful of
 function words, or used without `data/closed_class.tsv` and with those words
 handled by the Unigram layer.
