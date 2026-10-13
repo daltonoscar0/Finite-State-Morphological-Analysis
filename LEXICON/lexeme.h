@@ -35,8 +35,24 @@ enum class PartOfSpeech {
     NOUN,
     VERB,
     ADJECTIVE,
-    ADVERB
-    // Could extend: PREPOSITION, DETERMINER, PRONOUN, CONJUNCTION, etc.
+    ADVERB,
+
+    // FUNCTION: closed-class function word, uninflected
+    //
+    // Determiners, prepositions, conjunctions, pronouns, auxiliaries and
+    // modals, particles, numerals and interjections. The four open classes
+    // above each select an inflectional paradigm, which is what the rules
+    // consult them for; a function word has no paradigm, so one category
+    // covers all of them as far as morphology is concerned. The finer
+    // distinction between a determiner and a preposition is syntax, not
+    // morphology, and no rule in this system would ever read it, so it is
+    // kept as a comment grouping in data/closed_class.tsv rather than as
+    // eight enum values nothing consults. See docs/LEXICON.md.
+    //
+    // No rule matches FUNCTION, so these stems analyze as themselves and
+    // nothing else: "the" comes out as one piece with gate lexicon_stem,
+    // and "thes" is not a plural.
+    FUNCTION
 };
 
 /**
@@ -58,6 +74,7 @@ inline std::string pos_to_string(PartOfSpeech pos) {
         case PartOfSpeech::VERB: return "V";
         case PartOfSpeech::ADJECTIVE: return "ADJ";
         case PartOfSpeech::ADVERB: return "ADV";
+        case PartOfSpeech::FUNCTION: return "FUNC";
         default: return "UNKNOWN";
     }
 }

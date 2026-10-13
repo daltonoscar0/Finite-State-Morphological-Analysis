@@ -41,7 +41,8 @@ class FstTokenizer:
     MAX_CHUNK_WORDS = 128
     MAX_CHUNK_OUTPUT_BYTES = 16 * 1024
 
-    def __init__(self, analyzer="./analyzer", nbest=1, cwd=None):
+    def __init__(self, analyzer="./analyzer", nbest=1, cwd=None,
+                 extra_args=()):
         """Start the analyzer.
 
         Args:
@@ -50,6 +51,10 @@ class FstTokenizer:
             cwd: Working directory for the child. Defaults to the directory
                 holding the binary, because the analyzer loads
                 `data/english_lexicon.tsv` by a relative path.
+            extra_args: Further analyzer flags, passed through in order, for
+                example ("--lexicon", path, "--derived-first"). Anything that
+                changes what the analyzer loads or how it ranks belongs here;
+                the segmentation protocol itself is unaffected.
 
         Raises:
             AnalyzerError: If the binary is missing or will not start.
@@ -70,6 +75,7 @@ class FstTokenizer:
         argv = [analyzer_path, "--segment-jsonl"]
         if self.nbest > 1:
             argv += ["--nbest", str(self.nbest)]
+        argv += [str(a) for a in extra_args]
 
         # The child writes startup notices to stderr. Those go to a temporary
         # file rather than a pipe: nothing here reads stderr during normal
@@ -91,6 +97,15 @@ class FstTokenizer:
         self._closed = False
 
     # ── Process state ─────────────────────────────────────────────────────
+
+    def stderr_tail(self, limit=2000):
+        """Return the tail of the child's stderr.
+
+        The analyzer writes its startup notices there, including the lexeme
+        count, which a caller that loaded several lexicons has no other way to
+        learn.
+        """
+        return self._stderr_tail(limit)
 
     def _stderr_tail(self, limit=2000):
         """Return the tail of the child's stderr, for error messages."""

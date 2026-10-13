@@ -117,18 +117,79 @@ private:
     // Only terminal states have entries
     // Non-owning State* keys, owned shared_ptr values
     std::unordered_map<State*, std::shared_ptr<LexiconState>> state_annotations_;
-    
+
     // Storage for all lexemes (for ownership and iteration)
     std::vector<std::shared_ptr<Lexeme>> lexemes_;
-    
+
+    // Single-byte surface symbols, cached by byte value.
+    //
+    // The trie walks one byte at a time, and routing every one of those bytes
+    // through the symbol table means building a one-character std::string and
+    // hashing it. Loading a 500k-entry lexicon walks about four million bytes,
+    // and analysis walks a quadratic number of them per word, because it tries
+    // every stem length and looks up four candidate stems for each. Caching
+    // the 256 possible symbols turns that into an array index.
+    //
+    // Filled lazily, so no symbol is created that the lexicon does not use.
+    // The symbol table keys its registry on the representation alone, so a
+    // one-byte representation names exactly one symbol and this cache cannot
+    // disagree with it.
+    mutable std::shared_ptr<Symbol> byte_symbol_[256];
+
+    /**
+     * child: The trie node reached from `from` on the symbol with this ID
+     *
+     * FSA::step does the same walk through the virtual Transition::matches,
+     * which takes its argument by value and so pays a reference count update
+     * per transition examined. The trie is walked often enough that this
+     * matters: comparing symbol IDs directly is the same test with none of
+     * that cost. Nothing else about the traversal changes, and FSA::step is
+     * left alone for the rule FSTs, which need the virtual dispatch.
+     *
+     * @param from       Source state
+     * @param symbol_id  ID of the symbol to consume
+     * @return           Target state, or null if there is no such edge
+     */
+    static State* child(State* from, int symbol_id) {
+        for (Transition* trans : from->outgoing()) {
+            if (trans->input_id() == symbol_id) return trans->target();
+        }
+        return nullptr;
+    }
+
+    /** symbol_for: The surface symbol for a byte, creating it if needed */
+    const std::shared_ptr<Symbol>& symbol_for(unsigned char c) {
+        auto& slot = byte_symbol_[c];
+        if (!slot) {
+            slot = symbols()->get_or_create(std::string(1, static_cast<char>(c)),
+                                            SymbolType::SURFACE);
+        }
+        return slot;
+    }
+
+    /**
+     * cached_symbol: The surface symbol for a byte, or null if unknown
+     *
+     * A byte that no lexeme contains has no symbol and no trie edge, so a null
+     * result means the lookup cannot succeed. Only non-null results are
+     * cached, since a later insertion can introduce the symbol.
+     */
+    const Symbol* cached_symbol(unsigned char c) const {
+        auto& slot = byte_symbol_[c];
+        if (!slot) {
+            slot = symbols()->lookup(std::string(1, static_cast<char>(c)));
+        }
+        return slot.get();
+    }
+
 public:
     /**
      * Constructor
-     * 
+     *
      * @param symbol_table  Global symbol table (passed to FSA base class)
      */
     LexiconFSA(SymbolTable* symbol_table) : FSA(symbol_table) {}
-    
+
     /**
      * insert_lexeme: Add a lexeme to the trie
      * 
@@ -156,38 +217,42 @@ public:
     void insert_lexeme(std::shared_ptr<Lexeme> lexeme) {
         // Store lexeme for ownership and iteration
         lexemes_.push_back(lexeme);
-        
+
         // Ensure trie has a root
         if (!has_start_state()) {
-            auto root = create_state(false);  // Root is not terminal
-            set_start_state(root);
-            state_annotations_[root] = std::make_shared<LexiconState>(root);
+            set_start_state(create_state(false));  // Root is not terminal
         }
-        
+
         State* current = start_state();
         const std::string& stem = lexeme->stem();
-        
+
         // Traverse/create path for each character
         for (char c : stem) {
-            // BUG FIX: Was `SymbolType` (incomplete), should be `SymbolType::SURFACE`
-            auto symbol = symbols()->get_or_create(std::string(1, c), SymbolType::SURFACE);
-            
+            const auto& symbol = symbol_for(static_cast<unsigned char>(c));
+
             // Check if transition already exists
-            State* next = step(current, symbol);
-            
+            State* next = child(current, symbol->id());
+
             if (next == nullptr) {
                 // No existing path - create new state and transition
                 next = create_state(false);
                 create_transition(current, next, symbol);
-                state_annotations_[next] = std::make_shared<LexiconState>(next);
             }
-            
+
             current = next;
         }
-        
-        // Mark final state and push lexeme into vector (supports multi-POS)
+
+        // Mark final state and push lexeme into vector (supports multi-POS).
+        // Annotations exist for terminal states only: a 500k-entry lexicon has
+        // about 1.5 million trie nodes and only 500k of them carry lexemes, so
+        // giving every interior node an annotation object cost three times the
+        // memory and the allocations for nothing. Interior states have no entry
+        // and get_annotation returns null for them, which is what it has always
+        // done for a state it does not know.
         current->set_final(true);
-        state_annotations_[current]->lexemes.push_back(lexeme);
+        auto& annotation = state_annotations_[current];
+        if (!annotation) annotation = std::make_shared<LexiconState>(current);
+        annotation->lexemes.push_back(lexeme);
     }
     
     /**
@@ -228,10 +293,10 @@ public:
         State* current = start_state();
 
         for (char c : stem) {
-            auto symbol = symbols()->lookup(std::string(1, c));
+            const Symbol* symbol = cached_symbol(static_cast<unsigned char>(c));
             if (!symbol) return {};
 
-            State* next = step(current, symbol);
+            State* next = child(current, symbol->id());
             if (next == nullptr) return {};
 
             current = next;

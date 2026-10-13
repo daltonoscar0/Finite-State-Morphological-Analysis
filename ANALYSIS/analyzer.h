@@ -17,6 +17,7 @@
 #include <string>
 
 #include "../RULES/derivation_rule.h"
+#include "../RULES/orthography.h"
 
 /**
  * AnalysisState: Represents a configuration during parallel FSA traversal
@@ -65,6 +66,17 @@ public:
 
     void add_derivation_rule(std::shared_ptr<DerivationRule> rule) {
         deriv_rules_.push_back(rule);
+    }
+
+    /**
+     * derivation_rules: The registered derivational rules
+     *
+     * Exposed so that form generation (RULES/form_generator.h) can derive its
+     * forms from the same rule objects the analyzer strips with, rather than
+     * from a second hard-coded list that could drift out of step.
+     */
+    const std::vector<std::shared_ptr<DerivationRule>>& derivation_rules() const {
+        return deriv_rules_;
     }
 
     // Build reverse index from irregular forms to their lexemes
@@ -172,40 +184,28 @@ public:
 
                 auto y_lexemes = lexicon_->lookup_all(y_stem);
                 for (auto& lexeme : y_lexemes) {
-                    if (lexeme->stem_class() == StemClass::Y_FINAL) {
+                    if (orthography::effective_class(*lexeme) == StemClass::Y_FINAL) {
                         // Noun plural: city -> cities (suffix = "es")
                         if (lexeme->pos() == PartOfSpeech::NOUN && suffix == "es") {
-                            Analysis a(y_stem, PartOfSpeech::NOUN, {"+PL"});
-                            a.set_weight(lexeme->weight());
-                            results.push_back(a);
+                            emit(results, lexeme, y_stem, PartOfSpeech::NOUN, "+PL");
                         }
                         // Verb 3SG: carry -> carries (suffix = "es")
                         else if (lexeme->pos() == PartOfSpeech::VERB) {
                             if (suffix == "es") {
-                                Analysis a(y_stem, PartOfSpeech::VERB, {"+3SG"});
-                                a.set_weight(lexeme->weight());
-                                results.push_back(a);
+                                emit(results, lexeme, y_stem, PartOfSpeech::VERB, "+3SG");
                             }
                             if (suffix == "ed") {
-                                Analysis a1(y_stem, PartOfSpeech::VERB, {"+PAST"});
-                                a1.set_weight(lexeme->weight());
-                                results.push_back(a1);
-                                Analysis a2(y_stem, PartOfSpeech::VERB, {"+PAST_PART"});
-                                a2.set_weight(lexeme->weight());
-                                results.push_back(a2);
+                                emit(results, lexeme, y_stem, PartOfSpeech::VERB, "+PAST");
+                                emit(results, lexeme, y_stem, PartOfSpeech::VERB, "+PAST_PART");
                             }
                         }
                         // Adjective comparative/superlative: happy -> happier/happiest
                         else if (lexeme->pos() == PartOfSpeech::ADJECTIVE) {
                             if (suffix == "er") {
-                                Analysis a(y_stem, PartOfSpeech::ADJECTIVE, {"+COMP"});
-                                a.set_weight(lexeme->weight());
-                                results.push_back(a);
+                                emit(results, lexeme, y_stem, PartOfSpeech::ADJECTIVE, "+COMP");
                             }
                             if (suffix == "est") {
-                                Analysis a(y_stem, PartOfSpeech::ADJECTIVE, {"+SUP"});
-                                a.set_weight(lexeme->weight());
-                                results.push_back(a);
+                                emit(results, lexeme, y_stem, PartOfSpeech::ADJECTIVE, "+SUP");
                             }
                         }
                     }
@@ -220,28 +220,18 @@ public:
                     if (lex->stem_class() == StemClass::DOUBLE_CONS) {
                         if (lex->pos() == PartOfSpeech::VERB) {
                             if (suffix == "ed") {
-                                Analysis a1(undoubled, PartOfSpeech::VERB, {"+PAST"});
-                                a1.set_weight(lex->weight());
-                                results.push_back(a1);
-                                Analysis a2(undoubled, PartOfSpeech::VERB, {"+PAST_PART"});
-                                a2.set_weight(lex->weight());
-                                results.push_back(a2);
+                                emit(results, lex, undoubled, PartOfSpeech::VERB, "+PAST");
+                                emit(results, lex, undoubled, PartOfSpeech::VERB, "+PAST_PART");
                             } else if (suffix == "ing") {
-                                Analysis a(undoubled, PartOfSpeech::VERB, {"+PRES_PART"});
-                                a.set_weight(lex->weight());
-                                results.push_back(a);
+                                emit(results, lex, undoubled, PartOfSpeech::VERB, "+PRES_PART");
                             }
                         }
                         if (lex->pos() == PartOfSpeech::ADJECTIVE) {
                             if (suffix == "er") {
-                                Analysis a(undoubled, PartOfSpeech::ADJECTIVE, {"+COMP"});
-                                a.set_weight(lex->weight());
-                                results.push_back(a);
+                                emit(results, lex, undoubled, PartOfSpeech::ADJECTIVE, "+COMP");
                             }
                             if (suffix == "est") {
-                                Analysis a(undoubled, PartOfSpeech::ADJECTIVE, {"+SUP"});
-                                a.set_weight(lex->weight());
-                                results.push_back(a);
+                                emit(results, lex, undoubled, PartOfSpeech::ADJECTIVE, "+SUP");
                             }
                         }
                     }
@@ -253,32 +243,22 @@ public:
                 std::string e_stem = potential_stem + "e";
                 auto se_lexemes = lexicon_->lookup_all(e_stem);
                 for (auto& lex : se_lexemes) {
-                    if (lex->stem_class() == StemClass::SILENT_E) {
+                    if (orthography::effective_class(*lex) == StemClass::SILENT_E) {
                         if (lex->pos() == PartOfSpeech::VERB) {
                             if (suffix == "ing") {
-                                Analysis a(e_stem, PartOfSpeech::VERB, {"+PRES_PART"});
-                                a.set_weight(lex->weight());
-                                results.push_back(a);
+                                emit(results, lex, e_stem, PartOfSpeech::VERB, "+PRES_PART");
                             }
                             if (suffix == "ed") {
-                                Analysis a1(e_stem, PartOfSpeech::VERB, {"+PAST"});
-                                a1.set_weight(lex->weight());
-                                results.push_back(a1);
-                                Analysis a2(e_stem, PartOfSpeech::VERB, {"+PAST_PART"});
-                                a2.set_weight(lex->weight());
-                                results.push_back(a2);
+                                emit(results, lex, e_stem, PartOfSpeech::VERB, "+PAST");
+                                emit(results, lex, e_stem, PartOfSpeech::VERB, "+PAST_PART");
                             }
                         }
                         if (lex->pos() == PartOfSpeech::ADJECTIVE) {
                             if (suffix == "er") {
-                                Analysis a(e_stem, PartOfSpeech::ADJECTIVE, {"+COMP"});
-                                a.set_weight(lex->weight());
-                                results.push_back(a);
+                                emit(results, lex, e_stem, PartOfSpeech::ADJECTIVE, "+COMP");
                             }
                             if (suffix == "est") {
-                                Analysis a(e_stem, PartOfSpeech::ADJECTIVE, {"+SUP"});
-                                a.set_weight(lex->weight());
-                                results.push_back(a);
+                                emit(results, lex, e_stem, PartOfSpeech::ADJECTIVE, "+SUP");
                             }
                         }
                     }
@@ -346,6 +326,13 @@ public:
                     if (remainder.size() >= 2) {
                         auto base = analyze(remainder, false);
                         for (auto& ba : base) {
+                            // A derivational prefix attaches to an open-class
+                            // stem. Without this test "unto" comes apart as
+                            // un- plus the preposition "to", and "upon" as
+                            // up- plus "on". No lexeme is FUNCTION unless a
+                            // closed-class file was loaded, so nothing the
+                            // default lexicon analyzes is affected.
+                            if (ba.pos() == PartOfSpeech::FUNCTION) continue;
                             if (!ba.has_prefix()) {
                                 Analysis prefixed = ba;
                                 prefixed.set_prefix(prefix);
@@ -357,14 +344,28 @@ public:
             }
         }
 
-        // STEP 9: Deduplicate (keep first occurrence / highest weight if unordered)
-        // Use a seen-set approach since duplicates may not be adjacent
+        // STEP 9: Deduplicate, keeping the highest weight of each analysis.
+        // Duplicates may not be adjacent, so this is a scan rather than a
+        // neighbour comparison.
+        //
+        // Keeping the highest weight rather than the first one matters as soon
+        // as more than one lexicon is loaded. The same stem then arrives twice,
+        // once from the built-in lists at the default weight of 1.0 and once
+        // from a generated file at its frequency-derived weight, and the
+        // built-in lists are loaded first. Keeping the first occurrence threw
+        // the frequency away: "running" lost to its own stored noun entry
+        // because "run +V +PRES_PART" was pinned at 1.0. With the default
+        // lexicon alone every weight is 1.0, so nothing changes there.
         {
             std::vector<Analysis> deduped;
             for (auto& r : results) {
                 bool found = false;
-                for (const auto& d : deduped) {
-                    if (r == d) { found = true; break; }
+                for (auto& d : deduped) {
+                    if (r == d) {
+                        if (r.weight() > d.weight()) d.set_weight(r.weight());
+                        found = true;
+                        break;
+                    }
                 }
                 if (!found) deduped.push_back(r);
             }
@@ -381,26 +382,99 @@ public:
     }
 
 private:
+    /**
+     * emit: Record one inflected analysis unless the lexicon blocks it
+     *
+     * The reversal passes in analyze() reach a lexeme through an orthographic
+     * alternation and then assert a feature. A lexeme that stores that feature
+     * irregularly blocks the productive rule, exactly as in
+     * match_suffix_to_features below: "choose" reverses its silent e to give
+     * "choosing", while "choosed" is blocked by the stored "chose".
+     *
+     * @param results  Accumulator for the word's analyses
+     * @param lexeme   The lexeme the reversal found
+     * @param stem     The restored lemma to report
+     * @param pos      Part of speech of the analysis
+     * @param tag      The feature tag the rule produces
+     */
+    static void emit(std::vector<Analysis>& results,
+                     const std::shared_ptr<Lexeme>& lexeme,
+                     const std::string& stem, PartOfSpeech pos,
+                     const std::string& tag) {
+        if (orthography::stores_feature(*lexeme, tag)) return;
+        Analysis a(stem, pos, {tag});
+        a.set_weight(lexeme->weight());
+        results.push_back(a);
+    }
+
+    /**
+     * match_suffix_to_features: Which features does this surface suffix mark?
+     *
+     * The stem class decides HOW a suffix attaches, not WHETHER the feature
+     * exists, so the test on it names the classes whose surface form really is
+     * stem + suffix. A silent-e verb takes a plain -s ("hopes"), so does a
+     * doubling verb ("stops"), a sibilant verb takes a plain -ed ("fixed"),
+     * and an irregular verb still inflects regularly wherever it stores
+     * nothing ("breaks", "breaking", "goes"). The classes whose surface form
+     * is something else are still excluded, and they are reached by the
+     * reversal passes in analyze() instead: Y_FINAL through "ies" and "ied",
+     * DOUBLE_CONS through the doubled consonant, SILENT_E through the deleted
+     * e.
+     *
+     * Lexical storage blocks the productive rule for the feature it stores.
+     * "break" holds "broke" and "broken", so -ed yields nothing; it holds no
+     * third person singular, so -s yields +3SG. Noun plurals are the one
+     * exception: that path accepts -s on any noun, including the zero-plural
+     * and umlaut classes, and narrowing it would withdraw analyses that the
+     * output contract fixes in place. See docs/LEXICON.md.
+     */
     std::vector<std::string> match_suffix_to_features(const std::string& suffix,
                                                        std::shared_ptr<Lexeme> lexeme) {
         std::vector<std::string> features;
-        auto sc = lexeme->stem_class();
+        // Irregular lexemes spend stem_class() on the irregularity, so their
+        // suffixation is read off the spelling instead. Regular lexemes keep
+        // the class they state.
+        const StemClass sc = orthography::effective_class(*lexeme);
+
+        // Classes whose plain -s is the real third person singular. Y_FINAL
+        // surfaces as "ies" and SIBILANT as "es", so both are left out here.
+        const bool plain_s = sc == StemClass::REG ||
+                             sc == StemClass::SILENT_E ||
+                             sc == StemClass::DOUBLE_CONS;
+
+        // An irregular stem that might double its final consonant does not
+        // record whether it does, so a vowel-initial suffix on the undoubled
+        // stem is not accepted: "rid" gives "ridding", so "riding" must stay
+        // the participle of "ride" alone. A plain -s doubles nothing, so
+        // "rids" is unaffected. See orthography.h.
+        const bool doubling_unknown =
+            !::is_regular(lexeme->stem_class()) &&
+            orthography::may_double_final_consonant(lexeme->stem());
 
         if (lexeme->pos() == PartOfSpeech::NOUN) {
-            if (suffix == "s") {
-                features.push_back("+PL");
-            } else if (suffix == "es") {
+            // UNKNOWN is the one class that blocks this, and it is the only
+            // place anything blocks it: see the note on the noun plural path
+            // above. A generated lexicon writes UNKNOWN when the source lists
+            // no plural at all, which is how an uncountable noun arrives, and
+            // no hand-written entry uses it.
+            if (sc != StemClass::UNKNOWN && (suffix == "s" || suffix == "es")) {
                 features.push_back("+PL");
             }
         } else if (lexeme->pos() == PartOfSpeech::VERB) {
-            if (suffix == "s" && sc == StemClass::REG) {
+            if (suffix == "s" && plain_s) {
                 features.push_back("+3SG");
             } else if (suffix == "es" && sc == StemClass::SIBILANT) {
                 features.push_back("+3SG");
-            } else if (suffix == "ed" && (sc == StemClass::REG || sc == StemClass::SILENT_E)) {
+            } else if (suffix == "ed" && !doubling_unknown &&
+                       (sc == StemClass::REG ||
+                        sc == StemClass::SILENT_E ||
+                        sc == StemClass::SIBILANT)) {
                 features.push_back("+PAST");
                 features.push_back("+PAST_PART");
-            } else if (suffix == "ing" && (sc == StemClass::REG || sc == StemClass::Y_FINAL || sc == StemClass::SIBILANT)) {
+            } else if (suffix == "ing" && !doubling_unknown &&
+                       (sc == StemClass::REG ||
+                        sc == StemClass::Y_FINAL ||
+                        sc == StemClass::SIBILANT)) {
                 features.push_back("+PRES_PART");
             }
         } else if (lexeme->pos() == PartOfSpeech::ADJECTIVE) {
@@ -409,6 +483,15 @@ private:
             } else if (suffix == "est" && sc == StemClass::REG) {
                 features.push_back("+SUP");
             }
+        }
+
+        // Blocking, except on the noun plural path noted above
+        if (lexeme->pos() != PartOfSpeech::NOUN) {
+            std::vector<std::string> kept;
+            for (const auto& tag : features) {
+                if (!orthography::stores_feature(*lexeme, tag)) kept.push_back(tag);
+            }
+            features = std::move(kept);
         }
 
         return features;

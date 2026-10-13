@@ -25,10 +25,21 @@ class WordSegmenter {
 private:
     Analyzer* analyzer_;
     Segmenter segmenter_;
+    bool derived_first_;
 
 public:
-    WordSegmenter(Analyzer* analyzer, const LexiconFSA* lexicon)
-        : analyzer_(analyzer), segmenter_(lexicon) {}
+    /**
+     * @param analyzer       The analysis engine, used read only
+     * @param lexicon        Consulted for stem classes during segmentation
+     * @param derived_first  Rank a decomposed reading above a stored whole
+     *                       word, which is what --derived-first selects. The
+     *                       default is false, the ranking documented in
+     *                       SEGMENTATION.md.
+     */
+    WordSegmenter(Analyzer* analyzer, const LexiconFSA* lexicon,
+                  bool derived_first = false)
+        : analyzer_(analyzer), segmenter_(lexicon),
+          derived_first_(derived_first) {}
 
     std::vector<Segmentation> segment_word(const std::string& word) const {
         if (Segmenter::is_passthrough_input(word)) {
@@ -54,7 +65,9 @@ public:
             ranked.push_back(seg);
         }
 
-        std::sort(ranked.begin(), ranked.end(), segmentation_less);
+        std::sort(ranked.begin(), ranked.end(),
+                  derived_first_ ? segmentation_less_derived_first
+                                 : segmentation_less);
 
         // Two analyses can describe the same surface split: "unkind" is
         // un- + kind as both a noun and an adjective, and POS does not appear

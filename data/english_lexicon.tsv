@@ -1,4 +1,4 @@
-# English Lexicon supplement — TSV format
+# English Lexicon supplement, TSV format
 # Columns: stem  POS  StemClass  [FEATURE=form ...]  [WEIGHT=N.N]
 # Demonstrates multi-POS, irregular forms, and all stem classes
 
@@ -7,7 +7,11 @@ bank	NOUN	REG
 bank	VERB	REG
 light	NOUN	REG
 light	ADJECTIVE	REG
-light	VERB	SILENT_E
+# "light" was listed as SILENT_E, which made the rules read a final e that is
+# not there: hence "lightd", "lighing" and "lighment". The verb is regular,
+# lights / lighted / lighting, with "lit" as a variant past this file does not
+# carry.
+light	VERB	REG
 park	NOUN	REG
 park	VERB	REG
 
