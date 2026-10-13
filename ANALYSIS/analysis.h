@@ -28,8 +28,9 @@ private:
     // STEP 5: Optional prefix
     std::string prefix_;
 
-    // STEP 6: Optional derivational suffix and derived POS
-    std::string deriv_suffix_;
+    // STEP 6: Optional derivational suffixes, innermost first, and the part of
+    // speech the outermost one produces. "nationality" carries {-al, -ity}.
+    std::vector<std::string> deriv_suffixes_;
     PartOfSpeech derived_pos_ = PartOfSpeech::NOUN;
 
 public:
@@ -53,12 +54,31 @@ public:
     void set_prefix(const std::string& p) { prefix_ = p; }
 
     // Derivation
-    const std::string& deriv_suffix() const { return deriv_suffix_; }
+    const std::vector<std::string>& deriv_suffixes() const {
+        return deriv_suffixes_;
+    }
     PartOfSpeech derived_pos() const { return derived_pos_; }
-    bool is_derivational() const { return !deriv_suffix_.empty(); }
-    void set_derivation(const std::string& suffix, PartOfSpeech derived) {
-        deriv_suffix_ = suffix;
+    bool is_derivational() const { return !deriv_suffixes_.empty(); }
+
+    /**
+     * add_derivation: Record one more derivational layer, outside the last
+     *
+     * Called innermost first, so "nationality" arrives as -al and then -ity
+     * and the part of speech each layer produces overwrites the one before.
+     */
+    void add_derivation(const std::string& suffix, PartOfSpeech derived) {
+        deriv_suffixes_.push_back(suffix);
         derived_pos_ = derived;
+    }
+
+    /** deriv_chain: The suffixes as one string, for display: "-al -ity" */
+    std::string deriv_chain() const {
+        std::string out;
+        for (const auto& suffix : deriv_suffixes_) {
+            if (!out.empty()) out += " ";
+            out += suffix;
+        }
+        return out;
     }
 
     /**
@@ -71,8 +91,8 @@ public:
         for (const auto& feat : features_) {
             result += " " + feat;
         }
-        if (!deriv_suffix_.empty()) {
-            result += " [" + deriv_suffix_ + " ->" + pos_to_string(derived_pos_) + "]";
+        if (!deriv_suffixes_.empty()) {
+            result += " [" + deriv_chain() + " ->" + pos_to_string(derived_pos_) + "]";
         }
         return result;
     }
@@ -83,7 +103,7 @@ public:
     bool operator==(const Analysis& other) const {
         if (stem_ != other.stem_ || pos_ != other.pos_) return false;
         if (prefix_ != other.prefix_) return false;
-        if (deriv_suffix_ != other.deriv_suffix_) return false;
+        if (deriv_suffixes_ != other.deriv_suffixes_) return false;
         if (features_.size() != other.features_.size()) return false;
         for (size_t i = 0; i < features_.size(); i++) {
             if (features_[i] != other.features_[i]) return false;

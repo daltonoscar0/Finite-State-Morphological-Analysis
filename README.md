@@ -7,7 +7,7 @@ A finite-state morphological analyzer for English. Given raw text or individual 
 - **Inflectional morphology**, noun plurals, verb conjugations (past, present participle, 3rd person singular), adjective comparatives/superlatives
 - **Orthographic alternations**, y->i (city->cities), consonant doubling (stop->stopped), silent e deletion (hope->hoping), epenthetic vowel (kiss->kisses)
 - **Irregular forms**, suppletion (go->went), umlaut plurals (mouse->mice), zero-marking (sheep->sheep), and more
-- **Derivational morphology**, suffixes (-ness, -ly, -er, -tion, -ment) and prefixes (un-, re-, dis-, pre-, etc.)
+- **Derivational morphology**, twenty-eight suffixes (-ness, -ly, -er, -tion, -ment, -able, -al, -ful, -less, -ity, -ism, -ize and the rest) and fifteen prefixes (un-, re-, dis-, pre-, etc.), stacking up to two suffixes plus an inflection
 - **Ambiguity handling**, returns all valid analyses with weight-based ranking (e.g. `flies -> fly +N +PL | fly +V +3SG`)
 - **Text pipeline**, sentence segmentation and tokenization via Scalpel, then morphological analysis per token
 

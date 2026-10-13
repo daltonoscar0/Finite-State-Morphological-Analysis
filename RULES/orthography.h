@@ -136,6 +136,44 @@ inline StemClass effective_class(const Lexeme& lex) {
 }
 
 /**
+ * derivational_class: How a derivational suffix attaches to this lexeme's stem
+ *
+ * Wider than effective_class, and for a reason the stem class itself gives.
+ * The class answers an inflectional question: is the plural -s or -es, does
+ * the past double a consonant, is the comparative -er. UNKNOWN means no
+ * inflectional paradigm was established, which a built lexicon writes for an
+ * uncountable noun and for the 28% of adjectives that form their comparative
+ * with "more"; IRR_* means the inflected forms are stored. Neither says
+ * anything about derivation, and declining to derive from them would cost
+ * `nation|al` (UNKNOWN as an adjective) and `child|hood` (IRR_CHILD).
+ *
+ * So where the class makes no orthographic claim, the spelling is read
+ * instead, exactly as effective_class does for the irregulars. A stated
+ * orthographic class is always kept.
+ */
+inline StemClass derivational_class(const Lexeme& lex) {
+    const StemClass stated = lex.stem_class();
+    if (stated == StemClass::UNKNOWN || ::is_irregular(stated)) {
+        return implied_class(lex.stem());
+    }
+    return stated;
+}
+
+/**
+ * takes_vowel_initial_suffix: Does this suffix start with a written vowel?
+ *
+ * The orthographic alternations are conditioned on it. A vowel-initial suffix
+ * deletes a silent e ("use" plus -able is "usable") and doubles a final
+ * consonant ("run" plus -er is "runner"); a consonant-initial one does
+ * neither ("hope" plus -ful is "hopeful", "run" plus -ness is not
+ * "runnness"). The y-to-i alternation is not conditioned on it: "happy" gives
+ * both "happiness" and "happier".
+ */
+inline bool takes_vowel_initial_suffix(const std::string& suffix) {
+    return !suffix.empty() && is_vowel(suffix.front());
+}
+
+/**
  * tag_to_feature: The Lexeme::Feature a morphological tag names
  *
  * Needed so that a productive rule can ask whether the lexeme already stores

@@ -54,6 +54,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fst_tokenizer import AnalyzerError, FstTokenizer  # noqa: E402
+from pretokenize import existing, open_text  # noqa: E402
 from score_segmentation import (internal_boundaries, match_boundaries,  # noqa: E402
                                 prf)
 
@@ -95,6 +96,18 @@ def expand(path):
     return os.path.expanduser(path) if path else path
 
 
+def open_gold(path):
+    """Open a gold TSV, compressed or not.
+
+    Housekeeping on this machine compresses large plain files under the home
+    directory, and `eng.inflectional.v1.tsv` is 650,000 rows, so the name in
+    the default argument is not necessarily the name on disk today. The two
+    helpers come from tools/pretokenize.py, which every other tool here reads
+    through for the same reason.
+    """
+    return open_text(existing(path))
+
+
 def longest_common_prefix(a, b):
     i = 0
     limit = min(len(a), len(b))
@@ -115,7 +128,100 @@ def longest_common_prefix(a, b):
 # the two agree on where an alternation puts the boundary, and no tolerance
 # for being one character out is needed. See docs/SEGMENTATION.md.
 
-def read_inflection_gold(path):
+
+class GoldFilter:
+    """Hygiene for MorphyNet rows, applied by both readers below.
+
+    MorphyNet is mined, and some of what it mined is not morphology. It
+    carries `is` as `i` plus a plural, `has` as `ha` plus one, `its` as `it`
+    plus one and `during` as `dur` plus `-ing`, because `i`, `ha` and `dur`
+    are all headwords in Wiktionary. Scoring against those rows credits a
+    tokenizer for splitting the most frequent words in English into a letter
+    and a suffix, which is the opposite of what a tokenizer wants, and
+    docs/BASELINES.md measured exactly that.
+
+    Three tests, each cheap and each stating a property of the row rather than
+    a judgment about the word:
+
+      1. The stem is at least three characters. `i`, `ha`, `wa` and `u` go.
+      2. The stem is itself a lemma in the inflectional file. A real English
+         stem has a paradigm somewhere in MorphyNet's own inflection table,
+         even if that paradigm is a single row; a mining artifact usually does
+         not.
+      3. The form is not in `data/closed_class.tsv`. A function word has no
+         morphology by definition, so a row that gives it some is wrong
+         whatever its stem looks like.
+
+    The stem is the first morph for an inflection row and the source word for
+    a derivation row. For a suffix those are the same thing; for a prefix the
+    first morph is the prefix itself, and dropping `un|kind` because `un` is
+    two letters long would be reading the rule against its purpose.
+
+    Nothing here is reversible by guesswork, so the unfiltered numbers stay
+    available: `--unfiltered-gold` turns the whole filter off, and every reader
+    reports what it dropped and why.
+    """
+
+    def __init__(self, lemmas, closed_class, min_stem=3):
+        self.lemmas = lemmas
+        self.closed_class = closed_class
+        self.min_stem = min_stem
+
+    def keep(self, stem, form, stats):
+        """Should this row be scored? Counts the reason when it should not."""
+        if len(stem) < self.min_stem:
+            stats["filtered_stem_under_%d_chars" % self.min_stem] += 1
+            return False
+        if stem not in self.lemmas:
+            stats["filtered_stem_not_a_lemma"] += 1
+            return False
+        if form.lower() in self.closed_class:
+            stats["filtered_form_closed_class"] += 1
+            return False
+        return True
+
+
+def read_inflection_lemmas(path):
+    """The set of lemmas in eng.inflectional.v1.tsv, its first column."""
+    lemmas = set()
+    with open_gold(path) as handle:
+        for line in handle:
+            lemma, _, rest = line.partition("\t")
+            if rest:
+                lemmas.add(lemma)
+    return lemmas
+
+
+def read_closed_class(path):
+    """The first column of a closed-class TSV, lowercased.
+
+    The same file the analyzer's --derived-first guard reads, and for the same
+    reason: these are the words a decomposition is always wrong about. See
+    LEXICON/closed_class.h.
+    """
+    words = set()
+    if not path:
+        return words
+    with open_gold(path) as handle:
+        for line in handle:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            words.add(line.split()[0].lower())
+    return words
+
+
+def make_gold_filter(inflection_path, closed_class_path, min_stem=3):
+    """Build the filter the two MorphyNet readers take.
+
+    @param inflection_path   eng.inflectional.v1.tsv, read for its lemmas
+    @param closed_class_path data/closed_class.tsv, or '' for none
+    """
+    return GoldFilter(read_inflection_lemmas(inflection_path),
+                      read_closed_class(closed_class_path), min_stem)
+
+
+def read_inflection_gold(path, gold_filter=None):
     """Read eng.inflectional.v1.tsv as surface pieces.
 
     Rows are `lemma form POS|FEATURES segmentation`. A row is a boundary only
@@ -129,7 +235,7 @@ def read_inflection_gold(path):
     gold = collections.defaultdict(set)
     stats = collections.Counter()
 
-    with open(path, encoding="utf-8") as handle:
+    with open_gold(path) as handle:
         for line in handle:
             parts = line.rstrip("\n").split("\t")
             stats["rows"] += 1
@@ -143,6 +249,8 @@ def read_inflection_gold(path):
                 continue
             if not (WORD_RE.match(form) and WORD_RE.match(lemma)):
                 stats["skipped_not_lowercase_az"] += 1
+                continue
+            if gold_filter and not gold_filter.keep(morphs[0], form, stats):
                 continue
             cut = longest_common_prefix(morphs[0], form)
             if cut == 0:
@@ -159,7 +267,7 @@ def read_inflection_gold(path):
     return gold, stats
 
 
-def read_derivation_gold(path):
+def read_derivation_gold(path, gold_filter=None):
     """Read eng.derivational.v1.tsv as surface pieces.
 
     Rows are `source target srcPOS tgtPOS affix type`. For a suffix the
@@ -176,7 +284,7 @@ def read_derivation_gold(path):
     gold = collections.defaultdict(set)
     stats = collections.Counter()
 
-    with open(path, encoding="utf-8") as handle:
+    with open_gold(path) as handle:
         for line in handle:
             parts = line.rstrip("\n").split("\t")
             stats["rows"] += 1
@@ -186,6 +294,8 @@ def read_derivation_gold(path):
             source, target, _src_pos, _tgt_pos, affix, kind = parts
             if not (WORD_RE.match(source) and WORD_RE.match(target)):
                 stats["skipped_not_lowercase_az"] += 1
+                continue
+            if gold_filter and not gold_filter.keep(source, target, stats):
                 continue
             if kind == "suffix":
                 cut = longest_common_prefix(source, target)
@@ -618,6 +728,19 @@ def print_top_fallback(result, limit=100):
         print("    " + "  ".join(f"{w} {n}" for w, n in row))
 
 
+def print_gold_filter(name, stats):
+    """What the hygiene filter dropped, and why, for one gold file."""
+    dropped = {key: count for key, count in stats.items()
+               if key.startswith("filtered_")}
+    print("\n%s: %d rows kept of %d" % (name, stats["kept"], stats["rows"]))
+    if not dropped:
+        print("  hygiene filter: off")
+        return
+    for key in sorted(dropped):
+        print("  %-34s %7d" % (key[len("filtered_"):], dropped[key]))
+    print("  %-34s %7d" % ("dropped in total", sum(dropped.values())))
+
+
 def print_gold(name, result, stats=None):
     print(f"\n{name}")
     if stats:
@@ -689,6 +812,9 @@ def main(argv=None):
     parser.add_argument("--inflection", default=DEFAULT_INFLECTION)
     parser.add_argument("--derivation", default=DEFAULT_DERIVATION)
     parser.add_argument("--morpholex", default=DEFAULT_MORPHOLEX)
+    parser.add_argument("--unfiltered-gold", action="store_true",
+                        help="score every MorphyNet row, including the ones "
+                             "whose stem is a mining artifact; see GoldFilter")
     parser.add_argument("--gold-limit", type=int, default=0,
                         help="score only the first N gold forms, for a quick "
                              "run (0 means all)")
@@ -728,10 +854,17 @@ def main(argv=None):
     # Gold is read once and shared by the gold and curve stages.
     inflection = derivation = None
     if stages & {"gold", "curve", "policy"}:
-        inflection = read_inflection_gold(expand(args.inflection))
-        derivation = read_derivation_gold(expand(args.derivation))
+        gold_filter = None
+        if not args.unfiltered_gold:
+            gold_filter = make_gold_filter(expand(args.inflection),
+                                           args.closed_class)
+        inflection = read_inflection_gold(expand(args.inflection), gold_filter)
+        derivation = read_derivation_gold(expand(args.derivation), gold_filter)
+        report["gold_filtered"] = not args.unfiltered_gold
         report["gold_inflection_stats"] = dict(inflection[1])
         report["gold_derivation_stats"] = dict(derivation[1])
+        print_gold_filter("MorphyNet inflection", inflection[1])
+        print_gold_filter("MorphyNet derivation", derivation[1])
 
     if "corpus" in stages:
         if not os.path.isfile(corpus):

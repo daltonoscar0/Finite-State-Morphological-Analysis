@@ -35,10 +35,14 @@ public:
      *                       word, which is what --derived-first selects. The
      *                       default is false, the ranking documented in
      *                       SEGMENTATION.md.
+     * @param closed_class   Words --derived-first never splits, or nullptr.
+     *                       Read only by the guard on that ranking, so it has
+     *                       no effect on the default output.
      */
     WordSegmenter(Analyzer* analyzer, const LexiconFSA* lexicon,
-                  bool derived_first = false)
-        : analyzer_(analyzer), segmenter_(lexicon),
+                  bool derived_first = false,
+                  const ClosedClassSet* closed_class = nullptr)
+        : analyzer_(analyzer), segmenter_(lexicon, closed_class),
           derived_first_(derived_first) {}
 
     std::vector<Segmentation> segment_word(const std::string& word) const {

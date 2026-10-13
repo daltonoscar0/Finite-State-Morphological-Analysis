@@ -2,6 +2,7 @@
 #define SEGMENTATION_H
 
 #include "analysis.h"
+#include "../LEXICON/closed_class.h"
 #include "../LEXICON/lexicon_fsa.h"
 
 #include <algorithm>
@@ -224,6 +225,17 @@ struct Segmentation {
     float weight       = 0.0f;
 
     /**
+     * promotable: May this reading outrank a stored whole word?
+     *
+     * Read only by segmentation_less_derived_first, which is the one place a
+     * decomposition is allowed to beat a higher-weighted whole word. Nothing
+     * prints it and the default ranking never looks at it, so it changes
+     * neither the output format nor the default output. Segmenter::from_analysis
+     * documents the four conditions.
+     */
+    bool promotable = false;
+
+    /**
      * check: Verify every invariant above
      *
      * @param why  Filled with a short description of the first failure
@@ -319,6 +331,7 @@ struct Segmentation {
 class Segmenter {
 private:
     const LexiconFSA* lexicon_;
+    const ClosedClassSet* closed_class_;
 
     static bool is_vowel(char c) {
         return c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u';
@@ -345,9 +358,8 @@ private:
         return false;
     }
 
-    /** suffix_label: Map an analysis to the label for its suffix piece */
+    /** suffix_label: Map an analysis to the label for its inflectional piece */
     static std::string suffix_label(const Analysis& a) {
-        if (a.is_derivational())            return piece_label::SUFFIX_DERIV;
         if (has_feature(a, "+PL"))          return piece_label::SUFFIX_PL;
         if (has_feature(a, "+PAST") ||
             has_feature(a, "+PAST_PART"))   return piece_label::SUFFIX_PAST;
@@ -355,7 +367,60 @@ private:
         if (has_feature(a, "+3SG"))         return piece_label::SUFFIX_3SG;
         if (has_feature(a, "+COMP"))        return piece_label::SUFFIX_COMP;
         if (has_feature(a, "+SUP"))         return piece_label::SUFFIX_SUP;
+        if (a.features().empty())           return piece_label::SUFFIX_DERIV;
         return piece_label::SUFFIX_INFL;
+    }
+
+    /**
+     * split_suffixes: Cut the material after the stem into one piece per morph
+     *
+     * `tail` is everything after the stem piece, and the analysis says which
+     * derivational suffixes are stacked in it, innermost first: "alities" for
+     * "nationalities", carrying -al and -ity, with the plural still to come.
+     *
+     * Each piece is the longest prefix of what is left that the next suffix
+     * accounts for, which is the same rule the stem piece follows, so the
+     * altered material at a seam goes to the piece after it: "nationality"
+     * before a plural gives "it" and then "ies", exactly as "city" gives "cit"
+     * and then "ies". The one exception is the first piece, which also carries
+     * whatever the stem's own alternation displaced: "happiness" is "happ" and
+     * then "iness", not "happ", "i", "ness".
+     *
+     * A suffix that cannot be found is not forced. The rest of the tail
+     * becomes a single piece, which is what the output has always done, so a
+     * suffix whose surface form this does not predict costs a boundary rather
+     * than inventing one in the wrong place.
+     */
+    static std::vector<SurfacePiece> split_suffixes(const std::string& tail,
+                                                    const Analysis& a) {
+        std::vector<SurfacePiece> out;
+        size_t at = 0;
+
+        const auto& suffixes = a.deriv_suffixes();
+        for (size_t i = 0; i < suffixes.size() && at < tail.size(); i++) {
+            // The stored form carries a leading hyphen: "-ness"
+            const std::string suffix = suffixes[i].substr(1);
+            const std::string rest = tail.substr(at);
+
+            // Only the first piece may absorb a displaced character
+            size_t skip = 0;
+            if (!suffix.empty() && rest[0] != suffix[0] && i == 0 &&
+                rest.size() > 1 && rest[1] == suffix[0]) {
+                skip = 1;
+            }
+            const size_t matched =
+                shared_prefix_length(rest.substr(skip), suffix);
+            if (matched == 0) break;
+
+            out.emplace_back(tail.substr(at, skip + matched),
+                             piece_label::SUFFIX_DERIV);
+            at += skip + matched;
+        }
+
+        if (at < tail.size()) {
+            out.emplace_back(tail.substr(at), suffix_label(a));
+        }
+        return out;
     }
 
     /**
@@ -457,8 +522,151 @@ private:
         return seg;
     }
 
+    /**
+     * shortest_affix_bytes: Length of the smallest affix in the reading
+     *
+     * The affix, not the piece. Three of the alternations move a character out
+     * of the stem and into the piece after it, so the piece overstates the
+     * affix by one: `bet|ter` is the two-letter `-er` with a doubled
+     * consonant in front of it, `cit|ies` is the one-letter `-s`, and
+     * `happ|iness` is `-ness`. Measuring the piece instead let `better`,
+     * `matter` and `dinner` past the fourth condition of the guard below,
+     * which is the one that was supposed to catch them.
+     *
+     * e_deletion is not one of the three: it takes a character out of the stem
+     * without adding one to the suffix.
+     *
+     * Returns 0 when the reading has no affix piece at all.
+     */
+    static size_t shortest_affix_bytes(const std::vector<SurfacePiece>& pieces,
+                                       const std::string& alt) {
+        const bool displaced = alt == seg_alt::Y_TO_I ||
+                               alt == seg_alt::CONSONANT_DOUBLING ||
+                               alt == seg_alt::EPENTHESIS;
+        size_t shortest = 0;
+        bool after_stem = false;
+        for (const auto& p : pieces) {
+            if (p.label == piece_label::STEM) {
+                after_stem = true;
+                continue;
+            }
+            size_t length = p.text.size();
+            // Only the piece right after the stem carries the displaced
+            // character, and only when the stem is where it came from.
+            if (displaced && after_stem && length > 1) {
+                length--;
+                after_stem = false;
+            }
+            if (shortest == 0 || length < shortest) shortest = length;
+        }
+        return shortest;
+    }
+
+    /**
+     * best_lexeme: The highest-weighted lexeme for a stem, optionally by POS
+     *
+     * @param stem  Lowercased stem to look up
+     * @param pos   Part of speech to require, or nullptr for any
+     * @return      The entry with the highest weight, or null if there is none
+     */
+    std::shared_ptr<Lexeme> best_lexeme(const std::string& stem,
+                                        const PartOfSpeech* pos) const {
+        std::shared_ptr<Lexeme> best;
+        if (!lexicon_) return best;
+        for (const auto& lex : lexicon_->lookup_all(stem)) {
+            if (pos && lex->pos() != *pos) continue;
+            if (!best || lex->weight() > best->weight()) best = lex;
+        }
+        return best;
+    }
+
+    /**
+     * is_promotable: May this decomposition outrank a stored whole word?
+     *
+     * The question only arises under --derived-first, which is the one ranking
+     * where a decomposition beats a higher-weighted whole word. Ranking purely
+     * on "decomposes at all" split the most frequent words in English into a
+     * letter and a suffix: "is" became "i|s", "his" became "hi|s" and "number"
+     * became "numb|er", and those three alone are 1.3% of the test tokens in
+     * docs/BASELINES.md. Four conditions have to hold.
+     *
+     *   1. The word is not closed class. A function word has no morphology, so
+     *      a decomposition of one is wrong whatever the lexicon says about its
+     *      substrings. See LEXICON/closed_class.h.
+     *
+     *   2. The lemma is at least three characters. One and two letter lemmas
+     *      are where the spurious readings come from: the noun "i" with a
+     *      plural, the noun "hi", the noun "wa", the noun "u". A real stem that
+     *      short carries no derivation worth a boundary. The lemma is measured,
+     *      not the stem piece, because an alternation can leave the piece
+     *      shorter than the lemma: "flies" is "fl|ies" from the three-letter
+     *      lemma "fly".
+     *
+     *   3. The lemma is a lexeme in the loaded lexicon under the part of
+     *      speech the affix attaches to. Every rule-derived analysis already
+     *      satisfies this by construction, since that is how it was found; the
+     *      test is made again here so the guard states it rather than assuming
+     *      it, and so a reading that ever arrives another way is held to it.
+     *
+     *   4. Where the affix is one or two characters, the whole word is not
+     *      more frequent than the stem. This is the frequency test, and it is the
+     *      only thing that separates "number" from "higher": both are stored
+     *      nouns whose only decomposition is an adjective plus comparative
+     *      "-er", and the difference is that "number" is far more frequent than
+     *      "numb" while "higher" is less frequent than "high". Restricting it
+     *      to short affixes is what keeps "govern|ment" and "quick|ly"; see the
+     *      decision in docs/LEXICON.md for the measurement behind that.
+     *
+     * A reading the guard blocks is not withdrawn. It is ranked with the whole
+     * words, where weight decides as it does by default, and it is still
+     * reported under --nbest 2.
+     *
+     * @param lower   The lowercased input word
+     * @param a       The analysis the record was built from
+     * @param pieces  The pieces of the record
+     * @param alt     The alternation at the stem seam, which decides whether
+     *                the piece after the stem overstates the affix by one
+     */
+    bool is_promotable(const std::string& lower, const Analysis& a,
+                       const std::vector<SurfacePiece>& pieces,
+                       const std::string& alt) const {
+        if (pieces.size() < 2) return false;
+
+        // 1. Closed class, either by the guard's own list or by a FUNCTION
+        //    lexeme from a closed-class file that was loaded as a lexicon.
+        if (closed_class_ && closed_class_->contains(lower)) return false;
+        if (a.pos() == PartOfSpeech::FUNCTION) return false;
+        {
+            const PartOfSpeech func = PartOfSpeech::FUNCTION;
+            if (best_lexeme(lower, &func)) return false;
+        }
+
+        // 2. A lemma of at least three characters
+        const std::string& lemma = a.stem();
+        if (utf8::count(lemma) < 3) return false;
+
+        // 3. The lemma is a lexeme under the part of speech the affix takes
+        const PartOfSpeech source_pos = a.pos();
+        const auto stem_lex = best_lexeme(lemma, &source_pos);
+        if (!stem_lex) return false;
+
+        // 4. The frequency test, for one and two character affixes only
+        const size_t affix = shortest_affix_bytes(pieces, alt);
+        if (affix == 0 || affix > 2) return true;
+        if (!stem_lex->weight_known()) return true;
+        const auto whole_lex = best_lexeme(lower, nullptr);
+        if (!whole_lex) return true;
+        return whole_lex->weight() <= stem_lex->weight();
+    }
+
 public:
-    explicit Segmenter(const LexiconFSA* lexicon) : lexicon_(lexicon) {}
+    /**
+     * @param lexicon       Consulted for stem classes and for the guard
+     * @param closed_class  Words --derived-first never splits, or nullptr
+     */
+    explicit Segmenter(const LexiconFSA* lexicon,
+                       const ClosedClassSet* closed_class = nullptr)
+        : lexicon_(lexicon), closed_class_(closed_class) {}
 
     /**
      * ascii_lower: Lowercase ASCII letters, leaving every other byte alone
@@ -564,12 +772,15 @@ public:
                                 piece_label::STEM);
 
         if (stem_end < word.size()) {
-            seg.pieces.emplace_back(word.substr(stem_end), suffix_label(a));
+            for (auto& piece : split_suffixes(word.substr(stem_end), a)) {
+                seg.pieces.push_back(piece);
+            }
         }
 
         seg.alt  = detect_alt(region, lemma, lcp);
         seg.gate = seg.pieces.size() >= 2 ? seg_gate::DECOMPOSED
                                           : seg_gate::LEXICON_STEM;
+        seg.promotable = is_promotable(lower, a, seg.pieces, seg.alt);
         fill_offsets(seg);
         return seg;
     }
@@ -606,10 +817,20 @@ inline bool segmentation_less(const Segmentation& a, const Segmentation& b) {
 /**
  * segmentation_less_derived_first: The ranking --derived-first selects
  *
- * One change from segmentation_less: any reading that decomposes outranks any
- * reading that keeps the word whole. So `quickly` becomes `quick` plus `-ly`
- * even though `quickly` is an adverb lexeme in its own right, and `accused`
- * becomes `accuse` plus `-d` even though `accused` is a noun.
+ * One change from segmentation_less: a reading that decomposes, and that the
+ * guard allows to be promoted, outranks any reading that keeps the word whole.
+ * So `quickly` becomes `quick` plus `-ly` even though `quickly` is an adverb
+ * lexeme in its own right, and `accused` becomes `accuse` plus `-d` even
+ * though `accused` is a noun.
+ *
+ * The guard is `Segmentation::promotable`, and Segmenter::is_promotable states
+ * its four conditions. A reading it blocks is ranked with the whole words
+ * rather than withdrawn, so weight settles those pairs exactly as it does by
+ * default: `number` stays whole because the stored noun at 1.12 outweighs
+ * `numb` at 0.96, not because the `numb|er` reading went away. Making the
+ * guard part of the first key rather than a test on the pair keeps this a
+ * strict weak ordering: a blocked decomposition and a whole word are simply
+ * two records with the same first key.
  *
  * The test is "decomposes at all", not "has more pieces". Ranking purely by
  * piece count also promotes a three-piece reading over a correct two-piece
@@ -630,9 +851,9 @@ inline bool segmentation_less(const Segmentation& a, const Segmentation& b) {
  */
 inline bool segmentation_less_derived_first(const Segmentation& a,
                                             const Segmentation& b) {
-    const bool a_decomposes = a.pieces.size() > 1;
-    const bool b_decomposes = b.pieces.size() > 1;
-    if (a_decomposes != b_decomposes) return a_decomposes;
+    const bool a_promoted = a.pieces.size() > 1 && a.promotable;
+    const bool b_promoted = b.pieces.size() > 1 && b.promotable;
+    if (a_promoted != b_promoted) return a_promoted;
     return segmentation_less(a, b);
 }
 

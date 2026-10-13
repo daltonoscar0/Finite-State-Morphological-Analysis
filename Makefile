@@ -28,6 +28,7 @@ MORPH_HDR = ANALYSIS/analysis.h \
             AUTOMATA/state.h \
             AUTOMATA/transition.h \
             LANGUAGES/english_configuration.h \
+            LEXICON/closed_class.h \
             LEXICON/lexeme.h \
             LEXICON/lexicon_fsa.h \
             LEXICON/lexicon_loader.h \

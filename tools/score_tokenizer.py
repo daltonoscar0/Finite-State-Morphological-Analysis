@@ -49,8 +49,8 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from eval_lexicon import (read_derivation_gold, read_inflection_gold,  # noqa: E402
-                          read_morpholex)
+from eval_lexicon import (make_gold_filter, read_derivation_gold,  # noqa: E402
+                          read_inflection_gold, read_morpholex)
 from fst_tokenizer import FstTokenizer  # noqa: E402
 from pretokenize import existing, open_text  # noqa: E402
 from score_segmentation import (internal_boundaries, match_boundaries,  # noqa: E402
@@ -70,10 +70,19 @@ DEFAULT_DERIVATION = "~/data/morph/morphynet/eng.derivational.v1.tsv"
 BASELINE_ALGOS = ["bpe", "wordpiece", "unigram"]
 BASELINE_SIZES = [8000, 16000, 32000]
 
+# data/closed_class.tsv, read by the analyzer as a relative path, since the
+# child runs with the analyzer's own directory as its working directory. All
+# four settings load it. The first round of this comparison did not, on the
+# grounds that the brief named four settings and this file was not among them,
+# and the cost showed up in the worked examples: with no FUNCTION reading of
+# "is" or "his" to compete with, --derived-first promoted "i|s" and "hi|s", and
+# the guard on that ranking has nothing to keep if nothing was stored. See the
+# decisions in docs/BASELINES.md.
+CLOSED_CLASS = "data/closed_class.tsv"
+
 # The four analyzer settings, as (name, lexicon file or None, derived_first).
-# "built-in lexicon only" means no --lexicon at all: the 1,825 lexemes the
-# analyzer compiles in. data/closed_class.tsv is deliberately not loaded in
-# any of the four, see the decisions in docs/BASELINES.md.
+# "built-in lexicon only" means no --lexicon beyond the closed class above:
+# the 1,825 lexemes the analyzer compiles in.
 ANALYZER_SETTINGS = [
     ("analyzer-builtin", None, False),
     ("analyzer-en_100k", "en_100k.tsv", False),
@@ -268,9 +277,12 @@ class AnalyzerTokenizer(Tokenizer):
 
     kind = "analyzer"
 
-    def __init__(self, name, analyzer, lexicon, derived_first):
+    def __init__(self, name, analyzer, lexicon, derived_first,
+                 closed_class=CLOSED_CLASS):
         Tokenizer.__init__(self, name)
         extra = []
+        if closed_class:
+            extra += ["--lexicon", closed_class]
         if lexicon:
             extra += ["--lexicon", lexicon]
         if derived_first:
@@ -366,7 +378,12 @@ def readable(path):
 def load_gold(args):
     """Read the three gold standards as surface pieces.
 
-    All three conversions come from tools/eval_lexicon.py unchanged.
+    All three conversions come from tools/eval_lexicon.py unchanged, and so
+    does the hygiene filter on the two MorphyNet files: the rows that credit
+    `i|s` for `is` and `ha|s` for `has` are dropped by the same GoldFilter
+    object both tools build, so the two cannot disagree about what the gold
+    says. `--unfiltered-gold` turns it off, which is how the before and after
+    columns in docs/BASELINES.md are produced.
     """
     gold = {}
     morpholex = expand(args.morpholex)
@@ -374,6 +391,16 @@ def load_gold(args):
         forms, stats = read_morpholex(morpholex)
         gold["morpholex"] = {"forms": forms, "stats": dict(stats),
                              "independent": True}
+
+    gold_filter = None
+    inflection = expand(args.inflection)
+    if not args.unfiltered_gold and os.path.exists(existing(inflection)):
+        with readable(inflection) as usable:
+            gold_filter = make_gold_filter(usable, args.closed_class)
+        print("gold filter: %d inflectional lemmas, %d closed-class words"
+              % (len(gold_filter.lemmas), len(gold_filter.closed_class)),
+              file=sys.stderr)
+
     for key, path, reader in (
             ("morphynet-inflection", args.inflection, read_inflection_gold),
             ("morphynet-derivation", args.derivation, read_derivation_gold)):
@@ -382,9 +409,14 @@ def load_gold(args):
             print("gold %s: not found at %s" % (key, full), file=sys.stderr)
             continue
         with readable(full) as usable:
-            forms, stats = reader(usable)
+            forms, stats = reader(usable, gold_filter)
+        for reason in sorted(stats):
+            if reason.startswith("filtered_"):
+                print("  %s: %s %d" % (key, reason[len("filtered_"):],
+                                       stats[reason]), file=sys.stderr)
         gold[key] = {"forms": dict(forms), "stats": dict(stats),
-                     "independent": False}
+                     "independent": False,
+                     "filtered": gold_filter is not None}
     return gold
 
 
@@ -637,7 +669,8 @@ def build_alt_mask(args, words):
     """
     lexicon = os.path.join(expand(args.lexicon_dir), "en_all.tsv")
     tokenizer = FstTokenizer(args.analyzer,
-                             extra_args=["--lexicon", lexicon,
+                             extra_args=["--lexicon", CLOSED_CLASS,
+                                         "--lexicon", lexicon,
                                          "--derived-first"])
     mask = {}
     ordered = sorted(words)
@@ -810,6 +843,12 @@ def main(argv=None):
     parser.add_argument("--morpholex", default=DEFAULT_MORPHOLEX)
     parser.add_argument("--inflection", default=DEFAULT_INFLECTION)
     parser.add_argument("--derivation", default=DEFAULT_DERIVATION)
+    parser.add_argument("--closed-class", default=CLOSED_CLASS,
+                        help="read by the gold hygiene filter; '' to leave "
+                             "that test out")
+    parser.add_argument("--unfiltered-gold", action="store_true",
+                        help="score every MorphyNet row, including the ones "
+                             "whose stem is a mining artifact")
     parser.add_argument("--json", default=None,
                         help="defaults to <results>/baselines.json")
     parser.add_argument("--only", nargs="*", default=None,

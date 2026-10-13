@@ -180,8 +180,9 @@ inline std::vector<GeneratedForm> generate_forms(
     // Derivational forms, from the registered rules. The class tests mirror
     // the ones the analyzer applies when it strips these suffixes.
     for (const auto& rule : deriv_rules) {
-        if (lex->pos() != rule->source_pos()) continue;
+        if (!rule->accepts_pos(lex->pos())) continue;
         if (!rule->applies_to(sc)) continue;
+        if (s.size() < rule->min_stem_length()) continue;
         const std::string tag = "deriv -" + rule->suffix();
         forms.emplace_back(s + rule->suffix(), lex, tag);
         if (rule->needs_y_restoration() && sc == StemClass::Y_FINAL && last == 'y') {
@@ -189,6 +190,12 @@ inline std::vector<GeneratedForm> generate_forms(
         }
         if (sc == StemClass::SILENT_E && last == 'e') {
             forms.emplace_back(no_last + rule->suffix(), lex, tag);
+        }
+        // A vowel-initial suffix doubles the final consonant of a doubling
+        // stem, as inflection does: "run" gives "runner" as well as "running".
+        if (sc == StemClass::DOUBLE_CONS &&
+            orthography::takes_vowel_initial_suffix(rule->suffix())) {
+            forms.emplace_back(s + last + rule->suffix(), lex, tag);
         }
     }
 

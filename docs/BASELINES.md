@@ -15,13 +15,21 @@ standards.
 make && make test
 python3 tools/make_splits.py                         # about 4 minutes
 ~/venvs/tok/bin/python tools/train_baselines.py      # about 20 minutes
-~/venvs/tok/bin/python tools/score_tokenizer.py      # about 4 minutes
+~/venvs/tok/bin/python tools/score_tokenizer.py      # about 8 minutes
+~/venvs/tok/bin/python tools/suffix_report.py \
+    --lexicon data/closed_class.tsv \
+    --lexicon ~/data/morph/lexicons/en_100k.tsv --derived-first
 ```
 
 `make_splits.py` and the analyzer side are standard library only.
-`train_baselines.py` and `score_tokenizer.py` need the virtualenv. Results
-land in `~/data/tok/results/baselines.json` and `disagreements.tsv`. Nothing
-is written inside the repository.
+`train_baselines.py` and `score_tokenizer.py` need the virtualenv, for the
+libraries the baselines are trained with and for the spreadsheet reader
+MorphoLex needs. Results land in `~/data/tok/results/baselines.json` and
+`disagreements.tsv`, and the per-suffix report in `suffix_report.json`.
+Nothing is written inside the repository.
+
+The second half of this document, after the baseline tables, is the run with
+the derivation fixes in, which writes `baselines_v2.json`.
 
 ## Environment
 
@@ -587,3 +595,380 @@ Judgment calls made while building this, and why.
     of the pieces slightly more careful than the library's. Both readings are
     computed and compared on every string encoded, and `##` is the only place
     they ever differed.
+
+## After the derivation fixes
+
+Three changes, measured over the same thirteen systems, the same word list and
+the same scorer. `~/data/tok/results/baselines_v2.json` holds every number
+below; the tables above are the run before them and are left as they were.
+
+1. **A guard on the `--derived-first` promotion.** A decomposition outranks a
+   stored whole word only when four conditions hold: the word is not closed
+   class, the lemma is at least three characters, the lemma is a lexeme under
+   the part of speech the affix attaches to, and for a one or two character
+   affix the whole word is not more frequent than the stem.
+   `docs/LEXICON.md` has the conditions and the measurement behind the fourth.
+
+2. **Twenty-eight derivational suffixes instead of five.** `-able`, `-al`,
+   `-ful`, `-less`, `-ous`, `-ic`, `-ive`, `-ish`, `-y`, `-ity`, `-ism`,
+   `-ist`, `-ion`, `-ation`, `-ance`, `-ence`, `-hood`, `-ship`, `-dom`,
+   `-ize`, `-ise`, `-ify` and `-en` joined `-ness`, `-ly`, `-er`, `-tion` and
+   `-ment`, with the same three orthographic alternations inflection uses and
+   stacking up to two suffixes plus an inflection.
+
+3. **A hygiene filter on the MorphyNet gold.** The rows that credited `i|s`
+   for `is` and `ha|s` for `has` are dropped. `--unfiltered-gold` turns it off.
+
+And one change of configuration: **all four analyzer settings now load
+`data/closed_class.tsv`**, which decision 6 above left out. Without a
+`FUNCTION` reading of `is` there is no stored whole word for the guard to keep,
+and `i|s` was the single most frequent error in the table. It also raises token
+coverage from 86.9% to 92.8%, so the coverage and compression columns are not
+comparable with the run above; the gold columns are.
+
+### The gold after the filter
+
+| Gold | Rows | Kept before | Kept after | Dropped |
+|------|-----:|------------:|-----------:|--------:|
+| MorphyNet inflection | 649,593 | 219,025 | 218,835 | 190 |
+| MorphyNet derivation | 225,131 | 208,534 | 199,439 | 9,095 |
+
+| Reason | Inflection | Derivation |
+|--------|-----------:|-----------:|
+| the stem is under three characters | 173 | 167 |
+| the stem is not a lemma in the inflectional file | 0 | 8,892 |
+| the form is in `data/closed_class.tsv` | 17 | 65 |
+
+Scorable forms go from 187,083 to 186,947 and from 203,374 to 194,771. The
+inflectional file loses almost nothing, which is the expected result: its stems
+are its own first column, so the second test cannot fire and only `i`, `ha`,
+`wa`, `u` and the function words go. The derivational file loses 4.4% of its
+rows, nearly all of them to a source word that appears nowhere in MorphyNet's
+own inflection table.
+
+MorphoLex is not filtered. It is the independent gold and it already drops
+every row whose morphemes do not concatenate.
+
+**What the filter changes, both ways.** `--unfiltered-gold` scores the same
+systems against the unfiltered rows, and the aggregate barely moves:
+
+| | Unfiltered P | Filtered P | Unfiltered F1 | Filtered F1 |
+|---|---:|---:|---:|---:|
+| **MorphyNet derivation** | | | | |
+| unigram-32k | 0.294 | 0.297 | 0.418 | 0.420 |
+| analyzer-en_100k | 0.766 | **0.788** | 0.523 | 0.521 |
+| analyzer-en_100k-derived | 0.770 | **0.791** | 0.549 | 0.548 |
+| analyzer-en_all-derived | 0.748 | **0.770** | 0.572 | 0.572 |
+| **MorphyNet inflection** | | | | |
+| unigram-32k | 0.166 | 0.166 | 0.235 | 0.235 |
+| analyzer-en_100k | 0.678 | 0.680 | 0.555 | 0.555 |
+| analyzer-en_all-derived | 0.790 | 0.792 | 0.826 | 0.827 |
+
+Two points of derivational precision, and F1 to within 0.003. That is the
+right size: 9,095 rows out of 225,131 cannot move an aggregate far. The filter
+is worth having anyway, because the rows it drops are the ones that decided
+individual judgments: the unfiltered gold says `i|s` is the correct
+segmentation of `is`, and a table of worked examples that cites it as evidence
+is citing a mining artifact. It moves the analyzer rows more than the baseline
+rows because the dropped rows are short-stem splits, which is exactly what a
+Unigram model does anyway and what the analyzer has stopped doing.
+
+### Compression and round trip
+
+The analyzer settings, with Unigram 16k and 32k for reference.
+
+| system | pcs/token | pcs/type | chr/pc | pcs/1kB | distinct pieces | round trip |
+|--------|----------:|---------:|-------:|--------:|----------------:|-----------:|
+| unigram-16k | 1.101 | 2.795 | 3.574 | 275.52 | 15,213 | 100% |
+| unigram-32k | 1.056 | 2.427 | 3.725 | 266.94 | 30,181 | 100% |
+| analyzer-builtin | 1.054 | 1.076 | 3.733 | 265.79 | 118,658 | 100% |
+| analyzer-en_100k | 1.091 | 1.287 | 3.608 | 272.65 | 98,701 | 100% |
+| analyzer-en_100k-derived | 1.111 | 1.339 | 3.542 | 276.43 | 95,632 | 100% |
+| analyzer-en_all-derived | 1.111 | 1.346 | 3.541 | 276.52 | 95,585 | 100% |
+
+Round trip is exact for all thirteen systems on all 482,177 strings encoded,
+and the library decoders agree with the scorer on every one.
+
+The analyzer emits fewer pieces per token than it did (1.111 against 1.136 at
+`en_100k` with the flag) while decomposing more words, because the guard stopped
+it splitting `is`, `his` and `number`, which are among the most frequent tokens
+in the corpus. Its working inventory also shrank, from 100,492 distinct pieces
+to 95,632, for the same reason answer 2 gave before: a stem plus an affix it
+already has replaces a word it used to emit whole.
+
+### Morphological alignment
+
+**MorphoLex, 10,058 forms. Independent.**
+
+| system | P | R | F1 | exact | P alt | R alt | F1 alt |
+|--------|--:|--:|---:|------:|------:|------:|-------:|
+| **unigram-16k** | 0.566 | 0.712 | **0.631** | 0.433 | 0.568 | 0.715 | 0.633 |
+| unigram-32k | 0.638 | 0.617 | 0.628 | 0.439 | 0.640 | 0.619 | 0.629 |
+| analyzer-builtin | 0.967 | 0.092 | 0.169 | 0.087 | 0.971 | 0.093 | 0.169 |
+| analyzer-en_100k | 0.972 | 0.232 | 0.374 | 0.215 | 0.974 | 0.232 | 0.375 |
+| analyzer-en_100k-derived | 0.975 | 0.377 | 0.544 | 0.344 | 0.977 | 0.378 | 0.545 |
+| analyzer-en_all-derived | 0.973 | 0.382 | **0.548** | 0.347 | 0.975 | 0.382 | 0.549 |
+
+**MorphyNet inflection, 186,947 forms. IN DISTRIBUTION.**
+
+| system | P | R | F1 | exact |
+|--------|--:|--:|---:|------:|
+| unigram-16k | 0.165 | 0.457 | 0.243 | 0.047 |
+| unigram-32k | 0.166 | 0.402 | 0.235 | 0.064 |
+| analyzer-builtin | 0.502 | 0.042 | 0.078 | 0.010 |
+| analyzer-en_100k | 0.680 | 0.468 | 0.555 | 0.293 |
+| analyzer-en_100k-derived | 0.682 | 0.470 | 0.557 | 0.296 |
+| **analyzer-en_all-derived** | 0.792 | 0.865 | **0.827** | 0.684 |
+
+**MorphyNet derivation, 194,771 forms. IN DISTRIBUTION.**
+
+| system | P | R | F1 | exact |
+|--------|--:|--:|---:|------:|
+| unigram-16k | 0.266 | 0.736 | 0.391 | 0.157 |
+| unigram-32k | 0.297 | 0.722 | 0.420 | 0.214 |
+| analyzer-builtin | 0.702 | 0.065 | 0.120 | 0.041 |
+| analyzer-en_100k | 0.788 | 0.389 | 0.521 | 0.306 |
+| analyzer-en_100k-derived | 0.791 | 0.419 | 0.548 | 0.333 |
+| **analyzer-en_all-derived** | 0.770 | 0.455 | **0.572** | 0.367 |
+
+The analyzer now leads the derivational gold outright, 0.572 against Unigram
+32k's 0.420, where before the fixes it trailed at 0.386. On the inflectional
+gold it loses 0.035 F1 at the top, 0.862 to 0.827, and the loss is precision,
+0.871 to 0.792: that gold marks one boundary per word, the inflectional one, so
+every derivational boundary the new rules add inside a form like `abacists` is
+counted as a false positive. `abac|ist|s` against a gold of `abacist|s` is the
+shape of almost all of it.
+
+### Analyzer coverage and gates
+
+Token weighted, over the test word tokens.
+
+| system | coverage | decomposed | lexicon_stem | irregular | no_analysis |
+|--------|---------:|-----------:|-------------:|----------:|------------:|
+| analyzer-builtin | 69.5% | 5.2% | 62.2% | 2.1% | 30.5% |
+| analyzer-en_100k | 92.8% | 8.8% | 81.1% | 2.9% | 7.2% |
+| analyzer-en_100k-derived | 92.8% | 10.8% | 79.1% | 2.9% | 7.2% |
+| analyzer-en_all-derived | 92.8% | 10.8% | 79.1% | 2.9% | 7.2% |
+
+Type weighted, coverage is 10.4%, 58.8%, 58.8% and 60.0%.
+
+The jump in coverage against the table above is `data/closed_class.tsv`, not
+the rules. The share of tokens that come out decomposed fell, 13.4% to 10.8%,
+and that is the two of them together: the file gives a function word a stored
+reading and the guard stops the decomposition outranking it. The words that
+stopped splitting are the most frequent in the corpus, so they move a lot of
+token weight even though there are not many of them. Type weighted, the
+decomposed share went the other way, which is where the suffixes show up:
+26.2% of types to 31.2%.
+
+### Before and after, on the independent gold
+
+| | Before | After | |
+|---|---:|---:|---|
+| analyzer-builtin | 0.058 | **0.169** | F1 |
+| analyzer-en_100k | 0.149 | **0.374** | F1 |
+| analyzer-en_100k-derived | 0.223 | **0.544** | F1 |
+| analyzer-en_all-derived | 0.228 | **0.548** | F1 |
+| analyzer-en_100k-derived | 0.945 | **0.975** | precision |
+| analyzer-en_100k-derived | 0.126 | **0.377** | recall |
+
+Recall triples and precision rises. That is the result this work was for, and
+the direction matters: a rule set that only ever fires when the lexicon holds
+the stem buys recall without paying for it.
+
+### Per-suffix agreement with MorphoLex
+
+`tools/suffix_report.py` credits a suffix with a MorphoLex form when the
+analyzer's primary reading of that form ends in it, and scores the boundaries
+that reading predicts. Run with `data/closed_class.tsv` plus `en_100k` and
+`--derived-first`. "newly" counts the test types the suffix splits that the
+five-suffix rule set did not.
+
+| suffix | gold forms | P | R | F1 | exact | newly |
+|--------|-----------:|--:|--:|---:|------:|------:|
+| `-ness` | 603 | 0.994 | 0.846 | 0.914 | 475 | 404 |
+| `-ly` | 1,012 | 0.990 | 0.746 | 0.850 | 684 | 1,290 |
+| `-er` | 424 | 0.988 | 0.937 | 0.962 | 391 | 11 |
+| `-tion` | 4 | **0.000** | 0.000 | 0.000 | 0 | 1 |
+| `-ment` | 83 | 0.954 | 1.000 | 0.976 | 79 | 0 |
+| `-able` | 133 | 0.957 | 0.964 | 0.960 | 122 | 350 |
+| `-al` | 101 | 0.962 | 0.795 | 0.871 | 71 | 498 |
+| `-ful` | 131 | 0.970 | 0.978 | 0.974 | 124 | 219 |
+| `-less` | 199 | 0.995 | 0.985 | 0.990 | 195 | 314 |
+| `-ous` | 3 | 1.000 | 1.000 | 1.000 | 3 | 172 |
+| `-ic` | 88 | 0.961 | 0.772 | 0.856 | 60 | 290 |
+| `-ive` | 33 | 1.000 | 1.000 | 1.000 | 33 | 219 |
+| `-ish` | 81 | 0.988 | 0.952 | 0.970 | 77 | 194 |
+| `-y` | 332 | 0.982 | 0.971 | 0.976 | 319 | 1,408 |
+| `-ity` | 114 | 1.000 | 0.789 | 0.882 | 85 | 368 |
+| `-ism` | 108 | 0.982 | 0.727 | 0.835 | 69 | 275 |
+| `-ist` | 100 | 0.981 | 0.777 | 0.867 | 71 | 266 |
+| `-ion` | 59 | 0.983 | 0.906 | 0.943 | 53 | 828 |
+| `-ation` | 0 | n/a | n/a | n/a | 0 | 368 |
+| `-ance` | 27 | 0.964 | 1.000 | 0.982 | 26 | 109 |
+| `-ence` | 0 | n/a | n/a | n/a | 0 | 30 |
+| `-hood` | 22 | 1.000 | 1.000 | 1.000 | 22 | 49 |
+| `-ship` | 63 | 1.000 | 0.716 | 0.834 | 39 | 134 |
+| `-dom` | 15 | 1.000 | 1.000 | 1.000 | 15 | 35 |
+| `-ize` | 96 | 0.980 | 0.770 | 0.862 | 67 | 134 |
+| `-ise` | 0 | n/a | n/a | n/a | 0 | 68 |
+| `-ify` | 22 | 0.955 | 0.955 | 0.955 | 21 | 46 |
+| `-en` | 40 | 1.000 | 1.000 | 1.000 | 40 | 102 |
+
+Every suffix in the inventory scores at least 0.954 except `-tion`. Three more
+were dropped on an earlier pass of this same table and one was restricted:
+
+| Dropped or restricted | P then | On | Why |
+|---|---:|---:|---|
+| `-ible` dropped | 0.000 | 1 form | No free base in English. `visible` came out as `vis\|ible` off the verb `vise` |
+| `-sion` dropped | 0.000 | 1 form | `-ion` reaches the same words through a better cut, `confus\|ion` and `tens\|ion`. `-sion` only added `emul\|sion` |
+| `-ard` dropped | 0.400 | 5 forms | Its three measurable splits were compounds in `-yard`: `churchy\|ard`, `woody\|ard`, `bricky\|ard` |
+| `-ise` restricted to a four letter stem | 0.000 | 1 form | Keeps `real\|ise`, drops `now\|ise` |
+| `-ous` after the stacking limits | 0.667 | 4 forms | `re\|pet\|it\|ious` went when a two-suffix chain was made to need a four letter root |
+
+`-tion` is the one the test flags that stays, and `docs/LEXICON.md` decision 29
+says why: its four remaining splits are the boundary one character early,
+`fac|tion` where the gold says `fact|ion`, and dropping it would withdraw the
+analysis of every form the generator ever produced through it. The new `-ion`
+rule takes over wherever the base is a verb, which is where the gold agrees.
+
+The precision in this table is measured only over forms MorphoLex says are
+derived, because a row whose morphemes do not concatenate, and a row with a
+single morpheme, are both dropped before scoring. So a suffix pays nothing here
+for firing on a word that has no boundary at all, and `read|y`, `part|y` and
+`fin|ish` cost nothing in the column while costing a tokenizer something. The
+residue below is the honest other half of this table.
+
+### The remaining recall gap, counted
+
+7,352 gold boundaries are missed at `analyzer-en_100k-derived`, out of 11,797.
+Every one of them is in exactly one bucket, compounds tested first, since
+`play|house` is a compound whether or not the analyzer reached the word:
+
+| Cause | Boundaries | Share |
+|-------|-----------:|------:|
+| a compound of two free-standing words | 3,773 | 51.3% |
+| an affix the rule set does not have | 1,253 | 17.0% |
+| the inner layer of a multi-layer form | 1,050 | 14.3% |
+| an affix it does have and did not strip | 716 | 9.7% |
+| the word has no analysis at all | 560 | 7.6% |
+
+**Compounds are now the majority of the gap.** `air|base`, `above|board`,
+`switch|board`, `play|house`, `church|yard`: a boundary where both sides are
+free-standing words of three letters or more and the right side is not an affix
+the rules know. The analyzer does not do compounds at all, and this is the
+first time that has been the largest single thing wrong with it.
+
+**The affixes still unknown are 1,253 boundaries**, and the list is short and
+specific: `-ate` (`abomin|ate`, `accur|ate`), `-ee` (`absent|ee`), `-ian`
+(`academ|ic|ian`), `-acy` (`accur|acy`), `-ics` (`acoust|ics`), `-or`
+(`act|or`), `-ward` (`after|ward`), `-i`, `-n`, `-in`. Another dozen rules
+would reach most of it, and the per-suffix table is how each would be judged.
+
+**Multi-layer forms account for 1,050.** MorphoLex has 1,567 forms with three
+or more morphemes; the analyzer returns three or more pieces for 247 of them
+and is exactly right on 230. The limit is not the two-layer cap but the 0.9
+factor: where the intermediate form is a lexeme of its own, the one-layer
+reading outranks the two-layer one, so `nationality` is reported as
+`national|ity` and `nation|al|ity` sits under it in `--nbest 3`.
+
+**716 boundaries use an affix the rules have and did not strip**, which is the
+ranking and the guard: `absolutely` stays whole because the stored adverb
+outweighs `absolute`, which is the fourth condition doing exactly what it was
+measured to do.
+
+### What is still wrong
+
+The three errors in the worked examples above are fixed: `is`, `his` and
+`number` all come out whole. What the fixes cost, in test tokens, worst first:
+
+| word | count | analyzer | why |
+|------|------:|----------|-----|
+| `only` | 8,549 | `on\|ly` | `one` plus `-ly` with the silent e deleted. MorphyNet credits it; a tokenizer should not want it |
+| `ready` | 2,541 | `read\|y` | `-y` on a real noun, and the wrong etymology |
+| `party` | 1,974 | `part\|y` | the same |
+| `Mary` | 1,318 | `Mar\|y` | `mare` plus `-y`. The analyzer has no notion of a proper noun |
+| `letter` | 1,298 | `let\|ter` | the agentive `-er` on a doubling stem, where `let` is the more frequent word |
+| `broken` | 1,011 | `broke\|n` | `-en` on the adjective `broke`, ranked over the stored participle of `break` |
+| `married` | 990 | `married` | the opposite error: the fourth condition blocks `marr\|ied`, because `married` is more frequent than `marry` |
+
+`only` is the largest single one and it comes from the silent-e candidate being
+tried for every suffix rather than only the vowel-initial ones. Narrowing it
+would withdraw the analysis of 227 forms in the regression baseline, and
+`argu|ment` and `judg|ment` show the exception is real English, so it was left
+alone: `docs/LEXICON.md` decision 30.
+
+Over the whole test split, the twenty-eight suffixes change 7,992 of the
+125,852 types and 143,018 of the 9,647,333 tokens, 1.5%, against the
+five-suffix rule set with the same guard. The tables above are what that buys.
+
+### The four questions, after the fixes
+
+1. **At matched vocabulary size.** Still not matched: 95,632 distinct pieces
+   against 32,000, and the gap closed by 5% rather than by design. Against
+   unigram-16k, `analyzer-en_all-derived` is now 0.010 worse on pieces per word
+   token (1.111 against 1.101), 0.083 worse on MorphoLex F1 (0.548 against
+   0.631), 0.584 better on inflection and 0.181 better on derivation. Before
+   the fixes the MorphoLex gap was 0.403.
+
+2. **The analyzer's vocabulary is not fixed.** Unchanged as an answer, and the
+   direction of travel is the same: better rules shrink the inventory, 100,492
+   pieces to 95,632, because a word that used to be emitted whole is now a stem
+   plus an affix the layer already had.
+
+3. **The best baseline on morphological alignment.** Unchanged: Unigram, and
+   unigram-16k on the independent gold at 0.631. The baselines were not
+   retrained and their numbers move only where the gold was filtered.
+
+4. **Twenty words where the two disagree.** `~/data/tok/results/`
+   `disagreements.tsv`, 19,908 words, is regenerated. The top of it is now
+   almost entirely the analyzer being right and unigram-32k storing the word
+   whole: `called`, `things`, `laughs`, `looks`, `years`, `coming`, `asked`,
+   `says`, `looking`, `makes`. The one wrong split at the top is `only`.
+
+### Decisions, after the fixes
+
+These are in addition to the ten above, which still stand except where noted.
+
+11. **All four analyzer settings now load `data/closed_class.tsv`, which
+    reverses decision 6.** That decision left the file out because the brief
+    for the first round named four settings and did not name it, and the cost
+    was visible in the worked examples: with no `FUNCTION` reading of `is`,
+    `--derived-first` promoted `i|s`, and `is` and `his` together are 1.3% of
+    the test tokens. The guard on that ranking settles which of two readings
+    wins and cannot invent the one it is supposed to keep, so the file has to
+    be there for the fix to apply. The cost is that token coverage jumps from
+    86.9% to 92.8% and the coverage and compression columns are no longer
+    comparable with the earlier run. The gold columns are, since MorphoLex and
+    MorphyNet contain almost no function words, and the filter now drops the
+    few they did contain.
+
+12. **The hygiene filter is on by default and off behind a flag.** The
+    numbers it changes are the ones that were wrong: a gold that credits
+    `i|s` for `is` is not measuring segmentation quality. Defaulting to the
+    filtered gold and keeping `--unfiltered-gold` for the comparison puts the
+    better measurement in the path of least resistance and leaves the worse
+    one reproducible. Both readers report what they dropped and why on every
+    run.
+
+13. **The filter is not applied to MorphoLex.** It is the independent gold,
+    it was not mined, and it already drops every row whose morphemes do not
+    concatenate to the word. Filtering it further would mean deciding which of
+    its rows a psycholinguist got wrong, which is exactly the judgment that
+    would stop it being independent.
+
+14. **A derivation row's stem is its source word, even for a prefix.** The
+    filter asks whether the stem is three characters and whether it is a lemma
+    somewhere in MorphyNet's inflection table. For a suffix row the source word
+    and the first morph are the same string. For a prefix row the first morph
+    is the prefix, and dropping `un|kind` because `un` is two letters long
+    would be reading the rule against its purpose. The inflection rows use the
+    first morph, where that distinction does not arise.
+
+15. **The per-suffix precision in the table above is measured over the forms
+    MorphoLex says are derived, and that is a one-sided test.** A row whose
+    morphemes do not concatenate is dropped from the gold, and so is a row with
+    a single morpheme, so a suffix that fires on a word with no boundary at all
+    pays nothing in the column. `read|y`, `part|y` and `fin|ish` are each worth
+    a thousand test tokens and none of them appears in it. The residue section
+    counts them instead, by hand and by frequency, because no gold here can.
