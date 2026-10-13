@@ -29,8 +29,11 @@ training runs: whether a character can appear in the test text that the
 training text never showed, which is what decides whether a tokenizer without
 byte fallback can round-trip.
 
-The two large outputs are gzip compressed, see `open_text` in
-tools/pretokenize.py for why.
+The two large outputs are gzip compressed, and the corpora are read through
+`existing`, which finds them whether or not they have been compressed since.
+See `open_text` in tools/pretokenize.py for why. `raw_bytes` is the size of
+the uncompressed text either way, since it is counted while reading rather
+than taken from the directory entry.
 
 Standard library only.
 """
@@ -43,7 +46,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from pretokenize import UNIT_RE, WORD_RE, open_text  # noqa: E402
+from pretokenize import (UNIT_RE, WORD_RE, existing,  # noqa: E402
+                         open_text)
 
 REPORT_EVERY = 1000000
 
@@ -64,11 +68,13 @@ def build_test(path, out_dir):
     word_tokens = 0
     unit_tokens = 0
 
+    raw_bytes = 0
     words_path = os.path.join(out_dir, "test_words.txt.gz")
-    with open(path, encoding="utf-8", errors="replace") as source, \
+    with open_text(existing(path)) as source, \
             open_text(words_path, "w") as words_out:
         for line in source:
             lines += 1
+            raw_bytes += len(line.encode("utf-8"))
             alphabet.update(line)
             for unit in find(line):
                 unit_counts[unit] += 1
@@ -87,7 +93,7 @@ def build_test(path, out_dir):
     alphabet.discard("\n")
     return {
         "source": path,
-        "raw_bytes": os.path.getsize(path),
+        "raw_bytes": raw_bytes,
         "lines": lines,
         "word_tokens": word_tokens,
         "word_types": len(word_counts),
@@ -106,11 +112,12 @@ def build_train(path, out_dir):
     unit_tokens = 0
     types = set()
 
+    raw_bytes = 0
     out_path = os.path.join(out_dir, "train_pretok.txt.gz")
-    with open(path, encoding="utf-8", errors="replace") as source, \
-            open_text(out_path, "w") as out:
+    with open_text(existing(path)) as source, open_text(out_path, "w") as out:
         for line in source:
             lines += 1
+            raw_bytes += len(line.encode("utf-8"))
             alphabet.update(line)
             units = find(line)
             unit_tokens += len(units)
@@ -124,7 +131,7 @@ def build_train(path, out_dir):
     alphabet.discard("\n")
     return {
         "source": path,
-        "raw_bytes": os.path.getsize(path),
+        "raw_bytes": raw_bytes,
         "pretokenized": out_path,
         "pretokenized_bytes": os.path.getsize(out_path),
         "lines": lines,

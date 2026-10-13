@@ -37,6 +37,7 @@ Standard library only.
 
 import argparse
 import gzip
+import os
 import re
 import sys
 
@@ -62,6 +63,19 @@ def open_text(path, mode="r"):
     if path.endswith(".gz"):
         return gzip.open(path, mode + "t", encoding="utf-8", newline="")
     return open(path, mode, encoding="utf-8")
+
+
+def existing(path):
+    """Return `path`, or its `.gz` form if that is what is on disk.
+
+    Housekeeping on this machine compresses large plain files under the home
+    directory, read-only corpora included, so a path recorded in a script is
+    not necessarily the name the file has today. Nothing here ever writes to
+    those files, it just has to find them.
+    """
+    if not os.path.exists(path) and os.path.exists(path + ".gz"):
+        return path + ".gz"
+    return path
 
 
 def pretokenize(text):
@@ -117,8 +131,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     if args.files:
-        handles = [open(path, encoding="utf-8", errors="replace")
-                   for path in args.files]
+        handles = [open_text(existing(path)) for path in args.files]
     else:
         handles = [sys.stdin]
 
