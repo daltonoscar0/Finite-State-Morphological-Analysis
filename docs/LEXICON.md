@@ -1335,8 +1335,8 @@ Judgment calls made while scaling the lexicon, and why. The decisions in
     to the vowel-initial suffixes, where it is the only place it happens.
 
 31. **The one field that moves on the regression baseline is `n_analyses`.**
-    Of the 10,036 records, 9,880 are byte identical, 17 gained an analysis
-    where there was none, and 139 report a different number of analyses with
+    Of the 10,036 records, 9,878 are byte identical, 18 gained an analysis
+    where there was none, and 140 report a different number of analyses with
     every other field unchanged, pieces and weight included. That field counts
     the analyses the analyzer returned, so it cannot hold still while suffixes
     are added: `active` now has `act` plus `-ive` as a second reading, ranked
