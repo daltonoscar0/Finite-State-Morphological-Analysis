@@ -27,7 +27,7 @@ a word costs about eighty microseconds.
 
     python3 tools/eval_lexicon.py --all \\
         --lexicon-dir ~/data/morph/lexicons \\
-        --json ~/data/morph/eval.json
+        --json ~/data/morph/results/eval.json
 
 On independence
 ---------------
@@ -77,6 +77,12 @@ DEFAULT_LEXICON_DIR = "~/data/morph/lexicons"
 DEFAULT_INFLECTION = "~/data/morph/morphynet/eng.inflectional.v1.tsv"
 DEFAULT_DERIVATION = "~/data/morph/morphynet/eng.derivational.v1.tsv"
 DEFAULT_MORPHOLEX = "~/data/morph/morpholex/MorphoLex-en/MorphoLEX_en.xlsx"
+
+# Results land outside the repository, next to the data they were measured on.
+# A run writes its numbers without being asked to, because a table printed to a
+# terminal and then lost is a run that has to be done again.
+DEFAULT_RESULTS_DIR = "~/data/morph/results"
+DEFAULT_JSON = DEFAULT_RESULTS_DIR + "/eval.json"
 
 # The lexicons tools/build_lexicon.py writes, smallest first. "" is the
 # built-in lists on their own, which is the baseline the whole exercise is
@@ -688,8 +694,10 @@ def main(argv=None):
                              "run (0 means all)")
     parser.add_argument("--derived-first", action="store_true",
                         help="pass --derived-first to the analyzer")
-    parser.add_argument("--json", metavar="PATH",
-                        help="write every number to this path as JSON")
+    parser.add_argument("--json", metavar="PATH", default=DEFAULT_JSON,
+                        help="write every number to this path as JSON; "
+                             "'' to write nothing "
+                             f"(default: {DEFAULT_JSON})")
     parser.add_argument("--stages", default="",
                         help="comma separated: corpus, gold, curve, policy, "
                              "morpholex")
