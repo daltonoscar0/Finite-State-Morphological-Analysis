@@ -837,7 +837,9 @@ private:
      * third person singular, so -s yields +3SG. Noun plurals are the one
      * exception: that path accepts -s on any noun, including the zero-plural
      * and umlaut classes, and narrowing it would withdraw analyses that the
-     * output contract fixes in place. See docs/LEXICON.md.
+     * output contract fixes in place. See docs/LEXICON.md. The -es form of
+     * that plural is the one case the path tests, on the orthography rather
+     * than on what the lexeme stores.
      */
     std::vector<std::string> match_suffix_to_features(const std::string& suffix,
                                                        std::shared_ptr<Lexeme> lexeme) {
@@ -868,7 +870,18 @@ private:
             // above. A generated lexicon writes UNKNOWN when the source lists
             // no plural at all, which is how an uncountable noun arrives, and
             // no hand-written entry uses it.
-            if (sc != StemClass::UNKNOWN && (suffix == "s" || suffix == "es")) {
+            //
+            // The one thing the path does test is the shape of the -es
+            // plural, because the epenthetic e has an orthographic trigger:
+            // it appears after a sibilant grapheme and after a final o, and
+            // nowhere else. Without that test "-es" was accepted on any noun
+            // at all, which read the corpus name "CHILDES" as "child" plus a
+            // plural and "clothes" as "cloth" plus one. A plain -s is still
+            // accepted everywhere, so no ordinary plural is affected.
+            const bool es_is_licit = orthography::takes_es(lexeme->stem()) ||
+                                     sc == StemClass::SIBILANT;
+            if (sc != StemClass::UNKNOWN &&
+                (suffix == "s" || (suffix == "es" && es_is_licit))) {
                 features.push_back("+PL");
             }
         } else if (lexeme->pos() == PartOfSpeech::VERB) {

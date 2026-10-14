@@ -906,6 +906,20 @@ static int promotable_of(const WordSegmenter& ws, const std::string& word,
     return -1;
 }
 
+/**
+ * demoted_of: Whether the layer declined one particular split of one word
+ *
+ * The same shape as promotable_of, for the other verdict: 1 when that split is
+ * demoted, 0 when it stands, and -1 when the analyzer did not produce it.
+ */
+static int demoted_of(const WordSegmenter& ws, const std::string& word,
+                      const std::string& split) {
+    for (const auto& seg : ws.segment_word(word)) {
+        if (join_pieces(seg) == split) return seg.demoted ? 1 : 0;
+    }
+    return -1;
+}
+
 static void test_derived_first_guard() {
     std::cout << "\nTest: the guard on --derived-first" << std::endl;
 
@@ -1325,6 +1339,272 @@ static void test_orthography_fixes() {
               << std::endl;
 }
 
+// ── Group 1h: the guard on prefix readings ───────────────────────────────────
+
+/**
+ * add_prefix_fixture: The lexemes the prefix guard turns on
+ *
+ * Weights are the ones in `~/data/morph/lexicons/en_100k.tsv`, so every case
+ * below is the real one rather than a shape chosen to pass. The parts of
+ * speech are the ones that file lists, which is why `cord`, `port` and `sent`
+ * arrive under more categories than a dictionary would give them: a mined
+ * lexicon lists a word under every sense Wiktionary has for it, and the guard
+ * has to work on that.
+ */
+static void add_prefix_fixture(Env& env) {
+    const auto N   = PartOfSpeech::NOUN;
+    const auto V   = PartOfSpeech::VERB;
+    const auto ADJ = PartOfSpeech::ADJECTIVE;
+    const auto REG = StemClass::REG;
+    const auto SE  = StemClass::SILENT_E;
+    const auto YF  = StemClass::Y_FINAL;
+
+    // co- on a two-letter base: the length condition
+    add_weighted(env, "come",        V,   SE,  1.13f);
+    add_weighted(env, "me",          N,   REG, 1.19f);
+
+    // The frequency condition, in both directions
+    add_weighted(env, "understand",  V,   REG, 1.10f);
+    add_weighted(env, "stand",       N,   REG, 1.09f);
+    add_weighted(env, "stand",       V,   REG, 1.09f);
+    add_weighted(env, "present",     N,   REG, 1.09f);
+    add_weighted(env, "present",     V,   REG, 1.09f);
+    add_weighted(env, "sent",        N,   REG, 1.09f);
+    add_weighted(env, "report",      N,   REG, 1.10f);
+    add_weighted(env, "report",      V,   REG, 1.10f);
+    add_weighted(env, "port",        N,   REG, 1.05f);
+    add_weighted(env, "port",        V,   REG, 1.05f);
+    add_weighted(env, "record",      N,   REG, 1.09f);
+    add_weighted(env, "record",      V,   REG, 1.09f);
+    add_weighted(env, "cord",        N,   REG, 1.00f);
+    add_weighted(env, "cord",        V,   REG, 1.00f);
+    add_weighted(env, "return",      N,   REG, 1.09f);
+    add_weighted(env, "return",      V,   REG, 1.09f);
+    add_weighted(env, "turn",        N,   REG, 1.10f);
+    add_weighted(env, "turn",        V,   REG, 1.10f);
+
+    // A prefix with a suffix outside it, where the frequency condition reads
+    // the prefixed lemma: "department" against "depart", "unhappiness"
+    // against "unhappy"
+    add_weighted(env, "department",  N,   REG, 1.09f);
+    add_weighted(env, "depart",      N,   REG, 0.98f);
+    add_weighted(env, "depart",      V,   REG, 0.98f);
+    add_weighted(env, "part",        N,   REG, 1.13f);
+    add_weighted(env, "part",        V,   REG, 1.13f);
+    add_weighted(env, "unhappiness", N,   StemClass::SIBILANT, 0.94f);
+    add_weighted(env, "unhappy",     ADJ, YF,  1.00f);
+    add_weighted(env, "happy",       ADJ, YF,  1.10f);
+
+    // The readings the guard has to leave alone
+    add_weighted(env, "rewrite",     V,   SE,  0.96f);
+    add_weighted(env, "write",       V,   SE,  1.08f);
+    add_weighted(env, "nonsense",    N,   REG, 1.02f);
+    add_weighted(env, "sense",       N,   SE,  1.09f);
+    add_weighted(env, "disagree",    V,   REG, 1.01f);
+    add_weighted(env, "agree",       V,   REG, 1.07f);
+    add_weighted(env, "unkind",      ADJ, REG, 0.92f);
+    add_weighted(env, "kind",        ADJ, REG, 1.11f);
+    add_weighted(env, "kind",        N,   REG, 1.11f);
+    add_weighted(env, "war",         N,   REG, 1.11f);
+
+    // The part of speech condition, isolated. "re-" makes verbs out of verbs,
+    // so a noun-only base is not one it attaches to. Both entries are commoner
+    // than the whole word, so frequency cannot be what decides either pair.
+    add_weighted(env, "requs",       N,   REG, 0.90f);
+    add_weighted(env, "qus",         N,   REG, 1.20f);
+    add_weighted(env, "reqvs",       N,   REG, 0.90f);
+    add_weighted(env, "qvs",         V,   REG, 1.20f);
+
+    // The closed-class condition. "non" plus the preposition "for" is the
+    // shape, with "for" supplied as the marginal noun a mined lexicon carries
+    // so that the list is the only thing that knows better.
+    add_weighted(env, "nonfor",      N,   REG, 0.90f);
+    add_weighted(env, "for",         N,   REG, 1.25f);
+
+    // The stem convention the fix must not touch
+    add_weighted(env, "beauty",      N,   YF,  1.07f);
+    add_weighted(env, "busy",        ADJ, YF,  1.08f);
+
+    // The two-letter noun under "SIS", and the plural it used to license
+    add_weighted(env, "si",          N,   REG, 1.01f);
+}
+
+/**
+ * test_prefix_guard: Four conditions on a prefix reading, and what they fix
+ *
+ * Prefix stripping had no guard of its own: the analyzer tries fifteen
+ * prefixes against every analysis of the remainder, and the reading it built
+ * carried the base's weight, so `co|me` was reported at the weight of the
+ * pronoun `me` and beat the stored verb `come` on either ranking. That is
+ * 17,000 test tokens in docs/BASELINES.md, more than the four words the
+ * previous round fixed put together.
+ *
+ * Segmenter::prefix_is_licensed states the conditions and
+ * Segmentation::demoted is where the verdict goes. Unlike the promotion
+ * guard, the verdict is read by both rankings, because weight cannot settle a
+ * pair where one side's weight belongs to a different word.
+ */
+static void test_prefix_guard() {
+    std::cout << "\nTest: the guard on prefix readings" << std::endl;
+
+    Env env({"data/closed_class.tsv"});
+    add_prefix_fixture(env);
+
+    ClosedClassSet closed_class;
+    assert(closed_class.load("data/closed_class.tsv"));
+
+    const WordSegmenter standard(&env.analyzer, &env.lexicon, false,
+                                 &closed_class);
+    const WordSegmenter derived(&env.analyzer, &env.lexicon, true,
+                                &closed_class);
+
+    // The words the fix is for. Each comes out whole, or with the one suffix
+    // boundary that is right, on both rankings.
+    const struct { const char* word; const char* pieces; } fixed[] = {
+        {"come",       "come"},
+        {"Come",       "Come"},
+        {"understand", "understand"},
+        {"present",    "present"},
+        {"department", "depart|ment"},
+        {"report",     "report"},
+        {"record",     "record"},
+        {"return",     "return"},
+    };
+    for (const auto& c : fixed) {
+        expect_split(derived, c.word, c.pieces);
+        const std::string plain = split_of(standard, c.word);
+        if (plain.find('|') != std::string::npos && plain != c.pieces) {
+            std::cerr << "FAIL: " << c.word << " is " << plain
+                      << " on the default ranking" << std::endl;
+            assert(false);
+        }
+        std::cout << "  ✓ " << c.word << " → " << c.pieces
+                  << " on both rankings" << std::endl;
+    }
+
+    // The readings a prefix guard must not withdraw
+    const struct { const char* word; const char* pieces; } kept[] = {
+        {"unhappy",     "un|happy"},
+        {"rewrite",     "re|write"},
+        {"nonsense",    "non|sense"},
+        {"disagree",    "dis|agree"},
+        {"unkind",      "un|kind"},
+        {"prewar",      "pre|war"},
+    };
+    for (const auto& c : kept) {
+        expect_split(derived, c.word, c.pieces);
+        std::cout << "  ✓ " << c.word << " still splits: " << c.pieces
+                  << std::endl;
+    }
+
+    // A prefix reading is never promoted, which is the policy the measurement
+    // in docs/LEXICON.md selected. The guard leaves `un|happ|iness` alone, and
+    // it still wins on the default ranking, where it carries the weight of
+    // `happy` against the weight of `unhappy`. Under --derived-first the
+    // suffix reading is promoted and it is not, so `unhapp|iness` is reported
+    // instead: one of the two boundaries MorphoLex marks either way.
+    assert(demoted_of(derived, "unhappiness", "un|happ|iness") == 0);
+    expect_split(standard, "unhappiness", "un|happ|iness");
+    expect_split(derived, "unhappiness", "unhapp|iness");
+    std::cout << "  ✓ unhappiness: un|happ|iness by weight, unhapp|iness "
+                 "under the flag" << std::endl;
+
+    // Condition 1, the length of the base, isolated on the word it was
+    // written for: "me" is two letters, and every other condition passes,
+    // since "come" is rarer than "me" and co- does attach to a noun.
+    assert(demoted_of(derived, "come", "co|me") == 1);
+    std::cout << "  ✓ condition 1: co|me is demoted on a two-letter base"
+              << std::endl;
+
+    // Condition 2, the part of speech, isolated. The two synthetic words
+    // differ in nothing but the category of the base.
+    assert(demoted_of(derived, "requs", "re|qus") == 1);
+    assert(demoted_of(derived, "reqvs", "re|qvs") == 0);
+    expect_split(derived, "requs", "requs");
+    expect_split(derived, "reqvs", "re|qvs");
+    std::cout << "  ✓ condition 2: re- takes a verb, not a noun" << std::endl;
+
+    // Condition 3, the closed class, isolated, over a lexicon that does not
+    // load the closed class as a lexicon: the base arrives as the marginal
+    // noun a mined lexicon carries, so there is no FUNCTION reading to read
+    // off the analysis and the list is the only thing that knows better. The
+    // base is three letters and far commoner than the whole word, so no other
+    // condition can be what blocks it.
+    Env open_env;
+    add_prefix_fixture(open_env);
+    const WordSegmenter open_guarded(&open_env.analyzer, &open_env.lexicon,
+                                     true, &closed_class);
+    const WordSegmenter open_unguarded(&open_env.analyzer, &open_env.lexicon,
+                                       true, nullptr);
+    assert(demoted_of(open_unguarded, "nonfor", "non|for") == 0);
+    assert(demoted_of(open_guarded, "nonfor", "non|for") == 1);
+    assert(join_pieces(open_unguarded.segment_word("nonfor")[0]) == "non|for");
+    assert(join_pieces(open_guarded.segment_word("nonfor")[0]) == "nonfor");
+    std::cout << "  ✓ condition 3: non|for needs the closed-class list to go"
+              << std::endl;
+
+    // Condition 4, the frequency margin, isolated. Both pairs are a listed
+    // prefix on a listed base of the right category, and the only difference
+    // is that the base clears the margin in one and not the other.
+    assert(demoted_of(derived, "return", "re|turn") == 1);
+    assert(demoted_of(derived, "rewrite", "re|write") == 0);
+    assert(demoted_of(derived, "department", "de|part|ment") == 1);
+    assert(demoted_of(derived, "unhappiness", "un|happ|iness") == 0);
+    std::cout << "  ✓ condition 4: return and department go, rewrite and "
+                 "unhappiness stand" << std::endl;
+
+    // A demoted reading is ranked down, not withdrawn
+    bool kept_below = false;
+    for (const auto& seg : derived.segment_word("come")) {
+        if (join_pieces(seg) == "co|me") kept_below = true;
+    }
+    assert(kept_below);
+    std::cout << "  ✓ co|me is still reported below, under --nbest 2"
+              << std::endl;
+
+    // The stem convention is untouched: docs/SEGMENTATION.md puts the
+    // displaced i in the piece after the stem, and neither guard moves it.
+    expect_split(derived, "beautiful", "beaut|iful");
+    expect_split(derived, "business", "bus|iness");
+    std::cout << "  ✓ beaut|iful and bus|iness are unchanged" << std::endl;
+
+    // A plural needs a stem of three letters, and a short word in capitals
+    // with nothing but a demoted reading behind it comes out whole.
+    assert(demoted_of(derived, "sis", "si|s") == 1);
+    for (const auto& ws : {std::ref(standard), std::ref(derived)}) {
+        const auto sis = ws.get().segment_word("SIS");
+        verify(sis[0], "prefix:SIS");
+        assert(join_pieces(sis[0]) == "SIS");
+        assert(sis[0].gate == seg_gate::NO_ANALYSIS);
+        assert(sis[0].source == seg_source::FALLBACK);
+        // The reading is kept behind it
+        assert(sis.size() > 1 && join_pieces(sis[1]) == "SI|S");
+        // A reading the guards left alone is reported as it always was
+        assert(join_pieces(ws.get().segment_word("CATS")[0]) == "CAT|S");
+        assert(join_pieces(ws.get().segment_word("cats")[0]) == "cat|s");
+    }
+    std::cout << "  ✓ SIS comes out whole with gate no_analysis, CAT|S does "
+                 "not move" << std::endl;
+
+    // The -es plural has an orthographic trigger, so the corpus name is not a
+    // plural of "child" and "clothes" is not a plural of "cloth". A plain -s
+    // is accepted on any noun, as it always was, and -es after a sibilant or
+    // a final o is what the rule is for.
+    for (const char* word : {"CHILDES", "childes"}) {
+        const auto rec = env.analyzer.analyze(word);
+        assert(rec.empty());
+    }
+    const auto childes = derived.segment_word("CHILDES");
+    verify(childes[0], "prefix:CHILDES");
+    assert(join_pieces(childes[0]) == "CHILDES");
+    assert(childes[0].gate == seg_gate::NO_ANALYSIS);
+    expect_split(derived, "boxes", "box|es");
+    expect_split(derived, "kisses", "kiss|es");
+    expect_split(derived, "cats", "cat|s");
+    std::cout << "  ✓ CHILDES has no analysis, box|es and kiss|es stand"
+              << std::endl;
+}
+
 // ── Group 2: property test over the lexicon ──────────────────────────────────
 
 static void test_property_over_lexicon(Env& env, const WordSegmenter& ws) {
@@ -1687,6 +1967,7 @@ int main() {
     test_derivational_suffixes();
     test_derived_first_guard();
     test_orthography_fixes();
+    test_prefix_guard();
     test_json_escaping();
     test_nbest_records(ws);
     test_fuzz(ws);

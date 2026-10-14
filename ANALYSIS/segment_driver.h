@@ -35,9 +35,11 @@ public:
      *                       word, which is what --derived-first selects. The
      *                       default is false, the ranking documented in
      *                       SEGMENTATION.md.
-     * @param closed_class   Words --derived-first never splits, or nullptr.
-     *                       Read only by the guard on that ranking, so it has
-     *                       no effect on the default output.
+     * @param closed_class   Words no reading is allowed to split, or nullptr.
+     *                       Read by the guard on --derived-first, which only
+     *                       declines to promote, and by condition 3 of the
+     *                       prefix guard, which demotes on either ranking.
+     *                       Neither can add a reading or promote one.
      */
     WordSegmenter(Analyzer* analyzer, const LexiconFSA* lexicon,
                   bool derived_first = false,
@@ -90,6 +92,29 @@ public:
                 if (same_segmentation(kept, seg)) { seen = true; break; }
             }
             if (!seen) deduped.push_back(seg);
+        }
+
+        // A short word in capitals whose every reading is one of the two
+        // guards demoted is taken for an acronym and emitted whole, with the
+        // gate that says the layer has nothing to offer. `SIS` is the case:
+        // the only reading is a plural of the two-letter noun `si`, there is
+        // no whole-word reading to lose to, and the word is not an English
+        // word at all. A reading the guards left alone is reported as it
+        // always was, so `CATS` is still `CAT|S`.
+        //
+        // Segmenter::is_short_all_caps has the bound. The readings are kept
+        // behind the flat record rather than withdrawn, so --nbest 2 still
+        // shows what the analyzer found.
+        if (Segmenter::is_short_all_caps(word)) {
+            bool any_kept = false;
+            for (const auto& seg : deduped) {
+                if (!seg.demoted) { any_kept = true; break; }
+            }
+            if (!any_kept) {
+                Segmentation flat = Segmenter::fallback(word);
+                flat.n_analyses = analyses.size();
+                deduped.insert(deduped.begin(), flat);
+            }
         }
 
         return deduped;
