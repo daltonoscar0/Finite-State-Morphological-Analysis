@@ -19,6 +19,7 @@
 
 #include "../RULES/derivation_rule.h"
 #include "../RULES/orthography.h"
+#include "../RULES/prefix_rule.h"
 
 /**
  * AnalysisState: Represents a configuration during parallel FSA traversal
@@ -153,12 +154,20 @@ public:
         return irregular_index_.find(surface_lower) != irregular_index_.end();
     }
 
-    // English prefixes for prefix stripping
+    // English prefixes for prefix stripping, in the order they are tried.
+    // The forms come from the one inventory in RULES/prefix_rule.h, which also
+    // records what each prefix attaches to. Stripping does not consult the
+    // categories: a prefix is tried against every analysis of the remainder
+    // and the ranking settles which reading wins, so the lexical output is the
+    // same as it was when this list was written out here.
     static const std::vector<std::string>& english_prefixes() {
-        static const std::vector<std::string> prefixes = {
-            "un", "re", "pre", "dis", "mis", "over", "under",
-            "non", "anti", "de", "out", "up", "sub", "inter", "co"
-        };
+        static const std::vector<std::string> prefixes = [] {
+            std::vector<std::string> forms;
+            for (const auto& rule : english_prefix_rules()) {
+                forms.push_back(rule.form);
+            }
+            return forms;
+        }();
         return prefixes;
     }
 

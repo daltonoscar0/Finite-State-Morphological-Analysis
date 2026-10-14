@@ -42,6 +42,7 @@ MORPH_HDR = ANALYSIS/analysis.h \
             RULES/morph_rule.h \
             RULES/orthography.h \
             RULES/plural_rule.h \
+            RULES/prefix_rule.h \
             RULES/verb_rule.h \
             SYMBOLS/symbol.h
 
