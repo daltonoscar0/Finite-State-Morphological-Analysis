@@ -71,6 +71,12 @@ struct GeneratedForm {
  *      verb that happens to end in y, so its agent noun is "delayer", not
  *      "delaier", and only the Y_FINAL class undergoes the alternation.
  *
+ *   4. A silent e deleted before a consonant-initial suffix. "hope" plus -ful
+ *      is "hopeful", not "hopful", and the handful of words English does spell
+ *      with the e gone are the exception list in orthography.h. This mirrors
+ *      the candidate the analyzer stopped generating; see docs/LEXICON.md
+ *      decision 30.
+ *
  * @param lex          The lexeme to expand
  * @param deriv_rules  The derivational rules the configuration registered
  * @return             Generated forms, each tagged with its provenance
@@ -188,7 +194,12 @@ inline std::vector<GeneratedForm> generate_forms(
         if (rule->needs_y_restoration() && sc == StemClass::Y_FINAL && last == 'y') {
             forms.emplace_back(no_last + "i" + rule->suffix(), lex, tag);
         }
-        if (sc == StemClass::SILENT_E && last == 'e') {
+        // A silent e is deleted by a vowel-initial suffix, and otherwise only
+        // in the words English spells that way: "argument", not "hopness".
+        if (sc == StemClass::SILENT_E && last == 'e' &&
+            (orthography::takes_vowel_initial_suffix(rule->suffix()) ||
+             orthography::deletes_e_before_consonant(no_last +
+                                                     rule->suffix()))) {
             forms.emplace_back(no_last + rule->suffix(), lex, tag);
         }
         // A vowel-initial suffix doubles the final consonant of a doubling

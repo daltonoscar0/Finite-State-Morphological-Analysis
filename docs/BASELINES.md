@@ -898,6 +898,9 @@ would withdraw the analysis of 227 forms in the regression baseline, and
 `argu|ment` and `judg|ment` show the exception is real English, so it was left
 alone: `docs/LEXICON.md` decision 30.
 
+*Four of these seven are fixed by the orthography fixes below, which also
+re-list what is left.*
+
 Over the whole test split, the twenty-eight suffixes change 7,992 of the
 125,852 types and 143,018 of the 9,647,333 tokens, 1.5%, against the
 five-suffix rule set with the same guard. The tables above are what that buys.
@@ -972,3 +975,212 @@ These are in addition to the ten above, which still stand except where noted.
     pays nothing in the column. `read|y`, `part|y` and `fin|ish` are each worth
     a thousand test tokens and none of them appears in it. The residue section
     counts them instead, by hand and by frequency, because no gold here can.
+
+## After the orthography fixes
+
+Three changes, measured with the same scorer on the same word list. Only the
+four analyzer settings were re-scored, since nothing here touches a baseline
+model; `~/data/tok/results/baselines_orthography.json` holds every number
+below, and the nine baseline rows are the ones in the tables above.
+
+1. **Silent e is deleted only before a vowel-initial suffix.** A
+   consonant-initial one keeps it, except in the ten words English really does
+   spell with it gone: `argument`, `judgment`, `acknowledgment`,
+   `abridgment`, `truly`, `duly`, `wholly`, `introduction`, `production` and
+   `reduction`. `docs/LEXICON.md` decision 33 lists the 227 baseline forms
+   this withdrew and why the other 217 are not words.
+
+2. **Two conditions on `-y`.** The stem has to be at least as frequent as the
+   whole word, and the whole word must not be in `data/closed_class.tsv`.
+   Decision 34 has the measurement and says why `ready` and `party` still
+   split.
+
+3. **Two more conditions on the `--derived-first` guard.** A reading the rules
+   assembled is never promoted over a stored irregular form (decision 35,
+   which is `broken`), and a reading that doubles a consonant to reach a
+   suffix that does not make verbs is not promoted when the whole word is a
+   verb of its own (decision 36, which is `letter` and the whole `man|ner`
+   family with it).
+
+### Compression and round trip
+
+| system | pcs/token | pcs/type | chr/pc | pcs/1kB | distinct pieces | round trip |
+|--------|----------:|---------:|-------:|--------:|----------------:|-----------:|
+| analyzer-builtin | 1.054 | 1.076 | 3.732 | 265.83 | 118,586 | 100% |
+| analyzer-en_100k | 1.091 | 1.287 | 3.608 | 272.64 | 98,691 | 100% |
+| analyzer-en_100k-derived | 1.109 | 1.338 | 3.548 | 276.11 | 95,716 | 100% |
+| analyzer-en_all-derived | 1.110 | 1.345 | 3.546 | 276.20 | 95,667 | 100% |
+
+Round trip is exact for all four systems on all 482,177 strings encoded, and
+the library decoders agree with the scorer on every one.
+
+Pieces per token falls, 1.111 to 1.109 at `en_100k` with the flag, for the
+reason the guard always gives: the words that stopped splitting are frequent
+ones. The two settings with the flag gain 84 and 82 pieces of working
+inventory, 95,632 to 95,716 and 95,585 to 95,667, which is the same fact from
+the other side: a word that used to be a stem plus an affix the layer already
+had is now a piece of its own. The two default-ranking settings go the other
+way by a smaller margin, 118,658 to 118,586 and 98,701 to 98,691: there the
+only words that change are the handful the narrowing reached, and the stems it
+withdrew were pieces too.
+
+### Morphological alignment
+
+**MorphoLex, 10,058 forms. Independent.** Unigram 16k at F1 0.631 is still
+the best baseline and was not re-scored.
+
+| system | P | R | F1 | exact | P alt | R alt | F1 alt |
+|--------|--:|--:|---:|------:|------:|------:|-------:|
+| analyzer-builtin | 0.971 | 0.092 | 0.168 | 0.087 | 0.972 | 0.092 | 0.169 |
+| analyzer-en_100k | 0.971 | 0.231 | 0.374 | 0.214 | 0.974 | 0.232 | 0.375 |
+| analyzer-en_100k-derived | 0.976 | 0.376 | 0.543 | 0.343 | 0.978 | 0.377 | 0.544 |
+| analyzer-en_all-derived | 0.974 | 0.381 | **0.548** | 0.346 | 0.976 | 0.381 | 0.549 |
+
+**MorphyNet inflection, 186,947 forms. IN DISTRIBUTION.**
+
+| system | P | R | F1 | exact |
+|--------|--:|--:|---:|------:|
+| analyzer-builtin | 0.501 | 0.043 | 0.078 | 0.010 |
+| analyzer-en_100k | 0.678 | 0.470 | 0.555 | 0.292 |
+| analyzer-en_100k-derived | 0.679 | 0.471 | 0.557 | 0.295 |
+| **analyzer-en_all-derived** | 0.790 | 0.865 | **0.826** | 0.682 |
+
+**MorphyNet derivation, 194,771 forms. IN DISTRIBUTION.**
+
+| system | P | R | F1 | exact |
+|--------|--:|--:|---:|------:|
+| analyzer-builtin | 0.702 | 0.066 | 0.121 | 0.041 |
+| analyzer-en_100k | 0.788 | 0.389 | 0.521 | 0.306 |
+| analyzer-en_100k-derived | 0.791 | 0.419 | 0.548 | 0.333 |
+| **analyzer-en_all-derived** | 0.770 | 0.455 | **0.572** | 0.367 |
+
+### Before and after, on the independent gold
+
+Four decimals, because every move here is in the fourth place.
+
+| system | P before | P after | R before | R after | F1 before | F1 after | exact before | exact after |
+|--------|---------:|--------:|---------:|--------:|----------:|---------:|-------------:|------------:|
+| analyzer-builtin | 0.9671 | **0.9706** | 0.0923 | 0.0922 | 0.1685 | 0.1684 | 877 | 876 |
+| analyzer-en_100k | 0.9719 | 0.9712 | 0.2318 | 0.2315 | 0.3744 | 0.3739 | 2,159 | 2,157 |
+| analyzer-en_100k-derived | 0.9752 | **0.9762** | 0.3768 | 0.3759 | 0.5436 | 0.5428 | 3,456 | 3,452 |
+| analyzer-en_all-derived | 0.9728 | **0.9742** | 0.3816 | 0.3808 | 0.5482 | 0.5475 | 3,486 | 3,482 |
+
+This is the shape the fixes were meant to have, and it is a small shape. Each
+of them withdraws a reading rather than adding one, so recall can only fall
+and precision can only rise, and F1 holds to within a thousandth because
+almost nothing withdrawn was credited by the gold. `analyzer-en_100k` is the
+one row where precision falls too, by 0.0007, which is the three forms below
+with no compensating gain, since the default ranking had nothing of the
+`let|ter` kind to give up.
+
+Exactly which gold forms were lost is short enough to list. Under `en_100k`
+with the flag, three exact matches go and none arrives:
+
+| form | count | before | after | why |
+|------|------:|--------|-------|-----|
+| `envelopment` | 12 | `envelop\|ment` | `envelopment` | the reading went through `envelope` and the deleted e, because `envelop` without the e is not a lexeme |
+| `primly` | 5 | `prim\|ly` | `primly` | through `prime`, for the same reason: `prim` is not a lexeme in `en_100k` |
+| `primness` | 0 | `prim\|ness` | `primness` | the same word again |
+
+All three are a missing lexicon entry showing through a withdrawn
+alternation, not a boundary the rules got wrong.
+
+The token-weighted side is not in any of these tables, because MorphoLex
+weights every form equally. Over the test split, with `en_100k` and the flag,
+457 of the 125,852 types change and 23,102 tokens with them: 435 types and
+22,931 tokens stop splitting, 22 types and 171 tokens move a boundary, and
+nothing starts splitting that did not before. `only` and `letter` are 9,847 of
+those two on their own, and `Mary`, `broken`, `manner` and `hammer` another
+3,244.
+
+What it costs in the same units is five words. `live|s` (1,164) and `beat|en`
+(153) go to condition 5: both are correct splits, and both are also stored
+whole, as the plural of `life` and the participle of `beat`. `aw|ful` (441
+with the capitalised form), `nois|y` (163) and `tast|y` (122) go to the
+narrowing, where the e deletion before a consonant-initial suffix is real and
+the word is not on the exception list. The list is a list and not a pattern,
+so that is the bargain it makes; `docs/LEXICON.md` decision 33 says why no
+pattern was available.
+
+### Analyzer coverage and gates
+
+Token weighted, over the test word tokens.
+
+| system | coverage | decomposed | lexicon_stem | irregular | no_analysis |
+|--------|---------:|-----------:|-------------:|----------:|------------:|
+| analyzer-builtin | 69.5% | 5.2% | 62.2% | 2.1% | 30.4% |
+| analyzer-en_100k | 92.8% | 8.8% | 81.1% | 2.9% | 7.2% |
+| analyzer-en_100k-derived | 92.8% | 10.6% | 79.3% | 2.9% | 7.2% |
+| analyzer-en_all-derived | 92.8% | 10.6% | 79.2% | 2.9% | 7.2% |
+
+Coverage does not move: none of the three fixes can withdraw the last reading
+of a word, because each of them either narrows one candidate among several or
+re-ranks readings the analyzer already produced. The decomposed share falls
+from 10.8% to 10.6% of tokens, which is the 22,931 tokens above.
+
+### What is still wrong
+
+Of the seven in the table before, four are fixed: `only`, `Mary`, `letter`
+and `broken` all come out whole. `ready` and `party` still split and decision
+34 says why no frequency test can hold them; `married` is untouched.
+
+The rest of this is what a pass over the highest-frequency splits in the test
+split turns up. Most of it predates this round and was simply not listed,
+because the old table was scoped to what the previous round's fixes cost.
+Counts are test tokens of that exact spelling, and
+`analyzer-en_100k-derived` and `analyzer-en_all-derived` agree on every row:
+
+| word | count | analyzer | why |
+|------|------:|----------|-----|
+| `come` | 13,890 | `co\|me` | the prefix `co-` on `me`, which a mined lexicon carries as a noun. Prefix stripping has no guard of its own |
+| `Come` | 3,077 | `Co\|me` | the same word, capitalised |
+| `ready` | 2,541 | `read\|y` | `-y` on a real noun, and the wrong etymology. The frequency condition passes because `read` really is the commoner word |
+| `SIS` | 2,047 | `SI\|S` | the two-letter noun `si` plus a plural. `sis` is not a lexeme, so there is no whole-word reading for the guard to keep and nothing it can do |
+| `party` | 1,974 | `part\|y` | as `ready` |
+| `understand` | 1,932 | `under\|stand` | the prefix `under-` on `stand`, which is the etymology and not the word |
+| `beautiful` | 1,521 | `beaut\|iful` | the right boundary is `beauti\|ful`. The y-to-i reversal leaves the i in the piece after the stem |
+| `business` | 1,419 | `bus\|iness` | the same displacement, off `busy` |
+| `question` | 1,351 | `quest\|ion` | `-ion` on the verb `quest`, which is not where `question` comes from |
+| `department` | 1,328 | `de\|part\|ment` | `depart\|ment` is right and `de-` is one layer too far |
+| `present` | 1,326 | `pre\|sent` | the prefix again, on the past participle of `send` |
+| `CHILDES` | 1,173 | `CHILD\|ES` | the corpus name, read as `child` plus a sibilant plural. The noun plural path accepts `-es` on any noun, which is the documented exception in decision 5 |
+| `married` | 990 | `married` | the opposite error, unchanged from the table above: condition 4 blocks `marr\|ied` because `married` is more frequent than `marry` |
+
+Two patterns account for most of it.
+
+**Prefix stripping has no guard.** `come`, `understand`, `present` and
+`department` are all a real prefix on a real stem where the word is not the
+sum of the two, and the six conditions that settle the suffix side are not
+asked on the prefix side at all. That is the largest single thing left:
+`co|me` on its own is more test tokens than `only`, `Mary`, `letter` and
+`broken` together, which are 12,176.
+
+**The y-to-i reversal cuts one character early.** `beaut|iful` and
+`bus|iness` are the same shape as `fac|tion`: the alternation moves a
+character out of the stem and into the piece after it, and the gold puts the
+boundary after the i. `Segmenter::shortest_affix_bytes` already compensates
+for that when it measures an affix for the guard; the piece boundary itself
+does not.
+
+What is not in the table, deliberately: `get|ting`, `late|r`, `cr|ied` and
+`fl|ies` are the documented surface conventions for consonant doubling,
+e deletion and y-to-i, not errors. SEGMENTATION.md states each of them, and a
+reader comparing this list against a gold that spells morphemes rather than
+slices will see them as disagreements.
+
+### Decisions, orthography fixes
+
+16. **The four analyzer settings were re-scored and the nine baseline models
+    were not.** Nothing in this round touches a trained model, a vocabulary
+    file or the pretokenizer, so a baseline row would come back byte for byte
+    and the run would take twenty minutes to prove it. `--only` names the four
+    settings and the output goes to its own JSON, which leaves
+    `baselines_v2.json` as the complete thirteen-system run it was.
+
+17. **The "What is still wrong" table now lists errors this round did not
+    cause.** The old table was scoped to what the previous round's fixes cost,
+    which was the right scope for it and the wrong scope for a section called
+    "what is still wrong": `co|me` is 13,890 test tokens and was never in it.
+    The rows above are marked by cause rather than by which round introduced
+    them, and the two patterns they fall into are named, because that is the
+    next piece of work rather than a list of exceptions.

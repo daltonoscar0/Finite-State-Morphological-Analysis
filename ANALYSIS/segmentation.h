@@ -588,7 +588,7 @@ private:
      * on "decomposes at all" split the most frequent words in English into a
      * letter and a suffix: "is" became "i|s", "his" became "hi|s" and "number"
      * became "numb|er", and those three alone are 1.3% of the test tokens in
-     * docs/BASELINES.md. Four conditions have to hold.
+     * docs/BASELINES.md. Six conditions have to hold.
      *
      *   1. The word is not closed class. A function word has no morphology, so
      *      a decomposition of one is wrong whatever the lexicon says about its
@@ -617,19 +617,52 @@ private:
      *      to short affixes is what keeps "govern|ment" and "quick|ly"; see the
      *      decision in docs/LEXICON.md for the measurement behind that.
      *
+     *   5. The word is not a stored irregular form. Where the lexicon lists
+     *      the spelling outright, that listing is what the word is, and a
+     *      reading the rules assembled is not promoted over it: "broken" is
+     *      the participle of "break", not the adjective "broke" plus -en, and
+     *      the only reason the rules reach the second one is that "broke" is a
+     *      lexeme too. The irregular reading is itself a single piece, so this
+     *      condition always ends in the word coming out whole.
+     *
+     *   6. Where a doubled consonant reaches a suffix that does not make
+     *      verbs, the whole word is not a verb in its own right. Doubling is
+     *      the one alternation the spelling cannot predict, so a doubled
+     *      reading rests entirely on the stem class the lexicon states
+     *      (decision 1 in docs/LEXICON.md), and it is where a spurious
+     *      boundary is cheapest to spell: "manner" is "man" with a doubled n
+     *      and -er, "hammer" is "ham", "copper" is "cop", "letter" is "let".
+     *      What separates those from "runner" and "winner" is that the
+     *      lexicon lists each of them as a verb as well as a noun, and an
+     *      agentive -er noun does not become a verb: you run and you are a
+     *      runner, but you letter a sign and hammer a nail, and neither verb
+     *      is anything -er produces. A suffix that does make verbs is exempt,
+     *      because there a verb is the expected reading: "flat|ten" and
+     *      "mad|den" stand.
+     *
+     *      The brief for this work put the fix for "letter" in the rule, as a
+     *      requirement that a doubling stem for the agentive -er be a verb
+     *      rather than any lexeme. The rule already requires that: -er takes
+     *      a verb and nothing else, and "let" is a DOUBLE_CONS verb in every
+     *      generated lexicon, so "let|ter" satisfies it. The guard is where
+     *      the distinction can actually be drawn, and the measurement is in
+     *      docs/LEXICON.md.
+     *
      * A reading the guard blocks is not withdrawn. It is ranked with the whole
      * words, where weight decides as it does by default, and it is still
      * reported under --nbest 2.
      *
-     * @param lower   The lowercased input word
-     * @param a       The analysis the record was built from
-     * @param pieces  The pieces of the record
-     * @param alt     The alternation at the stem seam, which decides whether
-     *                the piece after the stem overstates the affix by one
+     * @param lower    The lowercased input word
+     * @param a        The analysis the record was built from
+     * @param pieces   The pieces of the record
+     * @param alt      The alternation at the stem seam, which decides whether
+     *                 the piece after the stem overstates the affix by one
+     * @param stored   Whether the lexicon holds this spelling as an irregular
+     *                 form of some lexeme
      */
     bool is_promotable(const std::string& lower, const Analysis& a,
                        const std::vector<SurfacePiece>& pieces,
-                       const std::string& alt) const {
+                       const std::string& alt, bool stored) const {
         if (pieces.size() < 2) return false;
 
         // 1. Closed class, either by the guard's own list or by a FUNCTION
@@ -652,11 +685,25 @@ private:
 
         // 4. The frequency test, for one and two character affixes only
         const size_t affix = shortest_affix_bytes(pieces, alt);
-        if (affix == 0 || affix > 2) return true;
-        if (!stem_lex->weight_known()) return true;
-        const auto whole_lex = best_lexeme(lower, nullptr);
-        if (!whole_lex) return true;
-        return whole_lex->weight() <= stem_lex->weight();
+        if (affix > 0 && affix <= 2 && stem_lex->weight_known()) {
+            const auto whole_lex = best_lexeme(lower, nullptr);
+            if (whole_lex && whole_lex->weight() > stem_lex->weight()) {
+                return false;
+            }
+        }
+
+        // 5. A stored irregular form is what the word is
+        if (stored) return false;
+
+        // 6. A doubled consonant reaching a suffix that does not make verbs,
+        //    where the whole word is a verb of its own
+        if (alt == seg_alt::CONSONANT_DOUBLING && a.is_derivational() &&
+            a.derived_pos() != PartOfSpeech::VERB) {
+            const PartOfSpeech verb = PartOfSpeech::VERB;
+            if (best_lexeme(lower, &verb)) return false;
+        }
+
+        return true;
     }
 
 public:
@@ -722,9 +769,14 @@ public:
      * @param word         The original input word, used for all piece slices
      * @param a            An analysis the analyzer produced for `word`
      * @param is_irregular Whether `a` came from the stored irregular forms
+     * @param stored       Whether the lexicon holds this spelling as an
+     *                     irregular form of any lexeme, which is condition 5
+     *                     of the guard on --derived-first. Defaults to false,
+     *                     so a caller that does not know leaves the other four
+     *                     conditions to decide.
      */
     Segmentation from_analysis(const std::string& word, const Analysis& a,
-                               bool is_irregular) const {
+                               bool is_irregular, bool stored = false) const {
         const std::string lower = ascii_lower(word);
         const std::string lemma = a.stem();
 
@@ -780,7 +832,7 @@ public:
         seg.alt  = detect_alt(region, lemma, lcp);
         seg.gate = seg.pieces.size() >= 2 ? seg_gate::DECOMPOSED
                                           : seg_gate::LEXICON_STEM;
-        seg.promotable = is_promotable(lower, a, seg.pieces, seg.alt);
+        seg.promotable = is_promotable(lower, a, seg.pieces, seg.alt, stored);
         fill_offsets(seg);
         return seg;
     }

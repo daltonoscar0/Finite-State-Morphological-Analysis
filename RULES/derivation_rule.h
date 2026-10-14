@@ -20,6 +20,38 @@
  */
 class DerivationRule {
 public:
+    /**
+     * Restriction: extra conditions a suffix may carry beyond the four above
+     *
+     * The four a rule always states (suffix, source POS, derived POS, stem
+     * classes) are structural: they say what the suffix attaches to. These two
+     * are evidential, and only `-y` needs them, because it is the one suffix
+     * short enough to find a stem at the end of almost any word. The analyzer
+     * applies them in Analyzer::derive_bases, which is where the lexicon and
+     * the closed-class list are; see docs/LEXICON.md.
+     */
+    enum Restriction : unsigned {
+        /** No condition beyond the four the rule states */
+        NONE = 0,
+        /**
+         * The stem must be at least as frequent as the whole word.
+         *
+         * `cloud` is more frequent than `cloudy`, so `cloud|y` is evidence of
+         * a live derivation; `dirty` is more frequent than `dirt`, so the
+         * boundary is not where the usage is. An unknown weight passes, for
+         * the reason decision 32 gives: the guard acts on evidence, and absent
+         * evidence it should not act.
+         */
+        FREQUENT_STEM = 1u << 0,
+        /**
+         * The whole word must not be in data/closed_class.tsv.
+         *
+         * A function word has no morphology, so a derivational reading of one
+         * is wrong whatever the lexicon says about its substrings.
+         */
+        NOT_CLOSED_CLASS = 1u << 1,
+    };
+
     virtual ~DerivationRule() = default;
     virtual const std::string& suffix() const = 0;
 
@@ -51,6 +83,12 @@ public:
      * "arm" plus -y.
      */
     virtual size_t min_stem_length() const { return 1; }
+
+    /** restrictions: The evidential conditions this suffix carries */
+    virtual unsigned restrictions() const { return Restriction::NONE; }
+
+    /** has: Does this rule carry one particular restriction? */
+    bool has(Restriction r) const { return (restrictions() & r) != 0; }
 };
 
 /**
@@ -70,6 +108,7 @@ private:
     std::vector<StemClass> classes_;   // empty means every class
     bool y_restoration_;
     size_t min_stem_;
+    unsigned restrictions_;
 
 public:
     /**
@@ -79,16 +118,18 @@ public:
      * @param classes        Stem classes it accepts, empty for all of them
      * @param y_restoration  Whether a Y_FINAL stem can surface with i
      * @param min_stem       Shortest stem in characters
+     * @param restrictions   Extra conditions, as a Restriction bitmask
      */
     SuffixDerivation(const std::string& suffix,
                      const std::vector<PartOfSpeech>& sources,
                      PartOfSpeech derived,
                      const std::vector<StemClass>& classes,
                      bool y_restoration,
-                     size_t min_stem)
+                     size_t min_stem,
+                     unsigned restrictions = Restriction::NONE)
         : suffix_(suffix), sources_(sources), derived_(derived),
           classes_(classes), y_restoration_(y_restoration),
-          min_stem_(min_stem) {}
+          min_stem_(min_stem), restrictions_(restrictions) {}
 
     const std::string& suffix() const override { return suffix_; }
     PartOfSpeech source_pos() const override { return sources_.front(); }
@@ -110,6 +151,7 @@ public:
 
     bool needs_y_restoration() const override { return y_restoration_; }
     size_t min_stem_length() const override { return min_stem_; }
+    unsigned restrictions() const override { return restrictions_; }
 };
 
 /**
@@ -120,7 +162,7 @@ public:
  * was measured on and a reading may not be withdrawn from a word that already
  * had one. The rest were added with the derivation fixes.
  *
- * Three things to read out of the table.
+ * Four things to read out of the table.
  *
  * **The new rules accept every stem class.** The stem class says how
  * INFLECTION attaches: whether the plural is -s or -es, whether the past
@@ -136,6 +178,14 @@ public:
  * either as well (`modern|ize`, `class|ify`), and -ful takes a verb as readily
  * as a noun: `care|ful` and `thank|ful` are the same suffix, and `thank` is a
  * verb in every lexicon this project builds.
+ *
+ * **-y is the one rule with evidential conditions on it.** It is a single
+ * letter, so it finds a stem at the end of almost any word: four characters of
+ * stem was not enough on its own, and it also requires the stem to be at least
+ * as frequent as the whole word and the whole word to be absent from
+ * data/closed_class.tsv. Those are the Restriction values above, and
+ * docs/LEXICON.md decision 34 has the measurement and says why `ready` and
+ * `party` still come apart.
  *
  * **-ion, -ation and -sion are one rule with three spellings, not three
  * rules.** `act|ion` and `creat|ion` need the bare -ion, `inform|ation` and
@@ -167,11 +217,12 @@ inline std::vector<std::shared_ptr<DerivationRule>> english_derivation_rules() {
                    PartOfSpeech derived,
                    const std::vector<StemClass>& classes,
                    bool y_restoration,
-                   size_t min_stem) {
+                   size_t min_stem,
+                   unsigned restrictions = DerivationRule::NONE) {
         return std::static_pointer_cast<DerivationRule>(
             std::make_shared<SuffixDerivation>(suffix, sources, derived,
                                                classes, y_restoration,
-                                               min_stem));
+                                               min_stem, restrictions));
     };
 
     return {
@@ -191,7 +242,9 @@ inline std::vector<std::shared_ptr<DerivationRule>> english_derivation_rules() {
         rule("ic",    {N},        ADJ, ANY, true,  3),
         rule("ive",   {V},        ADJ, ANY, true,  3),
         rule("ish",   {N, ADJ},   ADJ, ANY, true,  3),
-        rule("y",     {N},        ADJ, ANY, true,  4),
+        rule("y",     {N},        ADJ, ANY, true,  4,
+             DerivationRule::FREQUENT_STEM |
+             DerivationRule::NOT_CLOSED_CLASS),
 
         // Noun-forming
         rule("ity",   {ADJ},      N,   ANY, true,  3),

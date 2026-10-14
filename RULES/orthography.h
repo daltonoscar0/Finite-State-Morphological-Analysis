@@ -5,6 +5,7 @@
 #include "../LEXICON/stem_class.h"
 
 #include <string>
+#include <unordered_set>
 
 /**
  * orthography.h: Spelling-derived orthographic class for irregular lexemes
@@ -171,6 +172,37 @@ inline StemClass derivational_class(const Lexeme& lex) {
  */
 inline bool takes_vowel_initial_suffix(const std::string& suffix) {
     return !suffix.empty() && is_vowel(suffix.front());
+}
+
+/**
+ * deletes_e_before_consonant: Is this one of the words English spells with the
+ * silent e dropped before a consonant-initial suffix?
+ *
+ * A consonant-initial suffix does not delete a silent e: "hope" plus -ful is
+ * "hopeful", "safe" plus -ly is "safely", "wide" plus -ness is "wideness".
+ * Trying the deletion anyway is where `on|ly` comes from, off "one" plus -ly,
+ * and where `Mar|y` comes from, off "mare".
+ *
+ * English spells a short, closed list of words the other way, and every one of
+ * them is a word rather than a pattern: there is no rule that predicts
+ * "argument" from "argue" but "arguable" from the same stem. So the deletion
+ * is allowed for these surface forms and for nothing else. The list is the
+ * seven the brief names plus the three that came out of the regression
+ * baseline, where `introduce`, `produce` and `reduce` lose their e before
+ * -tion. `traction` is in the baseline too and is not here: the word is real
+ * but it is not "trace" plus -tion, and crediting `trac|tion` would assert a
+ * derivation English does not have. docs/LEXICON.md decision 30 lists what the
+ * narrowing withdrew.
+ *
+ * @param form  The surface form the suffix was stripped off, lowercased
+ */
+inline bool deletes_e_before_consonant(const std::string& form) {
+    static const std::unordered_set<std::string> exceptions = {
+        "argument", "judgment", "acknowledgment", "abridgment",
+        "truly", "duly", "wholly",
+        "introduction", "production", "reduction",
+    };
+    return exceptions.find(form) != exceptions.end();
 }
 
 /**
