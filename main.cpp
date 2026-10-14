@@ -375,7 +375,8 @@ void print_usage() {
         << "  analyzer --lexicon FILE      Load an extra lexicon TSV; repeatable, merged in order\n"
         << "  analyzer --load-stats        Print lexicon size, load time and peak RSS to stderr\n"
         << "  analyzer --derived-first     Rank a decomposed reading above a stored whole word\n"
-        << "  analyzer --closed-class FILE Words --derived-first never splits;"
+        << "  analyzer --closed-class FILE Words with no morphology: the -y rule"
+           " skips them and --derived-first never splits them;"
            " default data/closed_class.tsv, empty to turn the list off\n";
 }
 
@@ -492,10 +493,29 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Initialization order matters: SymbolTable must outlive everything else
+    // Two things read this list, and neither can add a reading: the guard on
+    // --derived-first declines to promote a decomposition of a closed-class
+    // word, and the -y rule declines to produce one. It used to be read only
+    // when --derived-first was on, which was right while the guard was its
+    // only reader; the -y condition applies to the default ranking too, so it
+    // is read either way now. The list is read independently of --lexicon,
+    // since that file is opt-in and the most frequent words in English are the
+    // ones that need protecting; see LEXICON/closed_class.h.
+    ClosedClassSet closed_class;
+    if (!closed_class_file.empty()) {
+        if (!closed_class.load(closed_class_file)) {
+            std::cerr << "note: cannot open " << closed_class_file
+                      << "; the -y rule and --derived-first will rely on "
+                         "their other conditions" << std::endl;
+        }
+    }
+
+    // Initialization order matters: SymbolTable must outlive everything else,
+    // and the closed-class list above outlives the analyzer that points at it.
     SymbolTable symbols;
     LexiconFSA lexicon(&symbols);
     Analyzer   analyzer(&symbols, &lexicon);
+    analyzer.set_closed_class(&closed_class);
 
     // In segmentation mode stdout carries nothing but JSON records, so the
     // startup notices go to stderr instead. --selfcheck writes a report that
@@ -518,20 +538,6 @@ int main(int argc, char* argv[]) {
                   << " load_ms=" << ms
                   << " rss_mb=" << (peak_rss_bytes() / (1024 * 1024))
                   << std::endl;
-    }
-
-    // The guard on --derived-first declines to promote a decomposition of a
-    // closed-class word. The list is read independently of --lexicon, since
-    // that file is opt-in and the most frequent words in English are the ones
-    // that need protecting; see LEXICON/closed_class.h. Nothing else consults
-    // it, so it is only read when the flag is on.
-    ClosedClassSet closed_class;
-    if (derived_first && !closed_class_file.empty()) {
-        if (!closed_class.load(closed_class_file)) {
-            std::cerr << "note: cannot open " << closed_class_file
-                      << "; --derived-first will rely on its other conditions"
-                      << std::endl;
-        }
     }
 
     if (selfcheck) {

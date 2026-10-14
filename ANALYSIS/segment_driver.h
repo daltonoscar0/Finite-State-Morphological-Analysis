@@ -57,12 +57,19 @@ public:
 
         const std::string lower = Segmenter::ascii_lower(word);
 
+        // Condition 5 of the guard on --derived-first: where the lexicon
+        // stores this spelling as an irregular form, no reading the rules
+        // assembled is promoted over it. Asked once for the word, not once
+        // per analysis, because it is a fact about the word.
+        const bool stored = analyzer_->stores_surface(lower);
+
         std::vector<Segmentation> ranked;
         ranked.reserve(analyses.size());
         for (const auto& a : analyses) {
             const bool irregular =
                 analyzer_->is_irregular_form(lower, a.stem(), a.features());
-            Segmentation seg = segmenter_.from_analysis(word, a, irregular);
+            Segmentation seg =
+                segmenter_.from_analysis(word, a, irregular, stored);
             // n_analyses counts what the analyzer returned for the word, not
             // the number of distinct surface splits, which can be smaller.
             seg.n_analyses = analyses.size();

@@ -4,6 +4,7 @@
 #include "analysis.h"
 #include "surface_fsa.h"
 #include "tokenizer.h"
+#include "../LEXICON/closed_class.h"
 #include "../LEXICON/lexicon_fsa.h"
 #include "../RULES/morph_rule.h"
 #include <vector>
@@ -48,6 +49,17 @@ private:
     Tokenizer tokenizer_;
     std::vector<std::shared_ptr<DerivationRule>> deriv_rules_;
 
+    /**
+     * closed_class_: The function-word list, or null when it was not supplied
+     *
+     * Read by one condition on one rule: a `-y` reading of a closed-class word
+     * is not produced. The list can only withdraw a derivational reading, so a
+     * caller that does not supply it gets exactly the analyses it got before.
+     * See LEXICON/closed_class.h for why the file is read as a word list
+     * rather than reached through --lexicon.
+     */
+    const ClosedClassSet* closed_class_ = nullptr;
+
     // Irregular reverse index: surface form -> [(lexeme, feature)]
     std::unordered_map<std::string,
         std::vector<std::pair<std::shared_ptr<Lexeme>, Lexeme::Feature>>>
@@ -66,6 +78,15 @@ public:
 
     void add_derivation_rule(std::shared_ptr<DerivationRule> rule) {
         deriv_rules_.push_back(rule);
+    }
+
+    /**
+     * set_closed_class: Supply the function-word list, which is not owned
+     *
+     * @param words  The list, or nullptr to analyze without it
+     */
+    void set_closed_class(const ClosedClassSet* words) {
+        closed_class_ = words;
     }
 
     /**
@@ -115,6 +136,21 @@ public:
             }
         }
         return false;
+    }
+
+    /**
+     * stores_surface: Is this spelling a stored irregular form of some lexeme?
+     *
+     * Weaker than is_irregular_form, which asks whether one particular
+     * analysis came out of the index. This asks only whether the lexicon holds
+     * the word at all, which is what the guard on --derived-first needs: if
+     * "broken" is listed as the participle of "break", then no reading of
+     * "broken" that the rules happen to build should be ranked above it.
+     *
+     * @param surface_lower  The lowercased surface word
+     */
+    bool stores_surface(const std::string& surface_lower) const {
+        return irregular_index_.find(surface_lower) != irregular_index_.end();
     }
 
     // English prefixes for prefix stripping
@@ -429,13 +465,19 @@ private:
      * and the reversal is the same reversal: "happi" was "happy", "us" was
      * "use", "runn" was "run".
      *
-     * Silent e is restored for every suffix, not only the vowel-initial ones
-     * that really delete it. That is what the pass has always done, and
-     * narrowing it would withdraw the analysis of forms like "hopness", which
-     * the output contract fixes in place even though no English text contains
-     * them. Consonant doubling is new and is restricted to the vowel-initial
-     * suffixes, where it is the only place it happens: "run" plus -er is
-     * "runner" and "run" plus -ness is not "runnness".
+     * Silent e is restored for the vowel-initial suffixes, which are the ones
+     * that delete it, and otherwise only for the words English really does
+     * spell that way: `argu|ment`, `judg|ment`, `whol|ly`. The pass used to
+     * restore it for every suffix, which is where `on|ly` came from, off "one"
+     * plus -ly, and `Mar|y` off "mare". Narrowing it withdrew 227 readings
+     * from the regression baseline, ten of which were real words and are now
+     * the exception list in orthography.h and 217 of which were forms like
+     * "hopness" and "safly" that no English text contains. docs/LEXICON.md
+     * decision 30 lists them.
+     *
+     * Consonant doubling is restricted to the vowel-initial suffixes, where it
+     * is the only place it happens: "run" plus -er is "runner" and "run" plus
+     * -ness is not "runnness".
      */
     static std::vector<StemCandidate> stem_candidates(const std::string& base,
                                                       const DerivationRule& rule) {
@@ -450,7 +492,10 @@ private:
         }
 
         // us -> use
-        out.push_back({base + "e", StemClass::SILENT_E});
+        if (orthography::takes_vowel_initial_suffix(rule.suffix()) ||
+            orthography::deletes_e_before_consonant(base + rule.suffix())) {
+            out.push_back({base + "e", StemClass::SILENT_E});
+        }
 
         // runn -> run
         if (orthography::takes_vowel_initial_suffix(rule.suffix()) &&
@@ -459,6 +504,40 @@ private:
                            StemClass::DOUBLE_CONS});
         }
         return out;
+    }
+
+    /**
+     * stem_at_least_as_frequent: Is the stem no rarer than the whole word?
+     *
+     * The frequency condition DerivationRule::FREQUENT_STEM states, asked of
+     * the two lexemes involved. A derivation that the usage supports has the
+     * stem at least as common as the derivative, because the derivative is one
+     * of the things the stem is used for: `cloud` outranks `cloudy`, `rain`
+     * outranks `rainy`. Where the derivative is the commoner word the boundary
+     * is not where the language is any more.
+     *
+     * An unknown weight passes rather than fails, which is decision 32: the
+     * condition is there to act on evidence, and the built-in lists carry no
+     * weights at all. A whole word that is not a lexeme passes for the same
+     * reason, since there is nothing to compare.
+     *
+     * @param stem  The lexeme the suffix would attach to
+     * @param form  The derived surface form, lowercased
+     */
+    bool stem_at_least_as_frequent(const Lexeme& stem,
+                                   const std::string& form) const {
+        if (!stem.weight_known()) return true;
+        bool found = false;
+        float whole = 0.0f;
+        for (const auto& lex : lexicon_->lookup_all(form)) {
+            if (!lex->weight_known()) continue;
+            if (!found || lex->weight() > whole) {
+                whole = lex->weight();
+                found = true;
+            }
+        }
+        if (!found) return true;
+        return stem.weight() >= whole;
     }
 
     /**
@@ -491,6 +570,14 @@ private:
             }
             const std::string base = form.substr(0, form.size() - suf.size());
 
+            // A closed-class word has no morphology, so a suffix that carries
+            // the condition does not read one. Only -y does: see the
+            // Restriction values in RULES/derivation_rule.h.
+            if (drule->has(DerivationRule::NOT_CLOSED_CLASS) &&
+                closed_class_ && closed_class_->contains(form)) {
+                continue;
+            }
+
             for (const auto& cand : stem_candidates(base, *drule)) {
                 // The base is a lexeme: the bottom of the chain
                 for (const auto& lex : lexicon_->lookup_all(cand.stem)) {
@@ -498,6 +585,10 @@ private:
                     if (!drule->applies_to(lex->stem_class())) continue;
                     if (lex->stem().size() < drule->min_stem_length()) continue;
                     if (!candidate_fits(cand, *lex)) continue;
+                    if (drule->has(DerivationRule::FREQUENT_STEM) &&
+                        !stem_at_least_as_frequent(*lex, form)) {
+                        continue;
+                    }
                     DerivedBase db;
                     db.root = lex;
                     db.layers.push_back({suf, drule->derived_pos()});

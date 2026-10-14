@@ -734,7 +734,8 @@ The tables above were measured before the guard, with the flag promoting any
 reading that decomposed. A decomposition may now outrank a stored whole word
 only when four conditions hold. `Segmenter::is_promotable` in
 `ANALYSIS/segmentation.h` is the one place they live, and the record carries
-the verdict in a field, `promotable`, that nothing prints.
+the verdict in a field, `promotable`, that nothing prints. Decisions 35 and 36
+add a fifth and a sixth; the four below are the ones these tables measure.
 
 1. **The word is not closed class.** A function word has no morphology, so a
    decomposition of one is wrong whatever the lexicon says about its
@@ -1334,6 +1335,8 @@ Judgment calls made while scaling the lexicon, and why. The decisions in
     regression baseline. Consonant doubling is new and is restricted properly,
     to the vowel-initial suffixes, where it is the only place it happens.
 
+    *Reversed by decision 33, which lists the forms it withdrew.*
+
 31. **The one field that moves on the regression baseline is `n_analyses`.**
     Of the 10,036 records, 9,878 are byte identical, 18 gained an analysis
     where there was none, and 140 report a different number of analyses with
@@ -1353,3 +1356,196 @@ Judgment calls made while scaling the lexicon, and why. The decisions in
     there to act on evidence, and absent evidence it should not act. Comparing
     against 1.0 would have worked almost as well and would have broken on the
     one Zipf value that maps to exactly 1.0.
+
+## Decisions, orthography fixes
+
+These are in addition to the thirty-two above, which still stand except where
+noted.
+
+33. **Silent e is deleted only before a vowel-initial suffix, plus a list of
+    ten words. This reverses decision 30.** A consonant-initial suffix does
+    not delete it: "hope" plus -ful is "hopeful", "safe" plus -ly is "safely",
+    "wide" plus -ness is "wideness". Offering the candidate anyway is where
+    `on|ly` came from, off the adjective "one" plus -ly, and `Mar|y` off the
+    noun "mare", and those two alone are 9,867 test tokens.
+
+    Decision 30 declined to narrow it because 227 forms in the regression
+    baseline would lose their reading. They are listed below, by suffix,
+    because the argument for keeping them rests on what they are, and what
+    they are is 217 non-words and ten words:
+
+    -ment (87): achievment, argument, bakment, blamment, breathment,
+    celebratment, changment, chasment, closment, combinment, completment,
+    creatment, dancment, decidment, definment, describment, desirment,
+    dividment, drivment, eliminatment, embracment, encouragment, escapment,
+    evaluatment, examinment, excitment, executment, exercisment, explorment,
+    forcment, guidment, hatment, hopment, imaginment, improvment, includment,
+    increasment, influencment, inspirment, introducment, invitment, judgment,
+    lovment, makment, managment, measurment, movment, namment, noticment,
+    observment, participatment, practicment, producment, promisment,
+    providment, provment, raisment, realizment, receivment, recognizment,
+    reducment, releasment, removment, requirment, resolvment, ridment,
+    risment, savment, schedulment, securment, sensment, servment, shakment,
+    sharment, smilment, solvment, statment, storment, structurment,
+    survivment, takment, tastment, tracment, tradment, usment, votment,
+    writment
+
+    -tion (89): achievtion, argution, baktion, blamtion, breathtion,
+    celebrattion, changtion, chastion, clostion, combintion, complettion,
+    comtion, creattion, danction, decidtion, defintion, describtion,
+    desirtion, dividtion, drivtion, eliminattion, embraction, encouragtion,
+    escaption, evaluattion, examintion, excittion, executtion, exercistion,
+    explortion, forction, guidtion, hattion, hoption, imagintion, improvtion,
+    includtion, increastion, influenction, inspirtion, introduction,
+    invittion, judgtion, lovtion, maktion, managtion, measurtion, movtion,
+    namtion, notiction, observtion, overcomtion, participattion, practiction,
+    production, promistion, providtion, provtion, raistion, realiztion,
+    receivtion, recogniztion, reduction, releastion, removtion, requirtion,
+    resolvtion, ridtion, ristion, savtion, schedultion, securtion, senstion,
+    servtion, shaktion, shartion, smiltion, solvtion, stattion, stortion,
+    structurtion, survivtion, taktion, tasttion, traction, tradtion, ustion,
+    vottion, writtion
+
+    -ness (26): bravness, closness, cutness, finness, freness, gentlness,
+    latness, loosness, nicness, palness, purness, rarness, rudness, safness,
+    sanness, severness, simplness, sincerness, solness, strangness, truness,
+    vaguness, whitness, wholness, widness, wisness
+
+    -ly (25): bravly, closly, cutly, finly, frely, gentlly, latly, loosly,
+    nicly, pally, purly, rarly, rudly, safly, sanly, severly, simplly,
+    sincerly, solly, strangly, vaguly, whitly, wholly, widly, wisly
+
+    Six of them are real English words: `argument`, `judgment`, `wholly`,
+    `introduction`, `production` and `reduction`. Those six, plus
+    `acknowledgment`, `abridgment`, `truly` and `duly`, which the brief for
+    this work names and which the baseline word list does not contain, are the
+    exception list in `RULES/orthography.h`. The list is of surface forms, not
+    of stems, because there is no pattern to generalise: "argue" gives
+    `argu|ment` and `argu|able` and also `arguing`, and nothing about the stem
+    says which of the three drops the e.
+
+    `traction` is the one judgment call. It is a real English word, it is in
+    the 227, and it is not on the list: "traction" is not "trace" plus -tion,
+    it is Latin *trahere*, and crediting `trac|tion` would assert a derivation
+    English does not have. A tokenizer that emits `traction` whole is not
+    making an error; one that emits `trac|tion` is.
+
+    The remaining 217 are forms no English text contains. They were in the
+    baseline because `RULES/form_generator.h` produced them and the property
+    test requires the analyzer to read back whatever the generator produces,
+    so the generator stopped producing them in the same change: the two sides
+    share `orthography::deletes_e_before_consonant` and cannot drift.
+
+    On the regression baseline this leaves 9,804 of the 10,036 records byte
+    identical, changes the segmentation of 221 (the 227 less the six on the
+    exception list that the baseline contains), and moves `n_analyses` alone
+    on 11. Under `--derived-first` the counts are 9,804, 224 and 8; the three
+    extra are `apply`, `comment` and `tidy`, which were `appl|y` off "apple",
+    `com|ment` off "come" and `tid|y` off "tide".
+
+34. **`-y` carries two evidential conditions, and `ready` and `party` still
+    split.** The suffix is one letter, so it finds a stem at the end of almost
+    any word, and decision 28 already held it to a stem of four characters.
+    Two more conditions are stated in the rule, as
+    `DerivationRule::Restriction` values that only `-y` sets:
+
+    - the stem is at least as frequent as the whole word, which is what a live
+      derivation looks like (`cloud` over `cloudy`, `rain` over `rainy`), and
+    - the whole word is not in `data/closed_class.tsv`, since a function word
+      has no morphology.
+
+    Of the eight words the brief names, six come out as it asks: `Mary`,
+    `happy` and `funny` whole, `rainy` and `cloudy` split, and `dirty` whole.
+    `ready` and `party` do not, and no frequency condition can make them,
+    because the frequency runs the other way: `read` is 1.12 against `ready`
+    at 1.10 and `part` is 1.13 against `party` at 1.11, so the stem is the
+    commoner word in both and the condition passes. `dirty` is the mirror
+    image, 1.04 against `dirt` at 1.02, which is why it comes out whole rather
+    than split. The condition is a frequency test and these three are where
+    frequency and etymology disagree; separating them would need a lexicon
+    that knows `ready` is not `read` plus -y, which is semantics.
+
+    `Mary` is fix 33 rather than this one. It was "mare" plus -y with the e
+    deleted, and -y is consonant-initial, so the candidate is no longer
+    offered. `funny` and `happy` never had a `-y` reading: "fun" is three
+    characters and "happ" is not a lexeme.
+
+    The frequency condition is a no-op on the ranking, because condition 4 of
+    the guard already applies the same comparison to a one-character affix.
+    What it changes is that the reading is withdrawn rather than demoted, so
+    `n_analyses` and `--nbest` no longer report it. The closed-class condition
+    is a no-op on this data as well: no noun of four characters plus -y spells
+    a function word, and the test in `test_segmentation.cpp` has to invent a
+    noun "ever" to exercise it. Both are stated anyway, for the reason
+    condition 3 of the guard is stated: a rule that relies on a condition
+    should say so rather than assume it.
+
+    **`-y` was kept.** The brief asked for it to be dropped if the conditions
+    lost more correct splits than they gained on MorphoLex. They lose none:
+    over the 10,058 MorphoLex forms, no `-y` split is withdrawn and none is
+    added, and the suffix scores P 0.979, R 0.970, F1 0.975 over the 332 forms
+    credited to it, the highest F1 of any suffix with more than 300 gold forms
+    in the per-suffix table in [BASELINES.md](BASELINES.md). Dropping it would
+    have cost 320 exact matches to fix nothing.
+
+35. **A stored irregular form is never outranked by a reading the rules
+    assembled.** `broken` is listed as the participle of `break`, and
+    `--derived-first` promoted `broke|n` over it, because `broke` is an
+    adjective lexeme in its own right and -en attaches to adjectives. The
+    lexicon listing the spelling outright is the strongest evidence there is
+    about what the word is, so condition 5 of the guard declines to promote
+    anything over it. The irregular reading is a single piece, so the
+    condition always ends in the word coming out whole, and the blocked
+    reading is still reported under `--nbest 2`, as every blocked reading is.
+
+    The condition is asked of the word, not of the analysis:
+    `Analyzer::stores_surface` says whether the irregular index holds the
+    spelling at all, which is weaker than `is_irregular_form` and is the right
+    question here. It costs nothing on the regression baseline, where no
+    stored form has a competing derivational reading.
+
+36. **`letter` is fixed in the guard, not in the rule, because the rule
+    already required what the brief asked for.** The brief for this work said
+    to require that a consonant-doubling stem for the agentive -er be a verb
+    rather than any lexeme. The rule requires that already: `-er` lists VERB
+    as its only source part of speech, `DerivationRule::accepts_pos` tests it
+    on every candidate, and `let` is a `DOUBLE_CONS` verb at weight 1.12 in
+    both `en_100k.tsv` and `en_all.tsv`. `let|ter` satisfies the requirement,
+    so stating it again changes nothing.
+
+    Nor can frequency separate it. `let` at 1.12 is the commoner word than
+    `letter` at 1.07, so condition 4 passes, and no margin on that comparison
+    distinguishes it from `run` at 1.11 over `runner` at 1.01 or `win` at 1.10
+    over `winner` at 1.06.
+
+    What does distinguish them is that the lexicon lists `letter` as a verb as
+    well as a noun, and an agentive -er noun does not become a verb: you run
+    and you are a runner, but you letter a sign and hammer a nail, and neither
+    of those verbs is anything -er produces. Condition 6 of the guard
+    therefore declines to promote a reading that doubles a consonant to reach
+    a derivational suffix when the whole word is a verb in its own right, and
+    exempts the suffixes that make verbs, where a stored verb is the expected
+    reading rather than evidence against the derivation.
+
+    Measured on the test split with `en_100k` and `--derived-first`, it moves
+    64 types and 3,657 tokens. What it withdraws is almost all of it:
+    `let|ter` (1,298 tokens), `man|ner` (516), `ham|mer` (399), `rub|ber`
+    (234), `zip|per` (110), `bit|ter` (104), `cop|per` (82), `bat|ter` (72),
+    `chat|ter` (53), `slip|per` (37), `ban|ner` (31), `bug|ger` (31),
+    `gut|ter` (16), `shut|ter` (10), `jab|ber` (9), `stag|ger` (9),
+    `pot|ter` (6), `swag|ger` (4), `slob|ber` (3), `fet|ter` (2). What it
+    costs is `chop|per` (12), `clap|per` (4), `clip|per` (4) and
+    `snap|per` (2), which are genuine agentives. On MorphoLex it is a small
+    gain rather than a cost: precision 0.9762 against 0.9760 and one more
+    exact match. `flat|ten`, `mad|den`, `run|ner`, `win|ner`, `begin|ner`,
+    `swim|mer`, `shop|per` and `stop|per` all stand.
+
+37. **`data/closed_class.tsv` is read whether or not `--derived-first` is
+    on.** It used to be read only with the flag, which was right while the
+    guard was its only reader. Decision 34 gives the `-y` rule a condition on
+    it, and that condition applies to the default ranking, so the file is read
+    either way. Neither reader can add an analysis or promote one: the guard
+    only declines to promote and the rule only declines to produce, so a
+    caller that does not supply the list gets exactly the output it got
+    before. The default output is unchanged by the change, since no word in
+    the list has a `-y` reading to withdraw.

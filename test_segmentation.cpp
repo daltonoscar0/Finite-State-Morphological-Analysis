@@ -1050,6 +1050,281 @@ static void test_derived_first_guard() {
               << std::endl;
 }
 
+// ── Group 1g: the orthography fixes ──────────────────────────────────────────
+
+/**
+ * add_orthography_fixture: The lexemes the three orthography fixes turn on
+ *
+ * Weights again from `~/data/morph/lexicons/en_100k.tsv`, so each case below
+ * is the real one. "one" is the exception: it carries no adjective reading in
+ * any lexicon this project builds, and the adjective is what the -ly rule
+ * needs to reach "only" at all, so it is supplied here at a weight that would
+ * win if the silent-e candidate were still offered to -ly. That is the only
+ * way to hold `on|ly` in place and watch it go.
+ */
+static void add_orthography_fixture(Env& env) {
+    const auto N   = PartOfSpeech::NOUN;
+    const auto V   = PartOfSpeech::VERB;
+    const auto ADJ = PartOfSpeech::ADJECTIVE;
+    const auto ADV = PartOfSpeech::ADVERB;
+    const auto REG = StemClass::REG;
+    const auto SE  = StemClass::SILENT_E;
+    const auto YF  = StemClass::Y_FINAL;
+    const auto DC  = StemClass::DOUBLE_CONS;
+
+    // Fix 1: the silent e before a consonant-initial suffix
+    add_weighted(env, "one",            ADJ, REG, 1.40f);
+    add_weighted(env, "only",           ADV, REG, 1.16f);
+    add_weighted(env, "lone",           ADJ, SE,  0.90f);
+    add_weighted(env, "lonely",         ADJ, REG, 1.02f);
+    add_weighted(env, "love",           N,   SE,  1.12f);
+    add_weighted(env, "lovely",         ADJ, REG, 1.06f);
+    add_weighted(env, "safe",           ADJ, SE,  1.12f);
+    add_weighted(env, "safely",         ADV, REG, 1.05f);
+    add_weighted(env, "acknowledge",    V,   SE,  0.96f);
+    add_weighted(env, "abridge",        V,   SE,  0.78f);
+    add_weighted(env, "due",            ADJ, SE,  1.10f);
+
+    // Fix 2: the -y suffix. "ever" is not a noun in any real lexicon; it is
+    // here so that the closed-class condition has something to block, since
+    // no genuine noun of four letters plus -y spells a function word.
+    add_weighted(env, "cloud",          N,   REG, 1.03f);
+    add_weighted(env, "cloudy",         ADJ, YF,  0.97f);
+    add_weighted(env, "rain",           N,   REG, 1.05f);
+    add_weighted(env, "rainy",          ADJ, YF,  0.98f);
+    add_weighted(env, "dirt",           N,   REG, 1.02f);
+    add_weighted(env, "dirty",          ADJ, YF,  1.04f);
+    add_weighted(env, "read",           N,   REG, 1.12f);
+    add_weighted(env, "ready",          ADJ, YF,  1.10f);
+    add_weighted(env, "part",           N,   REG, 1.13f);
+    add_weighted(env, "party",          N,   YF,  1.11f);
+    add_weighted(env, "happy",          ADJ, YF,  1.10f);
+    add_weighted(env, "fun",            N,   REG, 1.10f);
+    add_weighted(env, "funny",          ADJ, YF,  1.08f);
+    add_weighted(env, "mare",           N,   REG, 0.97f);
+    add_weighted(env, "ever",           N,   REG, 1.40f);
+
+    // Fix 3: the doubling -er, and the stored participle
+    add_weighted(env, "let",            V,   DC,  1.12f);
+    add_weighted(env, "letter",         N,   REG, 1.07f);
+    add_weighted(env, "letter",         V,   REG, 1.07f);
+    add_weighted(env, "run",            V,   DC,  1.11f);
+    add_weighted(env, "runner",         N,   REG, 1.01f);
+    add_weighted(env, "mad",            ADJ, DC,  1.11f);
+    add_weighted(env, "madden",         V,   REG, 0.90f);
+    // "break" comes from the built-in lists with "broken" stored under
+    // +PAST_PART, which is the whole point of the case. "zoke" is the same
+    // shape with nothing stored, so the guard's verdict differing between
+    // "broken" and "zoken" is condition 5 and nothing else.
+    add_weighted(env, "broke",          ADJ, SE,  1.06f);
+    add_weighted(env, "zoke",           ADJ, SE,  1.06f);
+}
+
+/** split_of: The primary surface split of one word, pieces joined with | */
+static std::string split_of(const WordSegmenter& ws, const std::string& word) {
+    const auto ranked = ws.segment_word(word);
+    assert(!ranked.empty());
+    verify(ranked[0], "orthography:" + word);
+    return join_pieces(ranked[0]);
+}
+
+/** expect_split: Assert the primary split, with a readable failure */
+static void expect_split(const WordSegmenter& ws, const std::string& word,
+                         const std::string& wanted) {
+    const std::string got = split_of(ws, word);
+    if (got != wanted) {
+        std::cerr << "FAIL: " << word << " came out as " << got
+                  << ", wanted " << wanted << std::endl;
+        assert(false);
+    }
+}
+
+/**
+ * test_orthography_fixes: The three fixes in docs/LEXICON.md decisions 33 to 35
+ *
+ * Fix 1 narrows the silent-e candidate to the vowel-initial suffixes plus an
+ * exception list. Fix 2 puts two evidential conditions on -y. Fix 3 adds
+ * conditions 5 and 6 to the guard on --derived-first. Each group below checks
+ * the words the fix is for and the words it must not touch.
+ */
+static void test_orthography_fixes() {
+    std::cout << "\nTest: the orthography fixes" << std::endl;
+
+    Env env({"data/closed_class.tsv"});
+    add_orthography_fixture(env);
+
+    ClosedClassSet closed_class;
+    assert(closed_class.load("data/closed_class.tsv"));
+    assert(closed_class.contains("every"));
+    env.analyzer.set_closed_class(&closed_class);
+
+    const WordSegmenter standard(&env.analyzer, &env.lexicon, false,
+                                 &closed_class);
+    const WordSegmenter derived(&env.analyzer, &env.lexicon, true,
+                                &closed_class);
+
+    // ── Fix 1: no silent-e deletion before a consonant-initial suffix ──
+
+    // "only" is the word the fix is for. "one" plus -ly with the e deleted
+    // spells it, and the adjective in the fixture outweighs the adverb, so
+    // without the fix the flag reports `on|ly`.
+    for (const auto* ws : {&standard, &derived}) {
+        expect_split(*ws, "only", "only");
+    }
+    // The e is kept, so these come out whole or as stem plus -ly with the e
+    // still in the stem piece. Never `lov|ely`, never `on|ly`.
+    for (const auto* ws : {&standard, &derived}) {
+        for (const char* word : {"lonely", "lovely", "safely"}) {
+            const std::string got = split_of(*ws, word);
+            const std::string stem_ly =
+                std::string(word).substr(0, std::string(word).size() - 2) +
+                "|ly";
+            if (got != word && got != stem_ly) {
+                std::cerr << "FAIL: " << word << " came out as " << got
+                          << ", wanted " << word << " or " << stem_ly
+                          << std::endl;
+                assert(false);
+            }
+        }
+    }
+    std::cout << "  ✓ only stays whole; lonely, lovely and safely keep the e"
+              << std::endl;
+
+    // The exception list: ten words English really does spell with the e gone
+    const struct { const char* word; const char* pieces; } exceptions[] = {
+        {"argument",       "argu|ment"},
+        {"judgment",       "judg|ment"},
+        {"acknowledgment", "acknowledg|ment"},
+        {"abridgment",     "abridg|ment"},
+        {"truly",          "tru|ly"},
+        {"duly",           "du|ly"},
+        {"wholly",         "whol|ly"},
+        {"introduction",   "introduc|tion"},
+        {"production",     "produc|tion"},
+        {"reduction",      "reduc|tion"},
+    };
+    for (const auto& c : exceptions) {
+        expect_split(derived, c.word, c.pieces);
+        assert(derived.segment_word(c.word)[0].alt == seg_alt::E_DELETION);
+    }
+    std::cout << "  ✓ the ten exceptions still delete the e" << std::endl;
+
+    // And nothing else does. These are the shape the narrowing withdrew: a
+    // silent-e stem plus a consonant-initial suffix, 217 of them in the
+    // regression baseline, none of them an English word.
+    for (const char* word : {"safly", "wholness", "lovness", "onness",
+                             "safment", "lovment"}) {
+        for (const auto& seg : derived.segment_word(word)) {
+            if (seg.alt == seg_alt::E_DELETION) {
+                std::cerr << "FAIL: " << word << " still reads as "
+                          << join_pieces(seg) << " with the e deleted"
+                          << std::endl;
+                assert(false);
+            }
+        }
+    }
+    // A vowel-initial suffix still deletes it, which is where the alternation
+    // belongs: "love" plus -able, "safe" plus -ity.
+    expect_split(derived, "lovable", "lov|able");
+    assert(derived.segment_word("lovable")[0].alt == seg_alt::E_DELETION);
+    std::cout << "  ✓ no other word deletes it, and -able still does"
+              << std::endl;
+
+    // ── Fix 2: the conditions on -y ──
+
+    // The stem has to be no rarer than the whole word. "cloud" and "rain"
+    // are, "dirt" is not.
+    expect_split(derived, "cloudy", "cloud|y");
+    expect_split(derived, "rainy", "rain|y");
+    expect_split(derived, "dirty", "dirty");
+    // Four letters of stem, which "fun" has not, and a stem in the lexicon,
+    // which "happ" is not. Both words come out whole without the frequency
+    // test having to be asked.
+    expect_split(derived, "funny", "funny");
+    expect_split(derived, "happy", "happy");
+    // "read" and "part" are the more frequent words, so the frequency test
+    // passes and these split. docs/LEXICON.md decision 34 says why no
+    // frequency test can hold them whole.
+    expect_split(derived, "ready", "read|y");
+    expect_split(derived, "party", "part|y");
+    // "Mary" is fix 1, not fix 2: it was "mare" plus -y with the e deleted,
+    // and -y is consonant-initial, so the candidate is simply not offered.
+    expect_split(derived, "Mary", "Mary");
+    expect_split(derived, "mary", "mary");
+    std::cout << "  ✓ -y: cloudy and rainy split; dirty, funny, happy and "
+                 "Mary stay whole; ready and party still split" << std::endl;
+
+    // The closed-class condition, isolated from the guard's own condition 1.
+    // Both segmenters below carry the list for the guard; only one analyzer
+    // carries it for the rule, and the reading is produced in exactly the
+    // case where the rule does not have it.
+    Env open_env({"data/closed_class.tsv"});
+    add_orthography_fixture(open_env);
+    const WordSegmenter open_derived(&open_env.analyzer, &open_env.lexicon,
+                                     true, &closed_class);
+    auto reads_ever = [](const WordSegmenter& ws) {
+        for (const auto& seg : ws.segment_word("every")) {
+            if (seg.lemma == "ever") return true;
+        }
+        return false;
+    };
+    assert(reads_ever(open_derived));
+    assert(!reads_ever(derived));
+    expect_split(derived, "every", "every");
+    std::cout << "  ✓ -y: every has an ever|y reading only without the "
+                 "closed-class list" << std::endl;
+
+    // ── Fix 3: conditions 5 and 6 of the guard ──
+
+    // Condition 6. "letter" and "let" differ in nothing the first five
+    // conditions can see: "let" is a DOUBLE_CONS verb of three letters, the
+    // affix is two characters, and "let" is the more frequent word. What
+    // separates it from "runner" is the stored verb "letter".
+    expect_split(derived, "letter", "letter");
+    expect_split(derived, "runner", "run|ner");
+    assert(promotable_of(derived, "letter", "let|ter") == 0);
+    assert(promotable_of(derived, "runner", "run|ner") == 1);
+    // A suffix that makes verbs is exempt: a stored verb is the expected
+    // reading there, not evidence against the derivation.
+    expect_split(derived, "madden", "mad|den");
+    std::cout << "  ✓ letter stays whole, runner and madden still split"
+              << std::endl;
+
+    // Condition 5. "broken" is stored as the participle of "break", so no
+    // reading the rules assembled is promoted over it, and the word comes out
+    // whole with "break" as its lemma. "zoken" is the same shape with nothing
+    // stored, and it is promoted, which is the condition isolated: the two
+    // adjectives carry the same weight and the same stem class.
+    expect_split(derived, "broken", "broken");
+    assert(derived.segment_word("broken")[0].lemma == "break");
+    assert(promotable_of(derived, "broken", "broke|n") == 0);
+    assert(promotable_of(derived, "zoken", "zoke|n") == 1);
+    expect_split(derived, "zoken", "zoke|n");
+    // The blocked reading is ranked down, not withdrawn
+    bool kept = false;
+    for (const auto& seg : derived.segment_word("broken")) {
+        if (join_pieces(seg) == "broke|n") kept = true;
+    }
+    assert(kept);
+    std::cout << "  ✓ broken is the participle of break, and broke|n is "
+                 "still reported below" << std::endl;
+
+    // Neither new condition reaches the default ranking.
+    const WordSegmenter standard_unguarded(&env.analyzer, &env.lexicon, false,
+                                           nullptr);
+    for (const char* word : {"letter", "runner", "madden", "broken", "only",
+                             "cloudy", "dirty", "ready", "argument"}) {
+        const auto a = standard.segment_word(word);
+        const auto b = standard_unguarded.segment_word(word);
+        assert(a.size() == b.size());
+        for (size_t i = 0; i < a.size(); i++) {
+            assert(same_segmentation(a[i], b[i]));
+        }
+    }
+    std::cout << "  ✓ the default ranking is unchanged by conditions 5 and 6"
+              << std::endl;
+}
+
 // ── Group 2: property test over the lexicon ──────────────────────────────────
 
 static void test_property_over_lexicon(Env& env, const WordSegmenter& ws) {
@@ -1411,6 +1686,7 @@ int main() {
     test_derived_first(env);
     test_derivational_suffixes();
     test_derived_first_guard();
+    test_orthography_fixes();
     test_json_escaping();
     test_nbest_records(ws);
     test_fuzz(ws);
