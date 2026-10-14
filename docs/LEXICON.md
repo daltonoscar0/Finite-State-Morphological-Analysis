@@ -809,6 +809,193 @@ a blocked decomposition is ranked with the whole words, where weight decides as
 it does by default, and it is still reported under `--nbest 2`. And it does not
 touch the default ranking, which never reads the field.
 
+### The guard on prefix readings
+
+The guard above settles suffix readings. Prefix stripping had none of its own,
+and the result was the largest single error left in `docs/BASELINES.md`:
+`come` came out as `co|me` on 16,967 test tokens, `understand` as
+`under|stand`, `present` as `pre|sent`, `department` as `de|part|ment`.
+
+The mechanism is worth stating, because it is not the one the promotion guard
+was built for. `Analyzer::analyze` tries each of fifteen prefixes against every
+analysis of the remainder, and the prefixed analysis keeps the remainder's
+weight unchanged. So `co|me` is reported at 1.19, the weight of the pronoun
+`me`, against 1.13 for the stored verb `come`, and it wins on **either**
+ranking: the default one as well as `--derived-first`. A derivational reading is
+multiplied by 0.9 and therefore needs promoting before it can beat a stored
+word; a prefix reading is multiplied by nothing and needs checking instead. The
+weight it carries is a weight for a different word.
+
+`Segmenter::prefix_is_licensed` is the check. Four conditions:
+
+1. **The base is at least three characters.** `co|me` goes here, and the
+   16,967 tokens with it. Three is the figure condition 2 above and the gold
+   hygiene filter both already use for a stem.
+
+2. **The base is a lexeme as it is spelled, under a part of speech the prefix
+   attaches to.** `RULES/prefix_rule.h` is the inventory, and it now records
+   what each prefix takes as well as its form: `re-` makes verbs out of verbs,
+   `non-` takes a noun or an adjective, `co-` a noun or a verb. The analyzer
+   still strips without consulting the categories, so no lexical analysis
+   changes.
+
+   Where a suffix is stacked outside the prefix the base may not be a lexeme at
+   all, because the suffix is still on it: `department` leaves `partment`,
+   which is not a word, and `unhappiness` leaves `happiness`, which a mined
+   lexicon happens to store and a smaller one builds from `happy` and `-ness`.
+   Where the base as spelled is not a lexeme the condition is asked of the two
+   forms the reading does claim instead. The lemma has to be a lexeme the
+   prefix attaches to, and the prefixed lemma, which is what the suffix
+   attaches to, has to be a lexeme as well: `-ment` on `depart` is a claim
+   about the word `depart`, and `-ness` on `unhappy` is a claim about the word
+   `unhappy`. Both of those hold, and condition 4 is what separates them.
+
+3. **The base is not closed class.** A prefix does not attach to a function
+   word. `Analyzer::analyze` already declines to strip one off a `FUNCTION`
+   lexeme, so that `unto` is not `un|to`; the test is made again against
+   `data/closed_class.tsv`, which is read as a word list whether or not that
+   file was also loaded as a lexicon.
+
+4. **The form the word is derived from is more frequent than the word, by half
+   a Zipf point.** That form is whichever one condition 2 accepted: the base
+   where the base is a lexeme, the prefixed lemma where it is not. So
+   `unhappy` is measured against `happy` and `department` against `depart`. On
+   the weight scale above half a Zipf point is 0.0375 of weight, so the
+   condition asks for a base about three times as common as the word.
+
+A reading any of the four rejects is **demoted**: ranked below every other
+reading of the word, on both rankings, rather than ranked level with the whole
+words as a blocked promotion is. That is the difference weight cannot make up,
+and it is why `come` now comes out whole under the default ranking too.
+Nothing is withdrawn; `co|me` is still reported under `--nbest 2`.
+
+Condition 4 is the one that carries the work, because the other three are
+satisfied by every Latinate form the fix is for. A live prefix costs frequency
+and a lexicalized form does not:
+
+| word | weight | the form it comes from | weight | Zipf apart | licensed |
+|------|-------:|------------------------|-------:|-----------:|----------|
+| `unkind` | 0.92 | `kind` | 1.11 | 2.53 | yes |
+| `rewrite` | 0.96 | `write` | 1.08 | 1.60 | yes |
+| `unhappy` | 1.00 | `happy` | 1.10 | 1.33 | yes |
+| `nonsense` | 1.02 | `sense` | 1.09 | 0.93 | yes |
+| `disagree` | 1.01 | `agree` | 1.07 | 0.80 | yes |
+| `return` | 1.09 | `turn` | 1.10 | 0.13 | no |
+| `present` | 1.09 | `sent` | 1.09 | 0.00 | no |
+| `understand` | 1.10 | `stand` | 1.09 | -0.13 | no |
+| `report` | 1.10 | `port` | 1.05 | -0.67 | no |
+| `record` | 1.09 | `cord` | 1.00 | -1.20 | no |
+| `department` | 1.09 | `depart` | 0.98 | -1.47 | no |
+
+The gap between the two groups is a factor of six, 0.80 Zipf against 0.13, so
+the threshold is not sitting on a knife edge. `prewar` is licensed by the other
+route: the lexicon does not hold the word, so there is no frequency to beat.
+
+### Which policy for a prefix reading
+
+Two policies were measured, over `data/closed_class.tsv` plus `en_100k` with
+`--derived-first`, against the 10,058 MorphoLex forms:
+
+| a prefix reading is | P | R | F1 | exact | the eight words |
+|---|---:|---:|---:|------:|---|
+| promoted, unguarded (before) | 0.9762 | 0.3759 | 0.5428 | 3,452 | 7 wrong |
+| (a) promoted, guarded | 0.9838 | 0.3756 | 0.5436 | 3,469 | all right |
+| **(b) never promoted, guarded** | **0.9884** | 0.3756 | **0.5443** | 3,486 | all right |
+| never promoted, unguarded | 0.9869 | 0.3760 | 0.5446 | 3,487 | 4 wrong |
+
+The last column is the eight words of the brief for this work: `come`, `Come`,
+`understand`, `present`, `department`, `report`, `record` and `return`, each of
+which has to come out whole or with one correct prefix.
+
+And at `en_all`: 0.5475 before, 0.5488 for (a), **0.5495** for (b), 0.5496
+unguarded.
+
+**(b) is the behaviour.** It has the better F1 of the two policies at a
+precision well above 0.97, and it is the one the mechanism argues for: a prefix
+reading carries the base's full weight, so it already beats a stored whole word
+wherever the base is the commoner of the two, and promoting it as well is
+giving a boost to a reading that was not paying the 0.9 the boost exists to
+offset. The two agree on every word in the table above; they disagree on forms
+like `unhappiness`, where (a) reports `un|happiness` and (b) reports
+`unhapp|iness`, which is one of MorphoLex's two boundaries either way.
+
+The fourth row is the same ranking with the guard taken out, and it is in the
+table because it is the row with the highest F1. It is not the behaviour: it
+leaves `co|me`, `Co|me`, `pre|sent` and `re|turn` exactly as they were, which
+is 19,265 test tokens and four of the eight words this work is for. The
+thousandth of F1 between it and row three is the honest measure of how much of
+this the independent gold can see, and the next section is why.
+
+### What MorphoLex can and cannot see here
+
+`tools/eval_lexicon.py` keeps a MorphoLex row only when its morphemes
+concatenate to the word, and it cannot parse the notation the database uses for
+a prefix that attaches leftwards: `<un<{(happy)}` and `{<re<(view)}` both come
+back empty, which is 10,972 of the 68,623 rows. Of the 10,058 rows that do
+score, 20 have one of the fifteen prefixes as their first morpheme, and most of
+those are accidents of spelling: `outer`, `union`, `unit`, `unify`, `unity`.
+
+**So the gold the policy was chosen on is nearly blind to prefixes.** The F1
+differences above are real but they are side effects, almost all of them
+suffix readings that stopped being reached through a spurious prefix:
+`de|light|ful` to `delight|ful`, `re|mark|able` to `remark|able`,
+`dis|cover|able` to `discover|able`. Over the 10,058 forms, 54 change, 35
+become exactly right, one is lost and 18 were wrong before and after. The one
+loss is `unit`, where MorphoLex really does say `un|it` and condition 1 and
+condition 3 both refuse it.
+
+The rows the reader drops can still be read by hand, and they should be,
+because they are the only independent measurement of the thing that changed.
+Taking the alphabetic tokens of the parse left to right and keeping the row
+when they concatenate gives 1,562 forms whose first morpheme is one of the
+fifteen prefixes. Scored on those, with the same lexicon and flag:
+
+| a prefix reading is | P | R | F1 | exact | prefix boundaries found |
+|---|---:|---:|---:|------:|------------------------:|
+| promoted, unguarded (before) | 0.9564 | 0.6896 | **0.8014** | 937 | 1,328 |
+| (a) promoted, guarded | 0.9571 | 0.5863 | 0.7272 | 800 | 1,095 |
+| (b) never promoted, guarded | 0.9488 | 0.5428 | 0.6906 | 726 | 958 |
+| never promoted, unguarded | 0.9474 | 0.6203 | 0.7497 | 827 | 1,098 |
+
+**This is the cost, and it is not small.** Prefix stripping was already
+precise on these rows, 0.956, and the two changes together withdraw 370 of the
+1,328 prefix boundaries it used to find: 230 of them to the ranking, which no
+longer promotes a prefix reading over a stored word, and 140 to the guard.
+`un|usual` (206 test tokens), `re|pair` (124), `re|view` (108) and `re|serve`
+(100) are the shape of what the guard takes: a prefix MorphoLex marks, on a
+word about as frequent as its base.
+
+Both measurements are reported because they disagree, and the disagreement is
+structural rather than noise. MorphoLex is a type list built by
+psycholinguists and it marks the Latinate prefix in `re|view` and `re|port`;
+the test split is running text, and there the same policy is worth 69,041
+tokens of which `co|me` alone is 16,967. This layer feeds a tokenizer, so the
+token-weighted side is the one that decides, and `docs/BASELINES.md` lists
+what it bought and what it cost word by word. A rule that could tell `re|view`
+from `re|turn` is the next piece of work, and no frequency comparison is going
+to be it.
+
+### On the test split
+
+Measured on the 125,852 test types with `en_100k`, against the run before this
+round:
+
+| | Types changed | Tokens | split to whole | boundary moved | started splitting |
+|---|---:|---:|---:|---:|---:|
+| `--derived-first`, (b) | 2,884 | 69,041 | 907 types, 45,155 | 1,977 types, 23,886 | 0 |
+| `--derived-first`, (a) | 1,536 | 53,752 | 904 types, 44,921 | 632 types, 8,831 | 0 |
+| `--derived-first`, unguarded | 2,345 | 39,053 | 371 types, 15,171 | 1,974 types, 23,882 | 0 |
+| default ranking, (b) | 1,351 | 47,153 | 907 types, 39,069 | 444 types, 8,084 | 0 |
+
+Nothing starts splitting that did not before, in any of the four, which is
+what a guard should do. The boundary moves are almost all a prefix coming off
+the front of a reading that keeps its suffix: `dis|cover|ed` to
+`discover|ed`, `re|main|ed` to `remain|ed`, `re|turn|ed` to `return|ed`. Those
+are why the in-distribution inflectional precision rises as far as it does,
+from 0.680 to 0.719 at `en_100k` and from 0.790 to 0.898 at `en_all`: that gold
+marks one boundary per word, and a prefix boundary in front of it was a false
+positive every time.
+
 ### Both policies at every lexicon size
 
 Measured before the guard. A star marks `--derived-first`.
@@ -1549,3 +1736,117 @@ noted.
     caller that does not supply the list gets exactly the output it got
     before. The default output is unchanged by the change, since no word in
     the list has a `-y` reading to withdraw.
+
+    Decision 38 gives the list a third reader, and that one does change the
+    default output: condition 3 of the prefix guard can demote a reading on
+    either ranking. It still cannot add or promote anything.
+
+## Decisions, the prefix guard
+
+38. **A prefix reading the guard rejects is demoted, not left to weight.** The
+    promotion guard can afford to rank a blocked reading level with the whole
+    words, because a blocked decomposition carries the 0.9 derivational factor
+    and loses to a stored word of ordinary frequency without any further help:
+    `numb|er` at 0.96 against the stored noun at 1.12. A prefix reading
+    carries no such factor. `Analyzer::analyze` copies the remainder's weight
+    on to the prefixed analysis unchanged, so `co|me` is reported at the
+    weight of the pronoun `me` and beats the stored verb `come` on the default
+    ranking as well as under `--derived-first`. Ranking it level with the whole
+    words would therefore have left `co|me` exactly where it was.
+
+    So the verdict goes in its own field, `Segmentation::demoted`, which both
+    rankings read as their first key, and a rejected prefix reading sorts below
+    every other reading of the word. Nothing is withdrawn and nothing new
+    appears: the field only ever moves a reading down, and `co|me` is still
+    reported under `--nbest 2`.
+
+    **This changes the default output**, which no previous round did, and the
+    section above counts it: 1,351 of the 125,852 test types and 47,153 tokens,
+    907 types of which stop splitting and 444 of which move a boundary.
+    Nothing starts splitting. The alternative was to leave the default ranking
+    reporting `co|me`, `pre|sent` and `SI|S`, which are not readings of those
+    words under any policy.
+
+39. **A prefix reading is never promoted, and the two policies were measured.**
+    The brief asked for both: promotion with the guard, and no promotion at
+    all. No promotion wins on MorphoLex, 0.5443 against 0.5436 at `en_100k`
+    and 0.5495 against 0.5488 at `en_all`, with precision 0.9884 against
+    0.9838, and the tables above have the rest. The mechanism says the same
+    thing: promotion exists to offset the 0.9 a derivational reading pays, and
+    a prefix reading does not pay it.
+
+    The row with the highest F1 of the four, 0.5446, is the one with no guard
+    at all, and it is not the behaviour. It differs from the chosen row by a
+    thousandth of F1 and by `co|me`, `Co|me`, `pre|sent` and `re|turn`, which
+    are 19,265 test tokens. What that thousandth measures is how little of the
+    prefix decision the scorable MorphoLex rows contain, and the section above
+    counts that too: 20 of 10,058.
+
+40. **Condition 4 carries a margin of half a Zipf point, where the suffix side
+    carries none.** The brief stated it as "the whole word is not itself more
+    frequent than the base", which is the form condition 4 of the promotion
+    guard takes. Measured, over MorphoLex with `en_100k` and the flag, and over
+    the 1,562 prefix-bearing rows alongside:
+
+    | Condition 4 | P | R | F1 | prefix rows F1 | what it leaves |
+    |---|---:|---:|---:|---:|---|
+    | as stated, not more frequent | 0.9877 | 0.3758 | 0.5444 | 0.7138 | `pre\|sent`, `re\|turn` |
+    | strictly less frequent | 0.9880 | 0.3757 | 0.5444 | 0.7093 | `re\|turn` |
+    | **as implemented**, half a Zipf point | 0.9884 | 0.3756 | 0.5443 | 0.6906 | nothing |
+
+    F1 is the same to a thousandth in all three, so the aggregate does not
+    choose, and the words do. As stated, `present` stays split: `present` and
+    the Estonian coin `sent` are both Zipf 5.2, and a comparison that passes on
+    equal frequencies cannot separate them. Strictly less fixes that and leaves
+    `re|turn`, where `turn` is 0.1 Zipf the commoner word. A margin is the only
+    thing that reaches both, and half a point is where it sits because the
+    readings that have to stand clear 0.8 and the readings that have to go stay
+    inside 0.15.
+
+    The margin is the most expensive part of the guard on the prefix-bearing
+    gold rows, 0.7138 to 0.6906, and `re|view` and `un|usual` are the kind of
+    thing it costs. That cost is recorded rather than argued away: it is the
+    same trade the whole guard makes, type-weighted agreement with a gold that
+    marks etymology against token-weighted correctness on running text.
+
+41. **The `-es` noun plural now has an orthographic trigger, and that is a
+    rule change rather than a guard.** The noun plural path accepts `-s` on any
+    noun, which decision 2 keeps permissive on purpose, and it used to accept
+    `-es` just as freely. That read the corpus name `CHILDES` as `child` plus a
+    plural and `clothes` as `cloth` plus one. The epenthetic e is not free
+    variation: it appears after a sibilant grapheme and after a final o, which
+    is what `orthography::takes_es` already says for the verb path, so the
+    plural now asks it too.
+
+    It is in the rule and not in the guard because there is nothing to rank:
+    `childes` is not a word, and demoting its only reading would still leave
+    that reading first. With this, `childes` has no analysis at all and the
+    existing fallback reports the word whole. Being in the rule means the
+    lexical output changes too, which nothing else in this round does:
+    `childes` no longer analyzes as `child +N +PL`, and `clothes` is a
+    form of `clothe` rather than the plural of `cloth`. The regression baseline is
+    unchanged: of the 2,164,514 forms generated from `en_100k`, the same one as
+    before, `eighty`, cannot be read back, so the rule withdraws nothing the
+    generator produces. `box|es`, `kiss|es`, `church|es`, `potato|es` and
+    `hero|es` all stand.
+
+    The brief named the all-caps rule below as the fix for `CHILDES`. It is not:
+    `CHILDES` is seven letters and that rule stops at six. The two mechanisms
+    are both in, and this is the one that reaches it.
+
+42. **A plural reading of a one or two letter noun is demoted, and a short word
+    in capitals with nothing else behind it is emitted whole.** `SIS` came out
+    as `SI|S`, off the two-letter noun `si`, and `sis` is not a lexeme, so
+    there was nothing for the reading to lose to. The two halves work together:
+    the length condition says the reading is not one the layer wants to report,
+    and the all-caps rule in `WordSegmenter::segment_word` says what to report
+    instead, which is the word whole with gate `no_analysis`.
+
+    Six characters is the brief's bound and it is kept. A long word in capitals
+    is a word someone shouted, not an initialism, and the rule is deliberately
+    narrow in the other direction too: it fires only when every reading of the
+    word is one of the two guards demoted. `CATS` is still `CAT|S`, because
+    nothing demoted that reading, and no lowercase form is reached at all, so
+    `ads` is still `ad|s` and `sis` is still `si|s`. Without that second half
+    the rule would have taken the boundary off every inflected word in capitals,
+    which is what a first version of it did.

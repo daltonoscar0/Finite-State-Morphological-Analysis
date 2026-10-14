@@ -1184,3 +1184,272 @@ slices will see them as disagreements.
     The rows above are marked by cause rather than by which round introduced
     them, and the two patterns they fall into are named, because that is the
     next piece of work rather than a list of exceptions.
+
+## After the prefix guard
+
+Three changes, measured with the same scorer on the same word list. Again only
+the four analyzer settings were re-scored, for the reason decision 16 gives.
+`~/data/tok/results/baselines_prefix.json` holds every number below, and the
+two rejected policies are in `baselines_prefix_promoted.json` and
+`baselines_prefix_unguarded.json`.
+
+1. **A guard on prefix readings.** Four conditions: the base is at least three
+   characters, it is a lexeme under a part of speech the prefix attaches to, it
+   is not closed class, and the form the word is derived from is more frequent
+   than the word by half a Zipf point. `docs/LEXICON.md` has the conditions,
+   the inventory of what each prefix attaches to, and the measurement behind
+   the margin.
+
+2. **A prefix reading is never promoted, and a reading the guard rejects is
+   demoted on both rankings.** Both policies the brief named were measured;
+   `docs/LEXICON.md` decisions 38 and 39 have the table and why this one won.
+   Demotion rather than non-promotion is what the mechanism needs: a prefix
+   reading carries the base's weight unchanged, so `co|me` was reported at the
+   weight of the pronoun `me` and beat the stored verb `come` on the default
+   ranking too.
+
+3. **Two conditions on a plural, and a rule for a short word in capitals.** The
+   `-es` plural now needs the orthographic trigger the epenthetic e actually
+   has, a sibilant grapheme or a final o, which is what `CHILD|ES` came from; a
+   plural reading of a one or two letter noun is demoted; and a word of six
+   letters or fewer in capitals whose every reading is demoted is emitted whole
+   with gate `no_analysis`, which is what `SI|S` came from. Decisions 41 and 42.
+
+### Compression and round trip
+
+| system | pcs/token | pcs/type | chr/pc | pcs/1kB | distinct pieces | round trip |
+|--------|----------:|---------:|-------:|--------:|----------------:|-----------:|
+| analyzer-builtin | 1.054 | 1.076 | 3.735 | 265.69 | 118,650 | 100% |
+| analyzer-en_100k | 1.086 | 1.276 | 3.624 | 271.74 | 99,597 | 100% |
+| analyzer-en_100k-derived | 1.102 | 1.316 | 3.570 | 274.80 | 97,396 | 100% |
+| analyzer-en_all-derived | 1.103 | 1.320 | 3.569 | 274.87 | 97,634 | 100% |
+
+Round trip is exact for all four systems on all 482,177 strings encoded, and
+the library decoders agree with the scorer on every one.
+
+Pieces per token falls again, 1.109 to 1.102 at `en_100k` with the flag, and
+this time the drop is one word: `come` and `Come` are 16,967 of the test tokens
+that stopped splitting. Working inventory rises, 95,716 to 97,396, which is the
+same fact from the other side, a word that used to be a prefix plus a stem
+becoming a piece of its own.
+
+### Morphological alignment
+
+**MorphoLex, 10,058 forms. Independent.** Unigram 16k at F1 0.631 is still the
+best baseline and was not re-scored.
+
+| system | P | R | F1 | exact | P alt | R alt | F1 alt |
+|--------|--:|--:|---:|------:|------:|------:|-------:|
+| analyzer-builtin | 0.971 | 0.092 | 0.168 | 0.087 | 0.972 | 0.092 | 0.169 |
+| analyzer-en_100k | 0.978 | 0.230 | 0.373 | 0.214 | 0.981 | 0.231 | 0.374 |
+| analyzer-en_100k-derived | 0.988 | 0.376 | 0.544 | 0.347 | 0.990 | 0.376 | 0.545 |
+| analyzer-en_all-derived | 0.987 | 0.381 | **0.550** | 0.350 | 0.989 | 0.381 | 0.551 |
+
+**MorphyNet inflection, 186,947 forms. IN DISTRIBUTION.**
+
+| system | P | R | F1 | exact |
+|--------|--:|--:|---:|------:|
+| analyzer-builtin | 0.509 | 0.043 | 0.079 | 0.010 |
+| analyzer-en_100k | 0.689 | 0.472 | 0.560 | 0.297 |
+| analyzer-en_100k-derived | 0.719 | 0.474 | 0.571 | 0.321 |
+| **analyzer-en_all-derived** | 0.898 | 0.872 | **0.885** | 0.793 |
+
+**MorphyNet derivation, 194,771 forms. IN DISTRIBUTION.**
+
+| system | P | R | F1 | exact |
+|--------|--:|--:|---:|------:|
+| analyzer-builtin | 0.702 | 0.066 | 0.121 | 0.041 |
+| analyzer-en_100k | 0.795 | 0.386 | 0.520 | 0.305 |
+| **analyzer-en_100k-derived** | 0.814 | 0.413 | **0.548** | 0.342 |
+| analyzer-en_all-derived | 0.805 | 0.407 | 0.541 | 0.365 |
+
+The inflectional gold is where this round shows up hardest: F1 0.826 to 0.885
+at `en_all`, and the whole of it is precision, 0.790 to 0.898. That gold marks
+one boundary per word and it is the inflectional one, so a prefix boundary in
+front of it was a false positive on every form: `re|turn|ed` against a gold of
+`return|ed`. The derivational gold moves the other way at `en_all`, 0.572 to
+0.541, because MorphyNet does carry prefix rows and this withdraws some of
+them. `docs/LEXICON.md` measures that cost directly, against the MorphoLex
+rows that carry a prefix, and does not argue it away.
+
+### Before and after, on the independent gold
+
+Four decimals, because the aggregate moves in the third and fourth place.
+
+| system | P before | P after | R before | R after | F1 before | F1 after | exact before | exact after |
+|--------|---------:|--------:|---------:|--------:|----------:|---------:|-------------:|------------:|
+| analyzer-builtin | 0.9706 | 0.9706 | 0.0922 | 0.0922 | 0.1684 | 0.1684 | 876 | 876 |
+| analyzer-en_100k | 0.9712 | **0.9780** | 0.2315 | 0.2303 | 0.3739 | 0.3728 | 2,157 | 2,156 |
+| analyzer-en_100k-derived | 0.9762 | **0.9884** | 0.3759 | 0.3756 | 0.5428 | **0.5443** | 3,452 | 3,486 |
+| analyzer-en_all-derived | 0.9742 | **0.9875** | 0.3808 | 0.3807 | 0.5475 | **0.5495** | 3,482 | 3,519 |
+
+Precision is the highest this layer has ever measured, 0.9884, and recall holds
+to a thousandth. Over the 10,058 forms, 54 change: 35 become exactly right, one
+is lost and 18 were wrong before and after. The 35 are all the same shape, a
+suffix reading that was being reached through a prefix that is not there:
+
+```
+  de|light|ful     → delight|ful      re|mark|able   → remark|able
+  dis|cover|able   → discover|able    re|fine|ment   → refine|ment
+  co|lon|ist       → colon|ist        pre|tender     → pretend|er
+  de|spot|ism      → despot|ism       sub|lime|ly    → sublime|ly
+```
+
+The one loss is `unit`, where MorphoLex says `un|it` and both the
+three-character condition and the closed-class condition refuse it.
+`analyzer-en_100k` is the row where F1 falls, by 0.0011, and it is the same
+trade in the setting with the least to gain: the default ranking had few
+spurious prefixes to give up, because weight was already keeping most of those
+words whole.
+
+### Analyzer coverage and gates
+
+Token weighted, over the test word tokens.
+
+| system | coverage | decomposed | lexicon_stem | irregular | no_analysis |
+|--------|---------:|-----------:|-------------:|----------:|------------:|
+| analyzer-builtin | 69.5% | 5.1% | 62.2% | 2.1% | 30.5% |
+| analyzer-en_100k | 92.7% | 8.4% | 81.2% | 3.1% | 7.3% |
+| analyzer-en_100k-derived | 92.7% | 10.1% | 79.5% | 3.1% | 7.3% |
+| analyzer-en_all-derived | 92.7% | 10.2% | 79.4% | 3.1% | 7.3% |
+
+Type weighted, coverage is 10.4%, 58.6%, 58.6% and 59.8%.
+
+Coverage falls for the first time, 92.8% to 92.7% of tokens, and it is the only
+round that could: the `-es` condition withdraws the last reading of a word
+rather than re-ranking one, and the all-caps rule declines a reading the
+analyzer did produce. The whole of the 0.08 points is `CHILDES`, `childes`,
+`SIS`, `James`, `Alpes`, `JS` and the rest of that list. The irregular share
+rises from 2.9% to 3.1%, which is `come`: with `co|me` demoted, the stored past
+participle is the reading that wins.
+
+### What it bought and what it cost, by test tokens
+
+2,884 of the 125,852 test types change under `en_100k` with the flag, 69,041
+tokens: 907 types stop splitting, 1,977 move a boundary, and nothing starts
+splitting. The top of the first group, which is the point of the round:
+
+```
+  13890  come        co|me        → come         1932  understand  under|stand → understand
+   3077  Come        Co|me        → Come         1326  present     pre|sent    → present
+   2047  SIS         SI|S         → SIS           972  return      re|turn     → return
+   1173  CHILDES     CHILD|ES     → CHILDES       820  interest    inter|est   → interest
+   1173  childes     child|es     → childes       691  James       Jam|es      → James
+```
+
+and of the second, which is where the inflectional precision came from:
+
+```
+    963  returned    re|turn|ed     → return|ed      535  discards  dis|card|s   → discard|s
+    526  discovered  dis|cover|ed   → discover|ed    473  remained  re|main|ed   → remain|ed
+    369  retired     re|tired       → retire|d       253  pretending pre|tend|ing → pretend|ing
+```
+
+What it costs is five words in the top fifty, 1,567 tokens of the 45,155:
+
+| word | count | before | after | why |
+|------|------:|--------|-------|-----|
+| `upstairs` | 647 | `up\|stair\|s` | `upstairs` | MorphoLex says `up\|stair`. The material after `up-` is `stairs`, which is not a lexeme, and the prefixed lemma `upstair` is not one either, so condition 2 has nothing to accept |
+| `disappeared` | 290 | `dis\|appear\|ed` | `disappeared` | the stored form is commoner than `disappear`, so condition 4 refuses the layer the suffix would attach to |
+| `unable` | 214 | `un\|able` | `unable` | the guard licenses it. The lexicon stores the spelling as the negative of `can`, at 1.18 against the prefix reading's 1.11, and a prefix reading is no longer promoted over a stored word |
+| `unit` | 210 | `un\|it` | `unit` | the base is two letters and closed class |
+| `unusual` | 206 | `un\|usual` | `unusual` | within the margin, like `unable` |
+
+The other forty-five in that list are fixes. `docs/LEXICON.md` has the
+type-weighted version of the same accounting, against the 1,562 MorphoLex rows
+that carry a prefix, and there the cost is larger than this list suggests: 370
+of the 1,328 prefix boundaries the layer used to find. The two measurements
+disagree because one is running text and the other is a type list that marks
+the Latinate prefix in `re|view` and `re|port`.
+
+### What is still wrong
+
+Of the thirteen rows in the table before, seven are fixed: `come`, `Come`,
+`SIS`, `understand`, `department`, `present` and `CHILDES` all come out whole or
+with the right single boundary. Two more leave the table for a different
+reason, below: `beaut|iful` and `bus|iness` are the documented convention and
+should never have been listed as errors. `ready`, `party`, `question` and
+`married` are unchanged and their rows stand.
+
+The rest is another pass over the highest-frequency splits in the test split.
+Counts are test tokens of that exact spelling, `analyzer-en_100k-derived` and
+`analyzer-en_all-derived` agree on every row, and the right-hand column is what
+MorphoLex says where it has an opinion:
+
+| word | count | analyzer | why |
+|------|------:|----------|-----|
+| `ready` | 2,541 | `read\|y` | `-y` on a real noun, and the wrong etymology. MorphoLex has one morpheme. Decision 34 says why no frequency test holds it |
+| `party` | 1,974 | `part\|y` | as `ready` |
+| `question` | 1,351 | `quest\|ion` | `-ion` on the verb `quest`, which is not where the word comes from. MorphoLex has one morpheme |
+| `former` | 1,167 | `form\|er` | the agentive `-er` on `form`, which is the commoner word, so condition 4 passes. One morpheme |
+| `career` | 1,051 | `care\|er` | the same shape on `care`. One morpheme |
+| `married` | 990 | `married` | the opposite error, unchanged: condition 4 blocks `marr\|ied` because `married` is commoner than `marry` |
+| `evening` | 950 | `even\|ing` | `-ing` on the verb `even`. One morpheme |
+| `news` | 887 | `new\|s` | a plural of the adjective `new`. One morpheme |
+| `finish` | 751 | `fin\|ish` | `-ish` through `fine`. One morpheme |
+| `upstairs` | 647 | `upstairs` | the new cost, in the table above |
+
+The pattern left is the one the previous round named and this one did not
+touch: **a suffix the lexicon can reach on a stem that is not the word's
+base.** `read|y`, `part|y`, `quest|ion`, `form|er`, `care|er`, `even|ing`,
+`new|s` and `fin|ish` are eight words and 10,672 test tokens, and every one of
+them is a real suffix on a real lexeme of the right category with the right
+frequency ordering. Nothing in the evidence this layer has distinguishes them
+from `read|er`, `part|ed`, `act|ion` or `fool|ish`. That is a different kind of
+problem from the two the last two rounds fixed, and it is the one left.
+
+What is not in the table, deliberately: `beaut|iful`, `bus|iness`, `get|ting`,
+`late|r`, `cr|ied` and `fl|ies` are the documented surface conventions for the
+y-to-i reversal, consonant doubling and e deletion, not errors.
+`docs/SEGMENTATION.md` states each of them, and the stem piece ends where the
+lemma stops being shared: `beauty` and `beautiful` share `beaut`, exactly as
+`city` and `cities` share `cit`. The previous round's table listed the first two
+as errors, which was the wrong call: the boundary a gold standard spells
+`beauti|ful` is the same boundary this output spells `beaut|iful`, and the
+alternation is reported in the `alt` field for a scorer that wants to forgive
+the difference.
+
+### Decisions, the prefix guard
+
+18. **The prefix guard changes the default output, and that is documented
+    rather than avoided.** Every earlier round could claim the default ranking
+    was untouched, because the thing being fixed was a promotion and the
+    default ranking promotes nothing. This one cannot: a prefix reading carries
+    the base's weight, so `co|me` outranked the stored verb `come` on the
+    default ranking too, and no change confined to `--derived-first` could
+    reach it. 1,351 of the 125,852 test types move under the default ranking,
+    47,153 tokens, 907 types of them stopping splitting and none starting.
+    `docs/LEXICON.md` decision 38 has the mechanism.
+
+19. **Both policies were measured and the losing one is in the table.** The
+    brief named two, promotion with the guard and no promotion at all, and
+    asked for the better MorphoLex F1 at a precision no lower than 0.97. No
+    promotion wins, 0.5443 against 0.5436, at 0.9884 against 0.9838. A third
+    row is reported alongside them, the same ranking with no guard, because it
+    has the highest F1 of the three and is not the behaviour: it differs from
+    the winner by a thousandth of F1 and by 19,265 test tokens of `co|me`,
+    `Co|me`, `pre|sent` and `re|turn`.
+
+20. **The prefix measurement that matters is reported even though the project's
+    gold reader cannot produce it.** `tools/eval_lexicon.py` drops 10,972
+    MorphoLex rows it cannot parse, and that is where almost every prefix row
+    lives: 20 of the 10,058 scorable forms have one of the fifteen prefixes as
+    their first morpheme. A gold that cannot see the change is a poor judge of
+    it, so `docs/LEXICON.md` scores the dropped rows by hand, with a lenient
+    parse, and reports that the guard costs 370 of 1,328 prefix boundaries
+    there. The reader is left as it is: fixing it would add eleven thousand
+    rows to the independent gold and renumber every table in this document,
+    which is a separate piece of work and not one to do in the middle of a
+    comparison.
+
+21. **`CHILDES` is fixed by the plural rule, not by the all-caps rule.** The
+    brief gave two mechanisms and named both words: a plural needs a stem of
+    three letters, and a word of six letters or fewer in capitals with no
+    whole-word reading comes out whole. The first reaches `SIS`, whose stem
+    `si` is two letters, and the second is what then reports it whole. Neither
+    reaches `CHILDES`, which is seven letters with a five-letter stem, so the
+    `-es` plural was given the orthographic trigger it should always have had.
+    Both of the brief's mechanisms are in and both do work;
+    `docs/LEXICON.md` decisions 41 and 42 have the detail, including why the
+    all-caps rule fires only when every reading of the word is demoted, which
+    is what keeps `CAT|S`.
