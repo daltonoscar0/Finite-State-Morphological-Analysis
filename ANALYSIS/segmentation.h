@@ -610,23 +610,35 @@ private:
     }
 
     /**
-     * PREFIX_FREQUENCY_MARGIN: How much commoner the base has to be
+     * WEIGHT_PER_ZIPF: One Zipf point, in weight
      *
-     * Half a Zipf point on the scale in docs/LEXICON.md, where a weight is
-     * 0.70 + 0.075 * zipf, so half a point is 0.0375 of weight and the base
-     * has to be about three times as frequent as the whole word.
+     * The weight scale in docs/LEXICON.md is 0.70 + 0.075 * zipf, clamped to
+     * [0.70, 1.30], and tools/build_lexicon.py writes it. This is the slope, so
+     * that a figure stated in Zipf points can be compared against weights
+     * without the conversion being spelled out at the comparison.
+     */
+    static constexpr float WEIGHT_PER_ZIPF = 0.075f;
+
+    /**
+     * PREFIX_FREQUENCY_MARGIN_ZIPF: How much commoner the base has to be
+     *
+     * A quarter of a Zipf point, so the base has to be about 1.8 times as
+     * frequent as the whole word. This is the one number the prefix guard
+     * tunes, it is stated in the unit the measurement is reported in, and
+     * docs/LEXICON.md decision 45 has the sweep that set it: every value from
+     * 0 to 0.5 was scored on the 12,828 MorphoLex forms, and 0.25 is the
+     * largest margin that still withdraws `pre|sent` and `re|turn`, which are
+     * the two readings no other condition can reach.
      *
      * A live prefix costs frequency: `write` is Zipf 5.1 and `rewrite` 3.5,
      * `kind` is 5.5 and `unkind` 2.9, `sense` is 5.2 and `nonsense` 4.3. A
      * lexicalized Latinate form sits level with the word it looks like it was
      * built from: `turn` is 5.3 and `return` 5.2, `sent` and `present` are
-     * both 5.2, `stand` is 5.2 and `understand` 5.3. The margin is what
-     * separates the two groups, and on the eleven words docs/LEXICON.md
-     * tabulates it has a factor of six of headroom: every reading that should
-     * stand clears 0.8 Zipf and every reading that should not stays inside
-     * 0.15.
+     * both 5.2, `stand` is 5.2 and `understand` 5.3.
      */
-    static constexpr float PREFIX_FREQUENCY_MARGIN = 0.0375f;
+    static constexpr float PREFIX_FREQUENCY_MARGIN_ZIPF = 0.25f;
+    static constexpr float PREFIX_FREQUENCY_MARGIN =
+        WEIGHT_PER_ZIPF * PREFIX_FREQUENCY_MARGIN_ZIPF;
 
     /**
      * best_attaching_lexeme: The commonest base the prefix could attach to
@@ -841,6 +853,20 @@ private:
      *      the distinction can actually be drawn, and the measurement is in
      *      docs/LEXICON.md.
      *
+     *   7. For a prefix reading, the base is not a stored irregular form
+     *      either. Condition 5 asks about the spelling of the whole word,
+     *      which is the right question for a suffix reading and half the
+     *      question for a prefix one: "un" plus a stored form is a reading
+     *      that rests on a listing the rules did not produce, one layer in.
+     *      "unable" is the case. A mined lexicon carries "can" with
+     *      PRES_PART=able, a Wiktionary artifact, so the irregular index maps
+     *      "able" to the participle of "can" and the analyzer reads "unable"
+     *      as un- plus that participle at weight 1.18. The competing reading
+     *      is un- plus the adjective "able" at 1.11, and promoting it would
+     *      put a rules-assembled reading above a stored one, which is what
+     *      condition 5 exists to stop. So the base is asked the same question
+     *      the word is, and "unable" comes out whole.
+     *
      * A reading the guard blocks is not withdrawn. It is ranked with the whole
      * words, where weight decides as it does by default, and it is still
      * reported under --nbest 2.
@@ -852,10 +878,14 @@ private:
      *                 the piece after the stem overstates the affix by one
      * @param stored   Whether the lexicon holds this spelling as an irregular
      *                 form of some lexeme
+     * @param stored_base  The same question about the material after the
+     *                 prefix, which is condition 7. False for a reading with
+     *                 no prefix, where there is no base to ask about.
      */
     bool is_promotable(const std::string& lower, const Analysis& a,
                        const std::vector<SurfacePiece>& pieces,
-                       const std::string& alt, bool stored) const {
+                       const std::string& alt, bool stored,
+                       bool stored_base) const {
         if (pieces.size() < 2) return false;
 
         // 1. Closed class, either by the guard's own list or by a FUNCTION
@@ -887,6 +917,9 @@ private:
 
         // 5. A stored irregular form is what the word is
         if (stored) return false;
+
+        // 7. And for a prefix reading, what the base is
+        if (stored_base) return false;
 
         // 6. A doubled consonant reaching a suffix that does not make verbs,
         //    where the whole word is a verb of its own
@@ -990,11 +1023,15 @@ public:
      * @param stored       Whether the lexicon holds this spelling as an
      *                     irregular form of any lexeme, which is condition 5
      *                     of the guard on --derived-first. Defaults to false,
-     *                     so a caller that does not know leaves the other four
+     *                     so a caller that does not know leaves the other
      *                     conditions to decide.
+     * @param stored_base  The same, for the material after the prefix, which
+     *                     is condition 7. Meaningless for a reading with no
+     *                     prefix and ignored there.
      */
     Segmentation from_analysis(const std::string& word, const Analysis& a,
-                               bool is_irregular, bool stored = false) const {
+                               bool is_irregular, bool stored = false,
+                               bool stored_base = false) const {
         const std::string lower = ascii_lower(word);
         const std::string lemma = a.stem();
 
@@ -1058,15 +1095,9 @@ public:
                       (!prefix_is_licensed(lower, a) ||
                        !plural_stem_is_long_enough(a));
 
-        // A prefix reading is never promoted, only demoted. Promotion exists
-        // because a derivational reading is multiplied by 0.9 and so loses to
-        // any stored whole word of ordinary frequency; a prefix reading is
-        // multiplied by nothing, since it carries the base's weight as it
-        // stands, so it already beats a stored whole word wherever the base is
-        // the commoner of the two. It needs a check, not a boost. Both
-        // policies were measured, and docs/LEXICON.md has the numbers.
-        seg.promotable = !seg.demoted && !a.has_prefix() &&
-                         is_promotable(lower, a, seg.pieces, seg.alt, stored);
+        seg.promotable =
+            !seg.demoted &&
+            is_promotable(lower, a, seg.pieces, seg.alt, stored, stored_base);
         fill_offsets(seg);
         return seg;
     }

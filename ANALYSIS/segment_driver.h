@@ -70,8 +70,17 @@ public:
         for (const auto& a : analyses) {
             const bool irregular =
                 analyzer_->is_irregular_form(lower, a.stem(), a.features());
+            // Condition 7 of the guard, which is condition 5 asked of the
+            // material after the prefix rather than of the word. It is a fact
+            // about the reading and not about the word, so unlike `stored` it
+            // is asked once per analysis: only a reading that strips a prefix
+            // has a base to ask about.
+            const bool stored_base =
+                a.has_prefix() && lower.size() > a.prefix().size() &&
+                analyzer_->stores_surface(lower.substr(a.prefix().size()));
             Segmentation seg =
-                segmenter_.from_analysis(word, a, irregular, stored);
+                segmenter_.from_analysis(word, a, irregular, stored,
+                                         stored_base);
             // n_analyses counts what the analyzer returned for the word, not
             // the number of distinct surface splits, which can be smaller.
             seg.n_analyses = analyses.size();
