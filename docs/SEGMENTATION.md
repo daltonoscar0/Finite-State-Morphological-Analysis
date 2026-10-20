@@ -106,6 +106,13 @@ tokenizer does with them.
 | `no_analysis` | Nothing found, the word is one `UNK` piece |
 | `passthrough` | Punctuation, numbers, and other input with no letters in it |
 
+`no_analysis` has one case where the analyzer did find something and the
+segmentation layer declined it: a word of six letters or fewer in capitals
+whose every reading is demoted is reported whole, because a short word in
+capitals that the lexicon cannot read as a word is far more likely to be an
+initialism than a morphologically complex form. `SIS` is the case, and
+decision 18 has the rest of it.
+
 ## The segmentation convention
 
 **The stem piece is the longest prefix of the surface word that is shared with
@@ -390,6 +397,19 @@ Judgment calls made while implementing this, and why.
    decomposed one is reported, which is why `unhappiness` comes out as
    `un|happ|iness`.
 
+   One key sits in front of weight: a **demoted** reading sorts below every
+   other reading of the word. Two kinds of reading are demoted, and what they
+   have in common is that their weight is not a weight for the word in hand. A
+   prefix reading carries the base's weight unchanged, so `co|me` was reported
+   at the weight of the pronoun `me` and outranked the stored verb `come`; a
+   plural of a one or two letter noun carries that noun's, so `SI|S` was
+   reported at the weight of `si` and had nothing to lose to. Weight cannot
+   settle either pair, so `Segmenter::prefix_is_licensed` and
+   `Segmenter::plural_stem_is_long_enough` do, and `docs/LEXICON.md` decisions
+   38 to 42 state their conditions and measure them. Nothing is withdrawn: a
+   demoted reading is still reported under `--nbest 2`, and the field itself is
+   not printed.
+
 4. **`n_analyses` counts the analyses the analyzer returned, not the number of
    distinct surface splits.** Two analyses can describe the same split: part of
    speech distinguishes the two readings of `unkind` and does not appear in
@@ -484,3 +504,21 @@ Judgment calls made while implementing this, and why.
     are build outputs that `make` regenerates and that must never be staged,
     the work proceeded rather than stopping. None of them is staged in any
     commit on this branch.
+
+18. **A short word in capitals with nothing but a demoted reading behind it is
+    reported whole, with gate `no_analysis`.** This is the one place the
+    segmentation layer declines a reading the analyzer produced rather than
+    ranking it. `SIS` came out as `SI|S`, off the two-letter noun `si`, and
+    `sis` is not a lexeme, so there was no whole-word reading for the ranking
+    to prefer: demotion alone leaves a demoted reading first when it is the
+    only one. `WordSegmenter::segment_word` therefore puts a fallback record
+    in front of it when the word is six characters or fewer, written in
+    capitals, and every reading of it is demoted.
+
+    Both halves of that test matter. Without the capitals, `ads` would stop
+    being `ad|s`, which is a correct plural of a two-letter noun. Without the
+    "every reading is demoted" half, every inflected word in capitals would
+    lose its boundary, since `cats` and `looks` are not lexemes either: `CATS`
+    is still `CAT|S`. The readings are kept behind the flat record rather than
+    withdrawn, so `--nbest 2` still shows what the analyzer found, and
+    `n_analyses` still counts it.

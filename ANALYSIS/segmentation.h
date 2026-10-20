@@ -4,6 +4,7 @@
 #include "analysis.h"
 #include "../LEXICON/closed_class.h"
 #include "../LEXICON/lexicon_fsa.h"
+#include "../RULES/prefix_rule.h"
 
 #include <algorithm>
 #include <cctype>
@@ -231,9 +232,37 @@ struct Segmentation {
      * decomposition is allowed to beat a higher-weighted whole word. Nothing
      * prints it and the default ranking never looks at it, so it changes
      * neither the output format nor the default output. Segmenter::from_analysis
-     * documents the four conditions.
+     * documents the conditions; `demoted` below is the other verdict, and that
+     * one both rankings read.
      */
     bool promotable = false;
+
+    /**
+     * demoted: Is this a reading the layer declines to report first?
+     *
+     * Read by both rankings, which is what separates it from `promotable`. A
+     * decomposition the promotion guard blocks still competes on weight,
+     * because its weight is a weight for the word: `numb|er` scores what the
+     * adjective `numb` scores and loses to the stored noun `number` on the
+     * default ranking without any help. Two kinds of reading carry no such
+     * weight of their own:
+     *
+     *   - A prefix reading. Its weight is the weight of the base, copied
+     *     unchanged, so `co|me` is reported at the weight of the pronoun `me`
+     *     and outranks the stored verb `come` on either ranking. Weight cannot
+     *     settle that pair, so the prefix guard does, and a reading it rejects
+     *     sorts below every other reading of the word.
+     *
+     *   - A plural on a one or two letter stem. `SI|S` is the noun `si` plus a
+     *     plural at the weight of `si`, and `sis` is not a lexeme, so there is
+     *     nothing for it to lose to.
+     *
+     * Nothing prints the field, and a demoted reading is not withdrawn: it is
+     * still reported under --nbest 2, exactly as a blocked promotion is.
+     * Segmenter::prefix_is_licensed and Segmenter::plural_stem_is_long_enough
+     * are the two places the value is decided.
+     */
+    bool demoted = false;
 
     /**
      * check: Verify every invariant above
@@ -581,6 +610,178 @@ private:
     }
 
     /**
+     * WEIGHT_PER_ZIPF: One Zipf point, in weight
+     *
+     * The weight scale in docs/LEXICON.md is 0.70 + 0.075 * zipf, clamped to
+     * [0.70, 1.30], and tools/build_lexicon.py writes it. This is the slope, so
+     * that a figure stated in Zipf points can be compared against weights
+     * without the conversion being spelled out at the comparison.
+     */
+    static constexpr float WEIGHT_PER_ZIPF = 0.075f;
+
+    /**
+     * PREFIX_FREQUENCY_MARGIN_ZIPF: How much commoner the base has to be
+     *
+     * A quarter of a Zipf point, so the base has to be about 1.8 times as
+     * frequent as the whole word. This is the one number the prefix guard
+     * tunes, it is stated in the unit the measurement is reported in, and
+     * docs/LEXICON.md decision 45 has the sweep that set it: every value from
+     * 0 to 0.5 was scored on the 12,828 MorphoLex forms, and 0.25 is the
+     * largest margin that still withdraws `pre|sent` and `re|turn`, which are
+     * the two readings no other condition can reach.
+     *
+     * A live prefix costs frequency: `write` is Zipf 5.1 and `rewrite` 3.5,
+     * `kind` is 5.5 and `unkind` 2.9, `sense` is 5.2 and `nonsense` 4.3. A
+     * lexicalized Latinate form sits level with the word it looks like it was
+     * built from: `turn` is 5.3 and `return` 5.2, `sent` and `present` are
+     * both 5.2, `stand` is 5.2 and `understand` 5.3.
+     */
+    static constexpr float PREFIX_FREQUENCY_MARGIN_ZIPF = 0.25f;
+    static constexpr float PREFIX_FREQUENCY_MARGIN =
+        WEIGHT_PER_ZIPF * PREFIX_FREQUENCY_MARGIN_ZIPF;
+
+    /**
+     * best_attaching_lexeme: The commonest base the prefix could attach to
+     *
+     * @param base    Lowercased material after the prefix
+     * @param prefix  The prefix, which decides the parts of speech allowed
+     */
+    std::shared_ptr<Lexeme> best_attaching_lexeme(
+            const std::string& base, const std::string& prefix) const {
+        std::shared_ptr<Lexeme> best;
+        if (!lexicon_) return best;
+        for (const auto& lex : lexicon_->lookup_all(base)) {
+            if (!prefix_attaches(prefix, lex->pos())) continue;
+            if (!best || lex->weight() > best->weight()) best = lex;
+        }
+        return best;
+    }
+
+    /**
+     * prefix_is_licensed: Is the prefix piece in this reading a real prefix?
+     *
+     * Prefix stripping had no guard at all, which is why `come` came out as
+     * `co|me`, `understand` as `under|stand`, `present` as `pre|sent` and
+     * `department` as `de|part|ment`: the analyzer tries each of fifteen
+     * prefixes against every analysis of the remainder, and nothing asked
+     * whether what followed was a word the prefix attaches to. Four conditions
+     * now do, and they are the prefix side of the six in is_promotable below.
+     *
+     *   1. The base is at least three characters. `co|me` goes here, and with
+     *      it 17,000 test tokens: the base is the two-letter pronoun, and a
+     *      prefix on a stem that short is an accident of spelling. Three
+     *      characters is the figure the promotion guard and the gold hygiene
+     *      filter both already use for a stem.
+     *
+     *   2. The base is a lexeme as it is spelled, under a part of speech the
+     *      prefix attaches to. RULES/prefix_rule.h records what each prefix
+     *      takes: `re-` makes verbs out of verbs, `non-` takes a noun or an
+     *      adjective, and so on.
+     *
+     *      Where the reading stacks a suffix outside the prefix the base is
+     *      not a lexeme as spelled, because the suffix is still on it:
+     *      `unhappiness` leaves `happiness`, which the rules build rather than
+     *      store, and `department` leaves `partment`, which is not a word at
+     *      all. There the condition is asked of the two forms the reading does
+     *      claim: the lemma has to be a lexeme the prefix attaches to, and the
+     *      prefixed lemma, which is what the suffix attaches to, has to be a
+     *      lexeme as well. `-ness` attaching to `unhappy` is a claim about the
+     *      word `unhappy`, and `-ment` attaching to `depart` is a claim about
+     *      the word `depart`; both hold, and condition 4 is then what
+     *      separates them.
+     *
+     *   3. The base is not closed class. A prefix does not attach to a
+     *      function word, and Analyzer::analyze already declines to strip one
+     *      off a FUNCTION lexeme so that `unto` is not `un|to`. The test is
+     *      made again here against data/closed_class.tsv, which is read as a
+     *      word list whether or not it was loaded as a lexicon.
+     *
+     *   4. The form the word is derived from is more frequent than the word,
+     *      by the margin above. That form is the base for a prefix on its own
+     *      and the prefixed lemma for a prefix with a suffix outside it, so
+     *      `unhappy` is measured against `happy` and `unhappiness` against
+     *      `unhappy`. This is the condition that separates `re|write` from
+     *      `re|turn`, `pre|war` from `pre|sent` and `un|happ|iness` from
+     *      `de|part|ment`, and it is the only one that can: both members of
+     *      each pair are a listed prefix on a listed base of the right
+     *      category. `department` is commoner than `depart` and
+     *      `unhappiness` is rarer than `unhappy`, which is a word commoner
+     *      than the thing it is supposedly built from against one that is
+     *      not. A weight that was never stated counts as unknown and passes,
+     *      and a whole word the lexicon does not hold has no frequency to
+     *      beat, which is how `prewar` keeps its split.
+     *
+     * A reading this rejects is not withdrawn. It is demoted, which is
+     * Segmentation::demoted and sorts it below every other reading of the
+     * word on both rankings, and it is still reported under --nbest 2.
+     *
+     * @param lower  The lowercased input word
+     * @param a      The analysis the record was built from
+     */
+    bool prefix_is_licensed(const std::string& lower,
+                            const Analysis& a) const {
+        const std::string& prefix = a.prefix();
+        if (prefix.empty()) return true;
+        if (lower.size() <= prefix.size()) return true;
+        const std::string base = lower.substr(prefix.size());
+
+        // 1. A base of at least three characters
+        if (utf8::count(base) < 3) return false;
+
+        // 3. The base is not a function word. Asked before the lexeme lookup
+        //    because the closed-class list is read independently of --lexicon.
+        if (closed_class_ && closed_class_->contains(base)) return false;
+        {
+            const PartOfSpeech func = PartOfSpeech::FUNCTION;
+            if (best_lexeme(base, &func)) return false;
+        }
+
+        // 2. The base is a lexeme under a part of speech the prefix takes,
+        //    or, where a suffix is stacked outside the prefix, the lemma is
+        //    and the prefixed lemma the suffix attaches to is a lexeme too.
+        //    `source` is the form the word is derived from, which condition 4
+        //    measures: the base in the first case, the prefixed lemma in the
+        //    second.
+        auto source = best_attaching_lexeme(base, prefix);
+        if (!source) {
+            const std::string& lemma = a.stem();
+            if (lemma == base) return false;
+            if (!best_attaching_lexeme(lemma, prefix)) return false;
+            source = best_lexeme(prefix + lemma, nullptr);
+            if (!source) return false;
+        }
+
+        // 4. The form the word is derived from is commoner than the word, by
+        //    the margin
+        if (source->weight_known()) {
+            const auto whole_lex = best_lexeme(lower, nullptr);
+            if (whole_lex && whole_lex->weight() >
+                    source->weight() - PREFIX_FREQUENCY_MARGIN) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * plural_stem_is_long_enough: Is there a noun under this plural?
+     *
+     * A plural reading of a one or two letter noun is a mining artifact, not
+     * morphology: `SIS` came out as `SI|S` off the two-letter noun `si`, and
+     * `sis` is not a lexeme, so nothing competed with it. Three characters is
+     * the same figure condition 2 of the promotion guard uses, and the same
+     * one tools/eval_lexicon.py drops a gold row for.
+     *
+     * The lemma is measured rather than the stem piece, since an alternation
+     * can leave the piece shorter: `flies` is `fl|ies` from `fly`.
+     */
+    static bool plural_stem_is_long_enough(const Analysis& a) {
+        if (!has_feature(a, "+PL")) return true;
+        return utf8::count(a.stem()) >= 3;
+    }
+
+    /**
      * is_promotable: May this decomposition outrank a stored whole word?
      *
      * The question only arises under --derived-first, which is the one ranking
@@ -589,6 +790,10 @@ private:
      * letter and a suffix: "is" became "i|s", "his" became "hi|s" and "number"
      * became "numb|er", and those three alone are 1.3% of the test tokens in
      * docs/BASELINES.md. Six conditions have to hold.
+     *
+     * A demoted reading never gets here: prefix_is_licensed and
+     * plural_stem_is_long_enough are asked first, and a reading either of them
+     * rejects is ranked below the whole words rather than level with them.
      *
      *   1. The word is not closed class. A function word has no morphology, so
      *      a decomposition of one is wrong whatever the lexicon says about its
@@ -648,6 +853,20 @@ private:
      *      the distinction can actually be drawn, and the measurement is in
      *      docs/LEXICON.md.
      *
+     *   7. For a prefix reading, the base is not a stored irregular form
+     *      either. Condition 5 asks about the spelling of the whole word,
+     *      which is the right question for a suffix reading and half the
+     *      question for a prefix one: "un" plus a stored form is a reading
+     *      that rests on a listing the rules did not produce, one layer in.
+     *      "unable" is the case. A mined lexicon carries "can" with
+     *      PRES_PART=able, a Wiktionary artifact, so the irregular index maps
+     *      "able" to the participle of "can" and the analyzer reads "unable"
+     *      as un- plus that participle at weight 1.18. The competing reading
+     *      is un- plus the adjective "able" at 1.11, and promoting it would
+     *      put a rules-assembled reading above a stored one, which is what
+     *      condition 5 exists to stop. So the base is asked the same question
+     *      the word is, and "unable" comes out whole.
+     *
      * A reading the guard blocks is not withdrawn. It is ranked with the whole
      * words, where weight decides as it does by default, and it is still
      * reported under --nbest 2.
@@ -659,10 +878,14 @@ private:
      *                 the piece after the stem overstates the affix by one
      * @param stored   Whether the lexicon holds this spelling as an irregular
      *                 form of some lexeme
+     * @param stored_base  The same question about the material after the
+     *                 prefix, which is condition 7. False for a reading with
+     *                 no prefix, where there is no base to ask about.
      */
     bool is_promotable(const std::string& lower, const Analysis& a,
                        const std::vector<SurfacePiece>& pieces,
-                       const std::string& alt, bool stored) const {
+                       const std::string& alt, bool stored,
+                       bool stored_base) const {
         if (pieces.size() < 2) return false;
 
         // 1. Closed class, either by the guard's own list or by a FUNCTION
@@ -694,6 +917,9 @@ private:
 
         // 5. A stored irregular form is what the word is
         if (stored) return false;
+
+        // 7. And for a prefix reading, what the base is
+        if (stored_base) return false;
 
         // 6. A doubled consonant reaching a suffix that does not make verbs,
         //    where the whole word is a verb of its own
@@ -748,6 +974,31 @@ public:
     }
 
     /**
+     * is_short_all_caps: Is this word written in capitals and short?
+     *
+     * Half the test for an acronym; WordSegmenter has the other half, which is
+     * that every reading of the word is one the guards demoted. A short word
+     * in capitals with nothing but a demoted reading behind it is far more
+     * likely to be a name or an initialism than a morphologically complex
+     * form, and reading it as one produced `SI|S` for the clipping of
+     * `sister`.
+     *
+     * Six characters is the bound, and it is deliberately short: a long word
+     * in capitals is a word someone shouted, not an initialism. A lowercase
+     * form is never reached, so `sis` is unaffected and so is every word with
+     * a reading the guards left alone, `CATS` included.
+     */
+    static bool is_short_all_caps(const std::string& word) {
+        if (utf8::count(word) > 6) return false;
+        bool any_upper = false;
+        for (unsigned char c : word) {
+            if (std::islower(c)) return false;
+            if (std::isupper(c)) any_upper = true;
+        }
+        return any_upper;
+    }
+
+    /**
      * is_passthrough_input: Should this input skip morphological analysis?
      *
      * The rule is deliberately simple: an input containing no ASCII letter
@@ -772,11 +1023,15 @@ public:
      * @param stored       Whether the lexicon holds this spelling as an
      *                     irregular form of any lexeme, which is condition 5
      *                     of the guard on --derived-first. Defaults to false,
-     *                     so a caller that does not know leaves the other four
+     *                     so a caller that does not know leaves the other
      *                     conditions to decide.
+     * @param stored_base  The same, for the material after the prefix, which
+     *                     is condition 7. Meaningless for a reading with no
+     *                     prefix and ignored there.
      */
     Segmentation from_analysis(const std::string& word, const Analysis& a,
-                               bool is_irregular, bool stored = false) const {
+                               bool is_irregular, bool stored = false,
+                               bool stored_base = false) const {
         const std::string lower = ascii_lower(word);
         const std::string lemma = a.stem();
 
@@ -832,7 +1087,17 @@ public:
         seg.alt  = detect_alt(region, lemma, lcp);
         seg.gate = seg.pieces.size() >= 2 ? seg_gate::DECOMPOSED
                                           : seg_gate::LEXICON_STEM;
-        seg.promotable = is_promotable(lower, a, seg.pieces, seg.alt, stored);
+
+        // A reading that keeps the word whole is never demoted: there would
+        // be nothing to prefer it to but a split, which is the opposite of
+        // what either guard is for.
+        seg.demoted = seg.pieces.size() >= 2 &&
+                      (!prefix_is_licensed(lower, a) ||
+                       !plural_stem_is_long_enough(a));
+
+        seg.promotable =
+            !seg.demoted &&
+            is_promotable(lower, a, seg.pieces, seg.alt, stored, stored_base);
         fill_offsets(seg);
         return seg;
     }
@@ -843,15 +1108,23 @@ public:
 /**
  * segmentation_less: Total order over candidate segmentations
  *
- * Primary key is the analyzer's own weight, descending, which is the ranking
- * the lexical output already uses. The remaining keys exist because weights
- * tie often (two readings of "unkind", two of "sheep") and std::sort is not
- * stable: without a total order the chosen record would depend on the
- * standard library implementation. Preferring more pieces on a tie also means
- * that when a decomposed and an undecomposed reading are equally weighted,
- * the decomposed one is reported.
+ * First key is Segmentation::demoted, which holds the two kinds of reading
+ * whose weight is not a weight for the word at all: a prefix reading carries
+ * the base's weight, and a plural of a two-letter noun carries that noun's.
+ * Both of them could otherwise outrank a stored whole word on either ranking
+ * without anything having decided they should, which is how `co|me` beat
+ * `come`. The field is documented on Segmentation.
+ *
+ * Then the analyzer's own weight, descending, which is the ranking the lexical
+ * output already uses. The remaining keys exist because weights tie often (two
+ * readings of "unkind", two of "sheep") and std::sort is not stable: without a
+ * total order the chosen record would depend on the standard library
+ * implementation. Preferring more pieces on a tie also means that when a
+ * decomposed and an undecomposed reading are equally weighted, the decomposed
+ * one is reported.
  */
 inline bool segmentation_less(const Segmentation& a, const Segmentation& b) {
+    if (a.demoted != b.demoted) return b.demoted;
     if (a.weight != b.weight) return a.weight > b.weight;
     if (a.pieces.size() != b.pieces.size()) {
         return a.pieces.size() > b.pieces.size();

@@ -13,6 +13,7 @@ standards.
 
 ```bash
 make && make test
+make test-tools                                      # the gold conversions
 python3 tools/make_splits.py                         # about 4 minutes
 ~/venvs/tok/bin/python tools/train_baselines.py      # about 20 minutes
 ~/venvs/tok/bin/python tools/score_tokenizer.py      # about 8 minutes
@@ -24,7 +25,9 @@ python3 tools/make_splits.py                         # about 4 minutes
 `make_splits.py` and the analyzer side are standard library only.
 `train_baselines.py` and `score_tokenizer.py` need the virtualenv, for the
 libraries the baselines are trained with and for the spreadsheet reader
-MorphoLex needs. Results land in `~/data/tok/results/baselines.json` and
+MorphoLex needs. `make test-tools` is standard library and covers the gold
+conversions, including the MorphoLex parser; `--morpholex-reader legacy`
+reproduces every MorphoLex number recorded before decision 22. Results land in `~/data/tok/results/baselines.json` and
 `disagreements.tsv`, and the per-suffix report in `suffix_report.json`.
 Nothing is written inside the repository.
 
@@ -221,6 +224,10 @@ scored on the same forms and against the same alternation mask: 30,514 of the
 
 **MorphoLex, 10,058 forms. Independent: built by psycholinguists from a
 different pipeline and never used to build a lexicon.**
+
+*Legacy reader: these rows are scored against the 10,058 forms the
+MorphoLex reader produced before decision 22 fixed it. They are left as
+they were measured; `--morpholex-reader legacy` reproduces them.*
 
 | system | P | R | F1 | exact | P alt | R alt | F1 alt |
 |--------|--:|--:|---:|------:|------:|------:|-------:|
@@ -700,6 +707,10 @@ already has replaces a word it used to emit whole.
 
 **MorphoLex, 10,058 forms. Independent.**
 
+*Legacy reader: these rows are scored against the 10,058 forms the
+MorphoLex reader produced before decision 22 fixed it. They are left as
+they were measured; `--morpholex-reader legacy` reproduces them.*
+
 | system | P | R | F1 | exact | P alt | R alt | F1 alt |
 |--------|--:|--:|---:|------:|------:|------:|-------:|
 | **unigram-16k** | 0.566 | 0.712 | **0.631** | 0.433 | 0.568 | 0.715 | 0.633 |
@@ -1029,6 +1040,10 @@ withdrew were pieces too.
 **MorphoLex, 10,058 forms. Independent.** Unigram 16k at F1 0.631 is still
 the best baseline and was not re-scored.
 
+*Legacy reader: these rows are scored against the 10,058 forms the
+MorphoLex reader produced before decision 22 fixed it. They are left as
+they were measured; `--morpholex-reader legacy` reproduces them.*
+
 | system | P | R | F1 | exact | P alt | R alt | F1 alt |
 |--------|--:|--:|---:|------:|------:|------:|-------:|
 | analyzer-builtin | 0.971 | 0.092 | 0.168 | 0.087 | 0.972 | 0.092 | 0.169 |
@@ -1184,3 +1199,461 @@ slices will see them as disagreements.
     The rows above are marked by cause rather than by which round introduced
     them, and the two patterns they fall into are named, because that is the
     next piece of work rather than a list of exceptions.
+
+## After the prefix guard
+
+Four changes, measured with the same scorer on the same word list. Again only
+the four analyzer settings were re-scored, for the reason decision 16 gives.
+`~/data/tok/results/baselines_promoted_025.json` holds every number below. The
+measurement that chose the ranking policy and the margin came after the reader
+fix in decision 22, so the policy variants it rejected are in
+`baselines_prefix_reader.json`, which is the same code with prefix readings
+never promoted, and in `baselines_orthography_reader.json`, which is `main`.
+
+1. **A guard on prefix readings.** Four conditions: the base is at least three
+   characters, it is a lexeme under a part of speech the prefix attaches to, it
+   is not closed class, and the form the word is derived from is more frequent
+   than the word by a quarter of a Zipf point. `docs/LEXICON.md` decision 38
+   has the conditions and what the guard costs on the gold, decision 40 the
+   margin, and the inventory of what each prefix attaches to is in
+   `RULES/prefix_rule.h`.
+
+2. **A reading the guard rejects is demoted on both rankings.** Demotion rather
+   than non-promotion is what the mechanism needs: a prefix reading carries the
+   base's weight unchanged, so `co|me` was reported at the weight of the
+   pronoun `me` and beat the stored verb `come` on the default ranking too.
+   This is the one change in the round that moves the default output, and
+   decision 18 counts it.
+
+3. **A prefix reading the guard licenses is promoted, and promotion is gated on
+   the stored irregular forms of the base as well as of the word.** Promotion
+   is worth 0.0070 of F1 and 149 of the 1,561 prefix boundaries at the margin
+   that is shipped, for 0.0024 of precision; `docs/LEXICON.md` decision 39 has
+   the comparison and the condition `unable` needs.
+
+4. **Two conditions on a plural, and a rule for a short word in capitals.** The
+   `-es` plural now needs the orthographic trigger the epenthetic e actually
+   has, a sibilant grapheme or a final o, which is what `CHILD|ES` came from; a
+   plural reading of a one or two letter noun is demoted; and a word of six
+   letters or fewer in capitals whose every reading is demoted is emitted whole
+   with gate `no_analysis`, which is what `SI|S` came from. Decisions 41 and 42.
+
+### Compression and round trip
+
+| system | pcs/token | pcs/type | chr/pc | pcs/1kB | distinct pieces | round trip |
+|--------|----------:|---------:|-------:|--------:|----------------:|-----------:|
+| analyzer-builtin | 1.054 | 1.076 | 3.735 | 265.69 | 118,650 | 100% |
+| analyzer-en_100k | 1.086 | 1.277 | 3.623 | 271.82 | 99,483 | 100% |
+| analyzer-en_100k-derived | 1.104 | 1.328 | 3.564 | 275.16 | 96,522 | 100% |
+| analyzer-en_all-derived | 1.105 | 1.333 | 3.563 | 275.24 | 96,508 | 100% |
+
+Round trip is exact for all four systems on all 482,406 strings encoded, and
+the library decoders agree with the scorer on every one. The string count is
+229 higher than the round before the reader fix, because every gold form is a
+string the scorer encodes and the reader produces more of them; nothing else in
+this table moves with it.
+
+Pieces per token falls against `main`, 1.109 to 1.104 at `en_100k` with the
+flag, and the drop is one word: `come` and `Come` are 16,967 of the test tokens
+that stopped splitting. Working inventory rises against `main`, 95,716 to
+96,522, which is a word that used to be a prefix plus a stem becoming a piece
+of its own. Against the policy that promoted nothing it falls, 97,396 to
+96,522, which is the same fact in reverse: promotion puts a stem and an affix
+the layer already has in place of a word it would have emitted whole.
+
+### Morphological alignment
+
+**MorphoLex, 12,828 forms. Independent.** Unigram 16k was last scored on the
+10,058 forms the legacy reader produced and was not re-scored here, so its F1
+of 0.631 is not comparable with this table.
+
+| system | P | R | F1 | exact | P alt | R alt | F1 alt |
+|--------|--:|--:|---:|------:|------:|------:|-------:|
+| analyzer-builtin | 0.950 | 0.111 | 0.199 | 0.103 | 0.952 | 0.111 | 0.199 |
+| analyzer-en_100k | 0.969 | 0.257 | 0.406 | 0.232 | 0.971 | 0.257 | 0.407 |
+| analyzer-en_100k-derived | 0.976 | 0.380 | 0.547 | 0.335 | 0.977 | 0.381 | 0.548 |
+| analyzer-en_all-derived | 0.976 | 0.385 | **0.552** | 0.337 | 0.977 | 0.386 | 0.553 |
+
+The 1,561 rows in that gold whose first morpheme is a prefix the analyzer
+strips, counted on their own, because 1,561 rows cannot move an aggregate of
+12,828 and are the only rows with an opinion about what this round changed:
+
+| system | prefix boundary found | of 1,561 |
+|--------|----------------------:|---------:|
+| analyzer-builtin | 555 | 0.356 |
+| analyzer-en_100k | 1,130 | 0.724 |
+| analyzer-en_100k-derived | 1,140 | 0.730 |
+| analyzer-en_all-derived | 1,129 | 0.723 |
+
+**Before the reader fix, the same four settings on the 10,058 forms the legacy
+reader produced.** These are the numbers this round was reported on, and
+`--morpholex-reader legacy` reproduces them exactly.
+
+| system | P | R | F1 | exact | P alt | R alt | F1 alt |
+|--------|--:|--:|---:|------:|------:|------:|-------:|
+| analyzer-builtin | 0.971 | 0.092 | 0.168 | 0.087 | 0.972 | 0.092 | 0.169 |
+| analyzer-en_100k | 0.978 | 0.230 | 0.373 | 0.214 | 0.981 | 0.231 | 0.374 |
+| analyzer-en_100k-derived | 0.988 | 0.376 | 0.544 | 0.347 | 0.990 | 0.376 | 0.545 |
+| analyzer-en_all-derived | 0.987 | 0.381 | **0.550** | 0.350 | 0.989 | 0.381 | 0.551 |
+
+**MorphyNet inflection, 186,947 forms. IN DISTRIBUTION.**
+
+| system | P | R | F1 | exact |
+|--------|--:|--:|---:|------:|
+| analyzer-builtin | 0.509 | 0.043 | 0.079 | 0.010 |
+| analyzer-en_100k | 0.689 | 0.472 | 0.560 | 0.297 |
+| analyzer-en_100k-derived | 0.690 | 0.474 | 0.562 | 0.299 |
+| **analyzer-en_all-derived** | 0.807 | 0.870 | **0.838** | 0.694 |
+
+**MorphyNet derivation, 194,771 forms. IN DISTRIBUTION.**
+
+| system | P | R | F1 | exact |
+|--------|--:|--:|---:|------:|
+| analyzer-builtin | 0.702 | 0.066 | 0.121 | 0.041 |
+| analyzer-en_100k | 0.795 | 0.387 | 0.521 | 0.305 |
+| analyzer-en_100k-derived | 0.798 | 0.417 | 0.548 | 0.333 |
+| **analyzer-en_all-derived** | 0.802 | 0.423 | **0.554** | 0.360 |
+
+Neither MorphyNet conversion moved with the reader fix, which touches the
+MorphoLex one alone, so these two tables are comparable with the round above
+them form for form.
+
+Both move a little and in opposite directions. The inflectional gold marks one
+boundary per word and it is the inflectional one, so a prefix boundary in front
+of it is a false positive on every form, `re|turn|ed` against a gold of
+`return|ed`: F1 0.826 to 0.838 at `en_all`, which is the guard withdrawing
+some of those, and precision 0.790 to 0.807. The derivational gold does carry
+prefix rows, 35,421 of them, and there the guard costs: the analyzer finds
+27,840 at `en_all` against 35,012 on `main`, and F1 is 0.572 to 0.554.
+
+Those two numbers are the same trade the independent gold reports, and
+`docs/LEXICON.md` decision 38 is where it is taken: the guard withdraws prefix
+boundaries, several of which every gold standard marks, in exchange for not
+splitting the most frequent words in the corpus.
+
+### Before and after, on the independent gold
+
+Four decimals, on the 12,828 forms the fixed reader produces. Both columns are
+re-measured: the "before" binary is the commit this branch starts from, scored
+again on the new gold rather than carried over.
+
+| system | P before | P after | R before | R after | F1 before | F1 after | exact before | exact after | prefix found before | after |
+|--------|---------:|--------:|---------:|--------:|----------:|---------:|-------------:|------------:|--------------------:|------:|
+| analyzer-builtin | 0.9502 | 0.9503 | 0.1109 | 0.1110 | 0.1987 | 0.1988 | 1,325 | 1,326 | 558 | 555 |
+| analyzer-en_100k | 0.9651 | **0.9694** | 0.2678 | 0.2569 | **0.4193** | 0.4061 | 3,055 | 2,975 | 1,274 | 1,130 |
+| analyzer-en_100k-derived | 0.9705 | **0.9760** | 0.3923 | 0.3804 | **0.5587** | 0.5474 | 4,382 | 4,291 | 1,327 | 1,140 |
+| analyzer-en_all-derived | 0.9688 | **0.9755** | 0.3975 | 0.3852 | **0.5637** | 0.5523 | 4,414 | 4,317 | 1,338 | 1,129 |
+
+**On a gold standard that can see prefixes, this round costs F1 at every
+setting that loads a lexicon.** It buys precision, 0.9705 to 0.9760 at
+`en_100k` with the flag, and it pays for it in recall, 0.3923 to 0.3804, which
+is 91 exact matches and 187 of the 1,327 prefix boundaries the layer used to
+find. That is the guard, and `docs/LEXICON.md` decision 38 takes the decision
+on the corpus rather than on the gold: the readings it withdraws are `co|me`,
+`Co|me`, `pre|sent`, `under|stand` and `re|turn`, which are 19,265 test tokens,
+and seven of the eight words the round had to fix are wrong without it.
+
+The ranking policy pulls the other way and recovers part of it. Promoting a
+licensed prefix reading is worth 0.0070 of F1 and 149 prefix boundaries against
+not promoting one, which is the difference between this table and the policy
+measured before the choice was made; decision 39 has that comparison.
+
+The numbers below are the same comparison before the reader was fixed, and they
+pointed the other way. That is not two measurements disagreeing. It is one
+replacing another that could not see the thing being changed: of the 10,058
+forms the legacy reader produced, 20 had a prefix as their first morpheme, so
+the F1 of 0.5443 was decided almost entirely by suffix readings that stopped
+being reached through a spurious prefix.
+
+**Before the reader fix, the same comparison on the 10,058 forms.** These are
+the numbers this round was reported on.
+
+| system | P before | P after | R before | R after | F1 before | F1 after | exact before | exact after |
+|--------|---------:|--------:|---------:|--------:|----------:|---------:|-------------:|------------:|
+| analyzer-builtin | 0.9706 | 0.9706 | 0.0922 | 0.0922 | 0.1684 | 0.1684 | 876 | 876 |
+| analyzer-en_100k | 0.9712 | **0.9780** | 0.2315 | 0.2303 | 0.3739 | 0.3728 | 2,157 | 2,156 |
+| analyzer-en_100k-derived | 0.9762 | **0.9884** | 0.3759 | 0.3756 | 0.5428 | **0.5443** | 3,452 | 3,486 |
+| analyzer-en_all-derived | 0.9742 | **0.9875** | 0.3808 | 0.3807 | 0.5475 | **0.5495** | 3,482 | 3,519 |
+
+Over those 10,058 forms, 54 changed: 35 became exactly right, one was lost and
+18 were wrong before and after. The 35 are all the same shape, a suffix reading
+that was being reached through a prefix that is not there:
+
+```
+  de|light|ful     → delight|ful      re|mark|able   → remark|able
+  dis|cover|able   → discover|able    re|fine|ment   → refine|ment
+  co|lon|ist       → colon|ist        pre|tender     → pretend|er
+  de|spot|ism      → despot|ism       sub|lime|ly    → sublime|ly
+```
+
+Those 35 are real and they survive the reader fix. What the fixed reader added
+is the other side of the ledger, 2,770 rows of it, and the policy and the
+margin were chosen on the whole of it: `docs/LEXICON.md` decisions 38 to 40
+have the sweep, the losing variants and the attribution word by word.
+
+### Analyzer coverage and gates
+
+Token weighted, over the test word tokens.
+
+| system | coverage | decomposed | lexicon_stem | irregular | no_analysis |
+|--------|---------:|-----------:|-------------:|----------:|------------:|
+| analyzer-builtin | 69.5% | 5.1% | 62.2% | 2.1% | 30.5% |
+| analyzer-en_100k | 92.7% | 8.4% | 81.2% | 3.1% | 7.3% |
+| analyzer-en_100k-derived | 92.7% | 10.2% | 79.4% | 3.1% | 7.3% |
+| analyzer-en_all-derived | 92.7% | 10.2% | 79.4% | 3.1% | 7.3% |
+
+Type weighted, coverage is 10.4%, 58.6%, 58.6% and 59.8%, and the decomposed
+share of types is 6.3%, 25.5%, 30.4% and 31.0%.
+
+Coverage falls for the first time, 92.8% to 92.7% of tokens, and it is the only
+round that could: the `-es` condition withdraws the last reading of a word
+rather than re-ranking one, and the all-caps rule declines a reading the
+analyzer did produce. The whole of the 0.08 points is `CHILDES`, `childes`,
+`SIS`, `James`, `Alpes`, `JS` and the rest of that list. The irregular share
+rises from 2.9% to 3.1%, which is `come`: with `co|me` demoted, the stored past
+participle is the reading that wins.
+
+### What it bought and what it cost, by test tokens
+
+1,415 of the 125,852 test types change against `main` under `en_100k` with the
+flag, 50,742 tokens: 835 types stop splitting, 580 move a boundary, and nothing
+starts splitting. On the default ranking it is 1,225 types and 43,702 tokens,
+816 of them stopping and 409 moving, which is decision 18. The top of the first
+group, which is the point of the round:
+
+```
+  13890  come        co|me        → come         1932  understand  under|stand → understand
+   3077  Come        Co|me        → Come         1326  present     pre|sent    → present
+   2047  SIS         SI|S         → SIS           972  return      re|turn     → return
+   1173  CHILDES     CHILD|ES     → CHILDES       820  interest    inter|est   → interest
+   1173  childes     child|es     → childes       691  James       Jam|es      → James
+```
+
+and of the second, where a prefix comes off the front of a reading that keeps
+its suffix, which is where the inflectional precision came from:
+
+```
+   1328  department  de|part|ment → depart|ment   258  notes    not|es      → note|s
+   1204  clothes     cloth|es     → clothe|s      245  remains  re|main|s   → remain|s
+    369  retired     re|tired     → re|tire|d     199  remaining re|main|ing → remain|ing
+```
+
+What it costs is four words in the top fifty, 1,361 tokens of the 42,432:
+
+| word | count | on `main` | now | why |
+|------|------:|-----------|-----|-----|
+| `upstairs` | 647 | `up\|stair\|s` | `upstairs` | MorphoLex says `up\|stair`. The material after `up-` is `stairs`, which is not a lexeme, and the prefixed lemma `upstair` is an adjective where `up-` takes a verb, so condition 2 has nothing to accept |
+| `international` | 290 | `inter\|national` | `international` | MorphoLex says `inter\|nation\|al`. `international` at Zipf 5.3 is 0.13 inside the margin of `national` at 5.5, so condition 4 refuses it |
+| `disappeared` | 290 | `dis\|appear\|ed` | `disappeared` | the stored form is commoner than `disappear`, so condition 4 refuses the layer the suffix would attach to |
+| `unable` | 214 | `un\|able` | `unable` | MorphoLex says `un\|able`. Condition 7 declines to promote a reading over a stored irregular form of the base, and the lexicon reads `able` as the participle of `can` at 1.18 against the prefix reading's 1.11 |
+
+`Un|it` is a fifth, 210 tokens, where the base is two letters and closed class
+and MorphoLex marks the boundary anyway. The other forty-five in the list are
+fixes. The margin at a quarter of a Zipf point is what keeps `un|usual` (206),
+`re|pair` (124) and `de|serve` (157), all three of which MorphoLex marks and
+all three of which a wider margin withdrew; `docs/LEXICON.md` decision 40 has
+that measurement.
+
+### What is still wrong
+
+Of the thirteen rows in the table before, seven are fixed: `come`, `Come`,
+`SIS`, `understand`, `department`, `present` and `CHILDES` all come out whole or
+with the right single boundary. Two more leave the table for a different
+reason, below: `beaut|iful` and `bus|iness` are the documented convention and
+should never have been listed as errors. `ready`, `party`, `question` and
+`married` are unchanged and their rows stand. Six rows are new, and five of
+those are the margin the policy round settled on, which is a looser one than
+the round before shipped.
+
+The rest is another pass over the highest-frequency splits in the test split.
+Counts are test tokens of that exact spelling, `analyzer-en_100k-derived` and
+`analyzer-en_all-derived` agree on every row, and the right-hand column is what
+MorphoLex says where it has an opinion:
+
+| word | count | analyzer | why |
+|------|------:|----------|-----|
+| `ready` | 2,541 | `read\|y` | `-y` on a real noun, and the wrong etymology. MorphoLex has one morpheme. Decision 34 says why no frequency test holds it |
+| `party` | 1,974 | `part\|y` | as `ready` |
+| `question` | 1,351 | `quest\|ion` | `-ion` on the verb `quest`, which is not where the word comes from. One morpheme |
+| `former` | 1,167 | `form\|er` | the agentive `-er` on `form`, which is the commoner word, so condition 4 passes. One morpheme |
+| `career` | 1,051 | `care\|er` | the same shape on `care`. One morpheme |
+| `married` | 990 | `married` | the opposite error: condition 4 of the promotion guard blocks `marr\|ied` because `married` is commoner than `marry` |
+| `evening` | 950 | `even\|ing` | `-ing` on the verb `even`. One morpheme |
+| `news` | 887 | `new\|s` | a plural of the adjective `new`. One morpheme |
+| `finish` | 751 | `fin\|ish` | `-ish` through `fine`. One morpheme |
+| `pretend` | 647 | `pre\|tend` | the prefix at the margin the sweep settled on: `tend` is 0.36 Zipf commoner, outside the 0.25 the guard asks for. One morpheme |
+| `upstairs` | 647 | `upstairs` | the opposite error, in the cost table above. MorphoLex says `up\|stair` |
+| `silence` | 561 | `sile\|nce` | `-ance` on a junk lexeme, `sile`. One morpheme, and it predates this round |
+| `remain` | 444 | `re\|main` | as `pretend`, 0.40 Zipf apart. One morpheme |
+| `unable` | 214 | `unable` | the opposite error again, from condition 7. MorphoLex says `un\|able` |
+| `interview` | 201 | `inter\|view` | as `pretend`, 0.27 Zipf apart. One morpheme |
+| `delay` | 138 | `de\|l\|ay` | as `pretend`, and two boundaries rather than one. One morpheme |
+| `reserve` | 100 | `re\|serve` | as `pretend`, 0.27 Zipf apart. One morpheme |
+
+Two patterns, and the round moved one of them.
+
+**A suffix the lexicon can reach on a stem that is not the word's base** is the
+one it did not touch. `read|y`, `part|y`, `quest|ion`, `form|er`, `care|er`,
+`even|ing`, `new|s`, `fin|ish` and `sile|nce` are nine words and 11,233 test
+tokens, and every one of them is a real suffix on a real lexeme of the right
+category with the right frequency ordering. Nothing in the evidence this layer
+has distinguishes them from `read|er`, `part|ed`, `act|ion` or `fool|ish`.
+
+**A prefix on a Latinate stem the margin lets through** is the one it made:
+`pre|tend`, `re|main`, `inter|view`, `de|lay` and `re|serve` are 1,530 test
+tokens that the previous margin of half a Zipf point withdrew and a quarter of
+a point does not. They are the price of `un|usual`, `re|pair` and `de|serve`,
+which the wider margin also withdrew and which MorphoLex marks, and
+`docs/LEXICON.md` decision 40 is where that trade is priced. A frequency
+comparison cannot separate the two groups: `tend` over `pretend` is 0.36 Zipf
+and `usual` over `unusual` is 0.27, so any threshold that keeps the second
+keeps the first.
+
+What is not in the table, deliberately: `beaut|iful`, `bus|iness`, `get|ting`,
+`late|r`, `cr|ied` and `fl|ies` are the documented surface conventions for the
+y-to-i reversal, consonant doubling and e deletion, not errors.
+`docs/SEGMENTATION.md` states each of them, and the stem piece ends where the
+lemma stops being shared: `beauty` and `beautiful` share `beaut`, exactly as
+`city` and `cities` share `cit`. The previous round's table listed the first two
+as errors, which was the wrong call: the boundary a gold standard spells
+`beauti|ful` is the same boundary this output spells `beaut|iful`, and the
+alternation is reported in the `alt` field for a scorer that wants to forgive
+the difference.
+
+### Decisions, the prefix guard
+
+18. **The prefix guard changes the default output, and that is documented
+    rather than avoided.** Every earlier round could claim the default ranking
+    was untouched, because the thing being fixed was a promotion and the
+    default ranking promotes nothing. This one cannot: a prefix reading carries
+    the base's weight, so `co|me` outranked the stored verb `come` on the
+    default ranking too, and no change confined to `--derived-first` could
+    reach it. 1,225 of the 125,852 test types move under the default ranking,
+    43,702 tokens, 816 of them stopping splitting, 409 moving a boundary and
+    none starting. `docs/LEXICON.md` decision 38 has the mechanism.
+
+19. **The policy and the margin were chosen on the full gold, and the losing
+    variants are in the table.** The first round picked a policy on the 10,058
+    forms the legacy reader produced, where the two candidates were a
+    thousandth of F1 apart and 20 rows had a prefix in them. On the 12,828
+    forms the fixed reader produces, with 1,561 prefix-initial rows, promoting
+    a licensed prefix reading beats not promoting one by 0.0070 of F1 and 149
+    prefix boundaries at every margin measured, and the margin that keeps all
+    eight of the words the round had to fix is a quarter of a Zipf point. Ten
+    variants were scored and `docs/LEXICON.md` decisions 38 to 40 carry the
+    sweep, the attribution word by word, and what each decision costs on the
+    gold.
+
+20. **The reader was fixed rather than worked around.** The first round
+    reported the prefix measurement by hand, with a lenient parse of the rows
+    `tools/eval_lexicon.py` could not read, because the alternative was to
+    choose a policy on a gold standard that could not see prefixes. Decision 22
+    fixes the reader, which makes that hand measurement unnecessary and
+    confirms it: for the policy the first round shipped, the hand parse
+    reported 370 of 1,328 prefix boundaries withdrawn and the reader reports
+    369 of 1,327, the difference being one row the lenient parse accepted and
+    the reader refuses. The hand numbers stay in
+    `docs/LEXICON.md`, labelled, because a measurement that was acted on should
+    stay on the record.
+
+21. **`CHILDES` is fixed by the plural rule, not by the all-caps rule.** The
+    brief gave two mechanisms and named both words: a plural needs a stem of
+    three letters, and a word of six letters or fewer in capitals with no
+    whole-word reading comes out whole. The first reaches `SIS`, whose stem
+    `si` is two letters, and the second is what then reports it whole. Neither
+    reaches `CHILDES`, which is seven letters with a five-letter stem, so the
+    `-es` plural was given the orthographic trigger it should always have had.
+    Both of the brief's mechanisms are in and both do work;
+    `docs/LEXICON.md` decisions 41 and 42 have the detail, including why the
+    all-caps rule fires only when every reading of the word is demoted, which
+    is what keeps `CAT|S`.
+
+### Decision, the reader fix
+
+22. **The MorphoLex reader could not see a prefix, and now can.** The database
+    writes the bracket that marks a morpheme's attachment pointing at what it
+    attached to, so a suffix is `>ness>` and a prefix `<un<`. The reader split
+    a parse on `>`, `{`, `}`, `(` and `)` and not on `<`, so every parse
+    carrying a prefix came back with a token like `<un<` in it, failed the test
+    that each token is a plain lowercase word, and was dropped. Adding `<` to
+    that set is the whole fix. `tools/test_eval_lexicon.py` covers it, with a
+    parse quoted from the database for each shape: a bare prefix, a prefix
+    inside the braces, a prefix with one and with two stacked suffixes, two
+    prefixes nested, two prefixes in a row, a prefix on a compound, a prefix
+    inside a root group, and the suffix-only shapes that must not move.
+
+    | Rows of the workbook | Legacy | Prefix-aware |
+    |---|---:|---:|
+    | word and parse both present | 68,623 | 68,623 |
+    | the word is not plain lowercase a-z | 1,095 | 1,095 |
+    | the parse cannot be read | 10,948 | 1 |
+    | the parse marks a bound root | 24 | 24 |
+    | one morpheme, so no boundary to score | 30,309 | 30,309 |
+    | the morphemes do not concatenate to the word | 16,189 | 24,366 |
+    | **kept** | **10,058** | **12,828** |
+
+    The gold grows by 2,770 forms and no form's segmentation changes: every one
+    of the 10,058 the legacy reader kept is kept, with the same boundaries.
+    1,561 of the 12,828 are prefix-initial under the analyzer's own inventory,
+    against 20 before.
+
+    The twenty newly scorable rows with the highest test-split count, as the
+    flattened boundaries they now contribute, which is what a reader should
+    check this against:
+
+    ```
+      11190  into         in|to            587  onto        on|to
+       1878  outside      out|side         568  amount      a|mount
+       1583  inside       in|side          534  perfect     per|fect
+       1030  afternoon    after|noon       516  include     in|clude
+        917  although     al|though        503  subject     sub|ject
+        725  especially   e|special|ly     473  enjoy       en|joy
+        718  except       ex|cept          466  perfectly   per|fect|ly
+        676  object       ob|ject          409  impossible  im|possible
+        626  alive        a|live           379  process     pro|cess
+        602  report       re|port          375  mistake     mis|take
+    ```
+
+    Most of that list is a prefix the analyzer does not strip and would not
+    want to: `in-`, `e-`, `ex-`, `ob-`, `a-`, `per-`, `en-`, `im-`, `pro-` and
+    `al-` are not in its inventory, so those rows are recall misses it cannot
+    reach. That is the gold getting harder rather than the layer getting worse,
+    and it is most of why recall and F1 fall against the legacy numbers in
+    every table below. Of the 2,770, 1,541 are prefix-initial under the
+    analyzer's own fifteen, and `report` at `re|port` is one of them: the
+    guard's refusal of that reading is now a measured miss.
+
+    It is 2,770 and not eleven thousand, which is what decision 20 guessed, and
+    the difference is the concatenation test: most of the 10,948 rows the
+    parser could not read would have been dropped anyway because MorphoLex
+    spells morphemes canonically and `ability` is `able` plus `ity`. That
+    guess was recorded as a reason not to do this work, which is the wrong way
+    round, and the count is now measured.
+
+    The rows still dropped are dropped for reasons that were always there. One
+    parse has a stray bracket, `daly` written `{(daly)]>`. Twenty-four mark a
+    bound root with an underscore, `cohere` written `{<co<(_here)}`, which says
+    the morpheme is not the free word `here`; taking it for one would be
+    reading an annotation as its opposite, so those rows stay out. The two
+    large groups, the single-morpheme rows and the rows whose morphemes do not
+    concatenate, are the gold saying there is no boundary to score and the
+    reader declining to guess at a canonical spelling, which is decision 18 in
+    `docs/LEXICON.md` and unchanged.
+
+    The old reader is kept as `--morpholex-reader legacy`, in both
+    `tools/eval_lexicon.py` and `tools/score_tokenizer.py`, so every MorphoLex
+    number recorded before this fix can be reproduced rather than described.
+    The three earlier rounds in this document are labelled with it and left
+    alone: re-measuring them would mean rebuilding four commits of the
+    analyzer, and what they record is what each round changed, which the legacy
+    reader still reproduces exactly.
+
+23. **The prefix-initial rows are counted on their own, and the inventory is
+    read from the source.** 1,561 rows out of 12,828 cannot move an aggregate,
+    and they are the only rows that have an opinion about prefix stripping, so
+    `score_tokenizer.py` reports how many of their prefix boundaries each
+    system finds alongside the aggregate. A row counts as prefix-initial when
+    its first morpheme is one of the forms `RULES/prefix_rule.h` lists, read
+    out of that file rather than copied into the tool, so the measurement
+    cannot drift from the inventory it is measuring. `--prefix-rules ''` turns
+    the counts off for a caller running from outside the repository.

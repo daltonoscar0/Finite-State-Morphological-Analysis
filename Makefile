@@ -42,10 +42,11 @@ MORPH_HDR = ANALYSIS/analysis.h \
             RULES/morph_rule.h \
             RULES/orthography.h \
             RULES/plural_rule.h \
+            RULES/prefix_rule.h \
             RULES/verb_rule.h \
             SYMBOLS/symbol.h
 
-.PHONY: all clean test
+.PHONY: all clean test test-tools
 
 all: analyzer test_infra test_lex test_analyzer test_seg
 
@@ -78,6 +79,13 @@ test: all
 	./test_lex
 	./test_analyzer
 	./test_seg
+
+# ── Tool tests ───────────────────────────────────────────────────────────────
+# Not part of `test`, which stays free of a Python dependency: `make && make
+# test` builds and checks the analyzer with a compiler and nothing else. The
+# tools need python3 anyway, so a caller touching them runs this as well.
+test-tools:
+	python3 tools/test_eval_lexicon.py
 
 clean:
 	rm -f analyzer test_infra test_lex test_analyzer test_seg

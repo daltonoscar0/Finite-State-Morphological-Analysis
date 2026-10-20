@@ -49,8 +49,10 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from eval_lexicon import (make_gold_filter, read_derivation_gold,  # noqa: E402
-                          read_inflection_gold, read_morpholex)
+from eval_lexicon import (MORPHOLEX_READERS, MORPHOLEX_READER_DEFAULT,  # noqa: E402
+                          make_gold_filter, prefix_initial_lengths,
+                          read_derivation_gold, read_inflection_gold,
+                          read_morpholex, read_prefix_inventory)
 from fst_tokenizer import FstTokenizer  # noqa: E402
 from pretokenize import existing, open_text  # noqa: E402
 from score_segmentation import (internal_boundaries, match_boundaries,  # noqa: E402
@@ -64,6 +66,7 @@ DEFAULT_MODELS = "~/data/tok/models"
 DEFAULT_RESULTS = "~/data/tok/results"
 DEFAULT_LEXICON_DIR = "~/data/morph/lexicons"
 DEFAULT_MORPHOLEX = "~/data/morph/morpholex/MorphoLex-en/MorphoLEX_en.xlsx"
+DEFAULT_PREFIX_RULES = "RULES/prefix_rule.h"
 DEFAULT_INFLECTION = "~/data/morph/morphynet/eng.inflectional.v1.tsv"
 DEFAULT_DERIVATION = "~/data/morph/morphynet/eng.derivational.v1.tsv"
 
@@ -388,9 +391,11 @@ def load_gold(args):
     gold = {}
     morpholex = expand(args.morpholex)
     if os.path.exists(morpholex):
-        forms, stats = read_morpholex(morpholex)
+        forms, stats = read_morpholex(morpholex, args.morpholex_reader)
         gold["morpholex"] = {"forms": forms, "stats": dict(stats),
                              "independent": True}
+        print("gold morpholex: reader %s" % args.morpholex_reader,
+              file=sys.stderr)
 
     gold_filter = None
     inflection = expand(args.inflection)
@@ -417,6 +422,22 @@ def load_gold(args):
         gold[key] = {"forms": dict(forms), "stats": dict(stats),
                      "independent": False,
                      "filtered": gold_filter is not None}
+
+    # Which rows have an opinion about prefix stripping. An aggregate over a
+    # gold standard that is almost all suffixation cannot show a prefix
+    # decision moving, so those rows are counted on their own as well; the
+    # inventory is read from RULES/prefix_rule.h so it cannot drift.
+    prefixes = read_prefix_inventory(args.prefix_rules)
+    for entry in gold.values():
+        entry["prefix_initial"] = (prefix_initial_lengths(entry["forms"],
+                                                          prefixes)
+                                   if prefixes else {})
+    if prefixes:
+        print("prefix inventory: %d forms; prefix-initial gold rows %s"
+              % (len(prefixes),
+                 ", ".join("%s %d" % (key, len(entry["prefix_initial"]))
+                           for key, entry in sorted(gold.items()))),
+              file=sys.stderr)
     return gold
 
 
@@ -608,6 +629,7 @@ def score_gold_set(system, entry, pieces_by_word, alt_mask):
     segmentation.
     """
     forms = entry["forms"]
+    prefix_initial = entry.get("prefix_initial") or {}
     counts = collections.Counter()
     mismatches = []
 
@@ -620,6 +642,11 @@ def score_gold_set(system, entry, pieces_by_word, alt_mask):
         tolerance = 1 if alt_mask.get(form) else 0
 
         counts["forms"] += 1
+        offsets = prefix_initial.get(form)
+        if offsets:
+            counts["prefix_forms"] += 1
+            if offsets.intersection(predicted):
+                counts["prefix_found"] += 1
         if any(tuple(surfaces) == gold_pieces for gold_pieces in forms[form]):
             counts["exact"] += 1
         elif len(mismatches) < 200:
@@ -646,6 +673,10 @@ def score_gold_set(system, entry, pieces_by_word, alt_mask):
            "exact_rate": counts["exact"] / counts["forms"] if counts["forms"]
            else 0.0,
            "independent": entry["independent"],
+           "prefix_forms": counts["prefix_forms"],
+           "prefix_found": counts["prefix_found"],
+           "prefix_recall": (counts["prefix_found"] / counts["prefix_forms"]
+                             if counts["prefix_forms"] else 0.0),
            "mismatches": mismatches[:40]}
     for label in ("strict", "tolerant"):
         precision, recall, f1 = prf(counts[label + "_tp"],
@@ -748,6 +779,22 @@ def print_table(results, gold_keys):
                      scored["exact_rate"], scored["tolerant"]["precision"],
                      scored["tolerant"]["recall"], scored["tolerant"]["f1"]))
 
+        # The rows that have an opinion about prefix stripping, counted on
+        # their own. An aggregate over a gold standard that is almost all
+        # suffixation cannot show a prefix decision moving.
+        if sample["gold"][key].get("prefix_forms"):
+            print("\n   prefix-initial rows, %d of the %d above: how often "
+                  "the prefix boundary is found"
+                  % (sample["gold"][key]["prefix_forms"],
+                     sample["gold"][key]["forms"]))
+            for row in results:
+                scored = row["gold"].get(key)
+                if not scored or not scored.get("prefix_forms"):
+                    continue
+                print("   %-23s%8d%8.3f"
+                      % (row["name"], scored["prefix_found"],
+                         scored["prefix_recall"]))
+
     analyzers = [row for row in results if row["kind"] == "analyzer"]
     if analyzers:
         print("\n== Analyzer coverage and gates "
@@ -841,6 +888,15 @@ def main(argv=None):
     parser.add_argument("--analyzer", default="./analyzer")
     parser.add_argument("--lexicon-dir", default=DEFAULT_LEXICON_DIR)
     parser.add_argument("--morpholex", default=DEFAULT_MORPHOLEX)
+    parser.add_argument("--prefix-rules", default=DEFAULT_PREFIX_RULES,
+                        help="where the prefix inventory is read from, for the "
+                             "prefix-initial counts; '' to leave them out")
+    parser.add_argument("--morpholex-reader", default=MORPHOLEX_READER_DEFAULT,
+                        choices=list(MORPHOLEX_READERS),
+                        help="'prefix' reads both bracket directions; "
+                             "'legacy' reads the suffix direction only, which "
+                             "reproduces the numbers recorded before the "
+                             "reader was fixed")
     parser.add_argument("--inflection", default=DEFAULT_INFLECTION)
     parser.add_argument("--derivation", default=DEFAULT_DERIVATION)
     parser.add_argument("--closed-class", default=CLOSED_CLASS,

@@ -603,6 +603,11 @@ Two properties hold by construction rather than by testing:
 Measured with the built-in lists plus `data/closed_class.tsv` plus `en_100k`,
 and before the guard below. `docs/BASELINES.md` has the numbers after it.
 
+*Legacy reader: the MorphoLex rows here are the 10,058 forms the reader
+produced before decision 22 in `docs/BASELINES.md` fixed it, and they are
+left as they were measured. `--morpholex-reader legacy` reproduces them.*
+
+
 | | Default | `--derived-first` |
 |---|---:|---:|
 | **MorphyNet inflection** (in distribution) | | |
@@ -766,6 +771,11 @@ measured and dropped if it cost correct splits. It does, and dropping it
 outright costs more. Measured over MorphoLex with the closed class plus
 `en_100k` and the flag on:
 
+*Legacy reader: the MorphoLex rows here are the 10,058 forms the reader
+produced before decision 22 in `docs/BASELINES.md` fixed it, and they are
+left as they were measured. `--morpholex-reader legacy` reproduces them.*
+
+
 | Condition 4 | P | R | F1 | exact | boundaries found |
 |---|---:|---:|---:|---:|---:|
 | as stated, any affix, strictly lower | 0.956 | 0.118 | 0.211 | 0.130 | 1,397 |
@@ -809,6 +819,327 @@ a blocked decomposition is ranked with the whole words, where weight decides as
 it does by default, and it is still reported under `--nbest 2`. And it does not
 touch the default ranking, which never reads the field.
 
+### The guard on prefix readings
+
+The guard above settles suffix readings. Prefix stripping had none of its own,
+and the result was the largest single error left in `docs/BASELINES.md`:
+`come` came out as `co|me` on 16,967 test tokens, `understand` as
+`under|stand`, `present` as `pre|sent`, `department` as `de|part|ment`.
+
+The mechanism is worth stating, because it is not the one the promotion guard
+was built for. `Analyzer::analyze` tries each of fifteen prefixes against every
+analysis of the remainder, and the prefixed analysis keeps the remainder's
+weight unchanged. So `co|me` is reported at 1.19, the weight of the pronoun
+`me`, against 1.13 for the stored verb `come`, and it wins on **either**
+ranking: the default one as well as `--derived-first`. A derivational reading is
+multiplied by 0.9 and therefore needs promoting before it can beat a stored
+word; a prefix reading is multiplied by nothing and needs checking instead. The
+weight it carries is a weight for a different word.
+
+`Segmenter::prefix_is_licensed` is the check. Four conditions:
+
+1. **The base is at least three characters.** `co|me` goes here, and the
+   16,967 tokens with it. Three is the figure condition 2 above and the gold
+   hygiene filter both already use for a stem.
+
+2. **The base is a lexeme as it is spelled, under a part of speech the prefix
+   attaches to.** `RULES/prefix_rule.h` is the inventory, and it now records
+   what each prefix takes as well as its form: `re-` makes verbs out of verbs,
+   `non-` takes a noun or an adjective, `co-` a noun or a verb. The analyzer
+   still strips without consulting the categories, so no lexical analysis
+   changes.
+
+   Where a suffix is stacked outside the prefix the base may not be a lexeme at
+   all, because the suffix is still on it: `department` leaves `partment`,
+   which is not a word, and `unhappiness` leaves `happiness`, which a mined
+   lexicon happens to store and a smaller one builds from `happy` and `-ness`.
+   Where the base as spelled is not a lexeme the condition is asked of the two
+   forms the reading does claim instead. The lemma has to be a lexeme the
+   prefix attaches to, and the prefixed lemma, which is what the suffix
+   attaches to, has to be a lexeme as well: `-ment` on `depart` is a claim
+   about the word `depart`, and `-ness` on `unhappy` is a claim about the word
+   `unhappy`. Both of those hold, and condition 4 is what separates them.
+
+3. **The base is not closed class.** A prefix does not attach to a function
+   word. `Analyzer::analyze` already declines to strip one off a `FUNCTION`
+   lexeme, so that `unto` is not `un|to`; the test is made again against
+   `data/closed_class.tsv`, which is read as a word list whether or not that
+   file was also loaded as a lexicon.
+
+4. **The form the word is derived from is more frequent than the word, by a
+   quarter of a Zipf point.** That form is whichever one condition 2 accepted:
+   the base where the base is a lexeme, the prefixed lemma where it is not. So
+   `unhappy` is measured against `happy` and `department` against `depart`. On
+   the weight scale above a quarter of a Zipf point is 0.01875 of weight, so
+   the condition asks for a base about 1.8 times as common as the word.
+   `Segmenter::PREFIX_FREQUENCY_MARGIN_ZIPF` is the one place the figure
+   lives, stated in Zipf points because that is the unit the sweep that set it
+   reports; decision 40 is the sweep.
+
+A reading any of the four rejects is **demoted**: ranked below every other
+reading of the word, on both rankings, rather than ranked level with the whole
+words as a blocked promotion is. That is the difference weight cannot make up,
+and it is why `come` now comes out whole under the default ranking too.
+Nothing is withdrawn; `co|me` is still reported under `--nbest 2`.
+
+Condition 4 is the one that carries the work, because the other three are
+satisfied by every Latinate form the fix is for. A live prefix costs frequency
+and a lexicalized form does not, and the margin is where the two groups
+separate:
+
+| word | weight | the form it comes from | weight | Zipf apart | licensed |
+|------|-------:|------------------------|-------:|-----------:|----------|
+| `unkind` | 0.92 | `kind` | 1.11 | 2.53 | yes |
+| `rewrite` | 0.96 | `write` | 1.08 | 1.60 | yes |
+| `unhappy` | 1.00 | `happy` | 1.10 | 1.33 | yes |
+| `nonsense` | 1.02 | `sense` | 1.09 | 0.93 | yes |
+| `disagree` | 1.01 | `agree` | 1.07 | 0.80 | yes |
+| `return` | 1.09 | `turn` | 1.10 | 0.13 | no |
+| `present` | 1.09 | `sent` | 1.09 | 0.00 | no |
+| `understand` | 1.10 | `stand` | 1.09 | -0.13 | no |
+| `report` | 1.10 | `port` | 1.05 | -0.67 | no |
+| `record` | 1.09 | `cord` | 1.00 | -1.20 | no |
+| `department` | 1.09 | `depart` | 0.98 | -1.47 | no |
+
+The five readings that have to stand clear 0.80 Zipf and the six that have to
+go stay inside 0.13, so nothing in that list is near the threshold. What is
+near it is the rest of the vocabulary, and decision 40 measures that: moving
+the margin between 0 and 0.5 moves 133 test types. `prewar` is licensed by the
+other route, since the lexicon does not hold the word and there is no
+frequency to beat.
+
+### Which policy for a prefix reading, and at which margin
+
+The sweep below is the policy question and the margin question asked together,
+on the 12,828 MorphoLex forms the fixed reader produces, of which 1,561 have a
+prefix as their first morpheme. It replaces a measurement made when the reader
+could see 20 of them; the section after this one keeps that one on the record.
+
+Ten rows, all at `data/closed_class.tsv` plus `en_100k` with
+`--derived-first`. Row 1 is `main`, the commit this branch starts from, which
+is unguarded and promotes. Rows 2 to 10 are the shipped source with at most two
+edits, whether a prefix reading may be promoted and the margin in condition 4,
+so any two of them differ in those and nothing else. Row 5 is what the branch
+ships.
+
+| row | a prefix reading is | P | R | F1 | exact | prefix found | the eight words |
+|----:|---|---:|---:|---:|------:|------------:|---|
+| 1 | promoted, unguarded (`main`) | 0.9705 | 0.3923 | **0.5587** | 4,382 | **1,327** | 1 of 8 |
+| 2 | promoted, guarded, margin 0.5 | 0.9767 | 0.3771 | 0.5441 | 4,262 | 1,093 | 8 of 8 |
+| 3 | never promoted, guarded, margin 0.5 | **0.9786** | 0.3709 | 0.5380 | 4,207 | 958 | 8 of 8 |
+| 4 | never promoted, unguarded | 0.9764 | 0.3823 | 0.5495 | 4,307 | 1,097 | 4 of 8 |
+| **5** | **promoted, guarded, margin 0.25** | 0.9760 | 0.3804 | **0.5474** | 4,291 | 1,140 | **8 of 8** |
+| 6 | promoted, guarded, margin 0.125 | 0.9757 | 0.3816 | 0.5487 | 4,303 | 1,158 | 7 of 8 |
+| 7 | promoted, guarded, margin 0 | 0.9755 | 0.3829 | 0.5500 | 4,317 | 1,180 | 6 of 8 |
+| 8 | never promoted, guarded, margin 0.25 | 0.9784 | 0.3733 | 0.5404 | 4,230 | 991 | 8 of 8 |
+| 9 | never promoted, guarded, margin 0.125 | 0.9784 | 0.3743 | 0.5415 | 4,240 | 1,004 | 7 of 8 |
+| 10 | never promoted, guarded, margin 0 | 0.9783 | 0.3752 | 0.5424 | 4,249 | 1,017 | 6 of 8 |
+
+`prefix found` is how many of the 1,561 prefix boundaries the row puts a
+boundary at. The last column is the eight words of the brief, `come`, `Come`,
+`understand`, `present`, `department`, `report`, `record` and `return`, each of
+which has to come out whole or with one correct prefix; `depart|ment` counts as
+right, since it has no prefix in it. Rows 1, 4, 6, 7, 9 and 10 fail on
+`come` and `Come`, on `pre|sent`, or on `re|turn`.
+
+Row 5 is checked against the official `score_tokenizer.py` run of the shipped
+binary and agrees to every digit, which is what makes the other nine worth
+reading: they come from the same reader and the same boundary helpers, driven
+over the ten binaries in one pass.
+
+Three readings of the table, and they are the three decisions:
+
+- **The guard costs gold boundaries and buys corpus precision.** Row 1 against
+  row 5 is the guard arriving: F1 0.5587 to 0.5474, prefix boundaries 1,327 to
+  1,140, precision 0.9705 to 0.9760. Decision 38.
+- **Promotion is worth more than it costs.** At the same margin, row 5 against
+  row 8 is promotion arriving: F1 0.5404 to 0.5474 and 991 prefix boundaries to
+  1,140, for 0.0024 of precision. Decision 39.
+- **The margin trades the two off.** Across rows 2, 5, 6 and 7 the margin only
+  moves, and F1 and prefix boundaries rise as it falls, up to the point where
+  `pre|sent` and `re|turn` come back. Decision 40.
+
+And the test split, every row against row 5, over the 125,852 types:
+
+| row | types | tokens | starts splitting | boundary moved | the most frequent of them |
+|----:|------:|-------:|---:|---:|---|
+| 1 | 1,415 | 50,742 | 835 | 580 | `come`, `Come`, `SIS`, `understand`, `present`, `CHILDES` |
+| 2 | 148 | 3,613 | 0 | 76 | `pretend`, `remain`, `unusual`, `interview`, `deserve` |
+| 3 | 1,550 | 19,053 | 0 | 1,478 | `pretend`, `remain`, `unusual`, `interview`, `deserve` |
+| 4 | 1,948 | 43,604 | 465 | 1,482 | `come`, `Come`, `present`, `return`, `upstairs` |
+| 6 | 55 | 2,723 | 31 | 24 | `return`, `International`, `international`, `reward`, `review` |
+| 7 | 133 | 5,241 | 72 | 61 | `present`, `return`, `International`, `cocoon`, `discovery` |
+| 8 | 1,479 | 16,331 | 0 | 1,478 | `Demotic` |
+| 9 | 1,510 | 18,505 | 31 | 1,478 | `return`, `International`, `international`, `reward`, `review` |
+| 10 | 1,546 | 20,466 | 67 | 1,478 | `present`, `return`, `International`, `reward`, `review` |
+
+The 1,478 boundary moves in every never-promoted row are the promotion key and
+not the guard: with promotion off, a prefix reading loses to a promoted suffix
+reading of the same word, so `unhappiness` reads `unhapp|iness` instead of
+`un|happiness` without the word starting or stopping to split. Row 8's start
+column is a single word, `Demotic`, which is the whole difference the margin
+makes once promotion is off and weight is doing the work.
+
+### Which condition rejects which word
+
+The conditions are tested in this order, which is not the order they are
+numbered in: the base length, then the closed-class list, then the lexeme and
+its part of speech, then the frequency margin. The first one to fail is the one
+that rejects, and the rest are not asked.
+
+| word | base | 1 length | 2 closed class | 3 lexeme and POS | 4 margin, 0.25 | rejected by | margin only? |
+|------|------|---|---|---|---|---|---|
+| `come` | `me` | **fails**, two letters | would fail, `me` is listed | not asked | would pass, 0.80 Zipf apart | length | no |
+| `Come` | `me` | **fails**, two letters | would fail | not asked | would pass | length | no |
+| `present` | `sent` | passes | passes | passes, `sent` is a noun and `pre-` takes one | **fails**, 0.00 Zipf apart | margin | **yes** |
+| `return` | `turn` | passes | passes | passes, `turn` is a verb and `re-` takes one | **fails**, 0.13 Zipf apart | margin | **yes** |
+| `review` | `view` | passes | passes | passes, `view` is a verb | **fails**, 0.13 Zipf apart | margin | **yes** |
+| `upstairs` | `stairs` | passes | passes | **fails**: `stairs` is not a lexeme, and the lemma `stair` is a noun where `up-` takes a verb | would fail too, the word is commoner than `stair` | lexeme and POS | no |
+| `unusual` | `usual` | passes | passes | passes | passes, 0.27 Zipf apart | nothing, it splits | n/a |
+| `repair` | `pair` | passes | passes | passes | passes, 0.27 Zipf apart | nothing, it splits | n/a |
+| `reserve` | `serve` | passes | passes | passes | passes, 0.27 Zipf apart | nothing, it splits | n/a |
+
+So of the four words the round was for, two are rejected by the margin alone
+and two by the length of the base. `co|me` is the one case where two conditions
+would each reject it on their own: `me` is two letters and it is in
+`data/closed_class.tsv`. The margin would have let it through, because `me` at
+Zipf 6.5 is 0.80 clear of `come` at 5.7, which is the same gap `agree` has over
+`disagree` and three times what the margin asks for.
+
+One more word is withdrawn by neither the guard nor the margin. `unable` is
+licensed, and condition 7 of the promotion guard declines to promote it,
+because the material after `un-` is a stored irregular form: a mined lexicon
+carries `can` with `PRES_PART=able`, so `able` is in the irregular index and
+`unable` reads as `un-` plus the participle of `can` at 1.18 against `un|able`
+at 1.11. Decision 39 has what that costs.
+
+The margin value at which each withdrawn reading comes back, read off rows 5,
+6 and 7, which differ in nothing else:
+
+| word | Zipf apart | splits at margin | test tokens | MorphoLex |
+|------|-----------:|------------------|------------:|-----------|
+| `present` | 0.00 | 0 | 1,326 | one morpheme |
+| `return` | 0.13 | 0.125 | 972 | one morpheme |
+| `review` | 0.13 | 0.125 | 108 | `re\|view` |
+| `international` | 0.13 | 0.125 | 290 | `inter\|nation\|al` |
+| `come`, `Come` | 0.80 | never, it is not the margin | 16,967 | one morpheme |
+| `upstairs` | not reached | never, it is not the margin | 647 | `up\|stair` |
+| `unable` | 0.80 | never, condition 7 holds it | 214 | `un\|able` |
+
+The flip points match the arithmetic exactly, which is the check on this
+table: a reading is accepted when the margin is no larger than the gap, and
+`present` at a gap of zero needs the margin to be zero as well.
+
+### The policy measurement before the reader fix
+
+*Superseded by the sweep above, and kept because it is what the shipped policy
+was chosen on. Both tables below are the 10,058 forms the legacy reader
+produced; `--morpholex-reader legacy` reproduces them.*
+
+Two policies were measured, over `data/closed_class.tsv` plus `en_100k` with
+`--derived-first`, against the 10,058 MorphoLex forms:
+
+| a prefix reading is | P | R | F1 | exact | the eight words |
+|---|---:|---:|---:|------:|---|
+| promoted, unguarded (before) | 0.9762 | 0.3759 | 0.5428 | 3,452 | 7 wrong |
+| (a) promoted, guarded | 0.9838 | 0.3756 | 0.5436 | 3,469 | all right |
+| **(b) never promoted, guarded** | **0.9884** | 0.3756 | **0.5443** | 3,486 | all right |
+| never promoted, unguarded | 0.9869 | 0.3760 | 0.5446 | 3,487 | 4 wrong |
+
+The last column is the eight words of the brief for this work: `come`, `Come`,
+`understand`, `present`, `department`, `report`, `record` and `return`, each of
+which has to come out whole or with one correct prefix.
+
+And at `en_all`: 0.5475 before, 0.5488 for (a), **0.5495** for (b), 0.5496
+unguarded.
+
+**(b) is the behaviour.** It has the better F1 of the two policies at a
+precision well above 0.97, and it is the one the mechanism argues for: a prefix
+reading carries the base's full weight, so it already beats a stored whole word
+wherever the base is the commoner of the two, and promoting it as well is
+giving a boost to a reading that was not paying the 0.9 the boost exists to
+offset. The two agree on every word in the table above; they disagree on forms
+like `unhappiness`, where (a) reports `un|happiness` and (b) reports
+`unhapp|iness`, which is one of MorphoLex's two boundaries either way.
+
+The fourth row is the same ranking with the guard taken out, and it is in the
+table because it is the row with the highest F1. It is not the behaviour: it
+leaves `co|me`, `Co|me`, `pre|sent` and `re|turn` exactly as they were, which
+is 19,265 test tokens and four of the eight words this work is for. The
+thousandth of F1 between it and row three is the honest measure of how much of
+this the independent gold can see, and the next section is why.
+
+### What MorphoLex could not see, and what the fix measured
+
+*This is what the section above was written against, and it is now history:
+the reader was fixed in decision 22 of `docs/BASELINES.md` and the sweep at the
+top of this part is the same question asked on the whole database.*
+
+The reader kept a row only when its morphemes concatenate to the word, and it
+could not parse the notation the database uses for a prefix: `<un<{(happy)}`
+and `{<re<(view)}` both came back empty, which was 10,972 of the 68,623 rows.
+Of the 10,058 rows that did score, 20 had one of the fifteen prefixes as their
+first morpheme, and most of those were accidents of spelling: `outer`, `union`,
+`unit`, `unify`, `unity`. So the gold the policy was chosen on was nearly blind
+to prefixes, and the F1 differences it showed were side effects, almost all of
+them suffix readings that stopped being reached through a spurious prefix:
+`de|light|ful` to `delight|ful`, `re|mark|able` to `remark|able`,
+`dis|cover|able` to `discover|able`.
+
+The rows the reader dropped were read by hand at the time, by taking the
+alphabetic tokens of the parse left to right and keeping the row when they
+concatenate, which gave 1,562 forms whose first morpheme is one of the fifteen
+prefixes:
+
+| a prefix reading is | P | R | F1 | exact | prefix boundaries found |
+|---|---:|---:|---:|------:|------------------------:|
+| promoted, unguarded (before) | 0.9564 | 0.6896 | **0.8014** | 937 | 1,328 |
+| promoted, guarded | 0.9571 | 0.5863 | 0.7272 | 800 | 1,095 |
+| never promoted, guarded | 0.9488 | 0.5428 | 0.6906 | 726 | 958 |
+| never promoted, unguarded | 0.9474 | 0.6203 | 0.7497 | 827 | 1,098 |
+
+The fixed reader finds 1,561 of those rows, one fewer, and the one it does not
+is `cohere`: the hand parse read `{<co<(_here)}` as `co` plus `here`, and the
+reader refuses the underscore, which is the right call and is why it is a
+stated condition rather than an accident. Where the two can be compared they
+agree. The last column above is the same count the sweep reports as `prefix
+found`, and the four rows that appear in both measurements give 1,328, 1,095,
+958 and 1,098 by hand against 1,327, 1,095, 958 and 1,097 from the reader, the
+difference being `cohere` in two of them. The hand measurement was right about
+the direction and right about the size; it is superseded because the sweep
+measures the whole gold rather than a subset of it, and comes from the
+repository's own reader.
+
+What has not changed is that the two measurements disagree with the test split.
+MorphoLex is a type list built by psycholinguists and it marks the Latinate
+prefix in `re|view` and `re|port`; the test split is running text, and there
+the shipped policy is worth 69,041 tokens of which `co|me` alone is 16,967.
+A rule that could tell `re|view` from `re|turn` is the work that would settle
+it, and no frequency comparison is going to be that rule.
+
+### On the test split
+
+Measured on the 125,852 test types with `en_100k`, against `main`:
+
+| | Types changed | Tokens | stops splitting | boundary moved | starts splitting |
+|---|---:|---:|---:|---:|---:|
+| `--derived-first` | 1,415 | 50,742 | 835 types, 42,432 | 580 types, 8,310 | 0 |
+| default ranking | 1,225 | 43,702 | 816 types, 36,068 | 409 types, 7,634 | 0 |
+
+Nothing starts splitting that did not split before, on either ranking, which
+is what a guard should do: every condition in it declines to promote or
+declines to license, and none of them can produce a reading. The default
+ranking moves because the demotion is read by both rankings, which is decision
+38; `docs/BASELINES.md` lists the words.
+
+The boundary moves are almost all a prefix coming off the front of a reading
+that keeps its suffix: `dis|cover|ed` to `discover|ed`, `re|turn|ed` to
+`return|ed`, `cloth|es` to `clothe|s`. Those are why the in-distribution
+inflectional precision rises, from 0.680 to 0.690 at `en_100k` and from 0.790
+to 0.807 at `en_all`: that gold marks one boundary per word and it is the
+inflectional one, so a prefix boundary in front of it is a false positive every
+time.
+
 ### Both policies at every lexicon size
 
 Measured before the guard. A star marks `--derived-first`.
@@ -846,6 +1177,11 @@ heard of, and the same is true of `-ic`, `-ist`, `-able`, `-less`, `-ism`,
 
 Counting the boundaries rather than the rows, and allowing a boundary to count
 as reachable if a known prefix starts the word or a known suffix ends it:
+
+*Legacy reader: the MorphoLex rows here are the 10,058 forms the reader
+produced before decision 22 in `docs/BASELINES.md` fixed it, and they are
+left as they were measured. `--morpholex-reader legacy` reproduces them.*
+
 
 | Gold | Boundaries | Reachable | Recall ceiling |
 |------|-----------:|----------:|---------------:|
@@ -1549,3 +1885,188 @@ noted.
     caller that does not supply the list gets exactly the output it got
     before. The default output is unchanged by the change, since no word in
     the list has a `-y` reading to withdraw.
+
+    Decision 38 gives the list a third reader, and that one does change the
+    default output: condition 3 of the prefix guard can demote a reading on
+    either ranking. It still cannot add or promote anything.
+
+## Decisions, the prefix guard
+
+38. **The guard on a prefix reading is a precision decision about running
+    text, and it costs boundaries on the gold.** Four conditions license a
+    prefix reading: the base is at least three characters, it is a lexeme
+    under a part of speech the prefix attaches to, it is not in
+    `data/closed_class.tsv`, and the form the word is derived from is more
+    frequent than the word by the margin in decision 40. A reading none of
+    them licenses is demoted, which is the one verdict in this layer that both
+    rankings read, because a prefix reading carries the base's weight
+    unchanged and weight therefore cannot settle it: `co|me` was reported at
+    1.19, the weight of the pronoun `me`, against 1.13 for the stored verb
+    `come`, and it won on the default ranking as well as under
+    `--derived-first`.
+
+    **What it buys is corpus precision.** Against `main`, 835 test types stop
+    splitting under the flag, 42,432 tokens, and nothing starts. The ten
+    largest are `co|me` and `Co|me` at 16,967 tokens together, `SI|S`,
+    `under|stand`, `pre|sent`, `CHILD|ES` and `child|es`, `re|turn`,
+    `inter|est` and `Jam|es`. Seven of the eight words this work had to fix
+    are wrong without it: only `report` comes out right unguarded.
+
+    **What it costs is gold recall, and the cost is not small.** On the 12,828
+    MorphoLex forms, with `en_100k` and the flag, the guard takes F1 from
+    0.5587 to 0.5474 and the prefix boundaries found from 1,327 of 1,561 to
+    1,140. Precision goes the other way, 0.9705 to 0.9760. Every unguarded row
+    of the sweep scores better on F1 than every guarded one at the same
+    policy.
+
+    So this is a decision about which measurement to believe, and it is taken
+    on the corpus rather than on the gold. MorphoLex is a type list and it
+    marks the Latinate prefix in `re|view` and `re|port`; the test split is
+    running text, where the readings the guard withdraws are among the most
+    frequent words in the corpus. A layer that feeds a tokenizer is read
+    token-weighted. The losing variants are rows 1 and 4 of the sweep, the two
+    unguarded ones, and they lose on the eight words rather than on the
+    aggregate: row 1 gets one of eight right and row 4 gets four.
+
+    `Segmenter::prefix_is_licensed` is the one place the conditions live, and
+    the attribution table above says which of them rejects each named reading.
+
+39. **A prefix reading the guard licenses is promoted, and promotion is gated
+    on the stored irregular forms of the base as well as of the word.**
+    Promotion is what lets a decomposition outrank a stored whole word under
+    `--derived-first`. The question is whether a prefix reading should have it,
+    and the sweep answers it at the margin that is shipped: promoted, row 5,
+    against never promoted, row 8, with every other condition identical.
+
+    | at margin 0.25 | P | R | F1 | exact | prefix found |
+    |---|---:|---:|---:|------:|------------:|
+    | **promoted** | 0.9760 | 0.3804 | **0.5474** | 4,291 | **1,140** |
+    | never promoted | 0.9784 | 0.3733 | 0.5404 | 4,230 | 991 |
+
+    Promotion is worth 0.0070 of F1, 61 exact matches and 149 of the 1,561
+    prefix boundaries, for 0.0024 of precision. It holds at the other margins
+    too: 0.5441 against 0.5380 at 0.5, 0.5487 against 0.5415 at 0.125, 0.5500
+    against 0.5424 at 0.0. The mechanical argument that a prefix reading needs
+    no boost, since it carries the base's full weight rather than the 0.9 a
+    derivational reading pays, is a statement about the pairs where weight
+    already favours the split; it says nothing about the pairs where a stored
+    whole word is the commoner of the two, and those are what promotion
+    settles. The losing variant is never promoted, rows 3, 8, 9 and 10, and
+    the 1,478 boundary moves in each of them are the same effect seen from the
+    other side: with promotion off a licensed prefix reading loses to a
+    promoted suffix reading of the same word.
+
+    **Promotion needs one more condition, because it can defeat decision 35.**
+    That decision says a stored irregular form is never outranked by a reading
+    the rules assembled, and condition 5 of the promotion guard asks it of the
+    spelling of the whole word. For a prefix reading that is half the
+    question. `unable` is the case: a mined lexicon carries `can` with
+    `PRES_PART=able`, which is a Wiktionary artifact, so `able` is in the
+    irregular index and the analyzer reads `unable` as `un-` plus the
+    participle of `can` at weight 1.18. The competing reading is `un-` plus the
+    adjective `able` at 1.11, and promoting it puts a rules-assembled reading
+    above a stored one. Condition 7 therefore asks the question of the base as
+    well, and `unable` comes out whole.
+
+    The condition costs two exact matches and two prefix boundaries on the
+    gold, and the two are `un|able` and `dis|able`, which MorphoLex marks and
+    which are 223 test tokens. It is kept because the alternative is to let a
+    single bad lexicon row overturn a stated principle, and because the row is
+    the thing that is wrong: `can` does not have a present participle `able`.
+    `unaxle` in `test_segmentation.cpp` is the same shape with nothing stored
+    under it, and it is promoted, so the verdict differing between the two is
+    condition 7 and nothing else.
+
+40. **The margin is a quarter of a Zipf point, and it is the only number in
+    the guard that was tuned.** Condition 4 compares the word against the form
+    it is derived from, and the margin is how much commoner that form has to
+    be. The brief for the first round stated it with no margin at all, which is
+    the row at 0. Every value was scored on the 12,828 MorphoLex forms, with
+    `en_100k`, the flag and promotion on:
+
+    | margin, Zipf | P | R | F1 | exact | prefix found | the eight words |
+    |---|---:|---:|---:|------:|------------:|---|
+    | 0.5 | 0.9767 | 0.3771 | 0.5441 | 4,262 | 1,093 | 8 of 8 |
+    | **0.25** | 0.9760 | 0.3804 | **0.5474** | 4,291 | 1,140 | **8 of 8** |
+    | 0.125 | 0.9757 | 0.3816 | 0.5487 | 4,303 | 1,158 | 7 of 8 |
+    | 0 | 0.9755 | 0.3829 | 0.5500 | 4,317 | 1,180 | 6 of 8 |
+
+    F1 and prefix boundaries both improve as the margin falls, monotonically,
+    and so 0.25 is not the best value on the gold: 0 is, by 0.0026 of F1 and 40
+    prefix boundaries. What 0.25 buys is `pre|sent`. At 0.125 `re|turn` comes
+    back and at 0 `pre|sent` comes back with it, and those are the two readings
+    no other condition reaches: `sent` is a noun the lexicon holds, `pre-`
+    takes a noun, and `sent` is four letters and not closed class, so the three
+    other conditions all pass. `present` and the Estonian coin `sent` are both
+    Zipf 5.2, so any margin at all withdraws it and no margin keeps it.
+
+    Going the other way, from 0.25 to 0.5 costs 47 prefix boundaries and
+    0.0033 of F1, and the words it withdraws are `un|usual`, `re|pair` and
+    `de|serve`, all three of which MorphoLex marks. So 0.25 is the largest
+    margin that still reaches `pre|sent` and the smallest that keeps those
+    three, which is the whole of the case for it. On the test split it is 133
+    types and 5,241 tokens away from no margin at all, and 148 types and 3,613
+    tokens away from half a Zipf point.
+
+    The value it buys the eight words with is not free of wrong splits of its
+    own: `pre|tend` (647 test tokens), `re|main` (444), `inter|view` (201),
+    `de|lay` (138) and `re|serve` (100) are all words MorphoLex gives one
+    morpheme, and all five are licensed at 0.25. They are in the table in
+    `docs/BASELINES.md` under what is still wrong, and they are the reason the
+    aggregate moves by thousandths rather than by points.
+
+41. **The `-es` noun plural now has an orthographic trigger, and that is a
+    rule change rather than a guard.** The noun plural path accepts `-s` on any
+    noun, which decision 2 keeps permissive on purpose, and it used to accept
+    `-es` just as freely. That read the corpus name `CHILDES` as `child` plus a
+    plural and `clothes` as `cloth` plus one. The epenthetic e is not free
+    variation: it appears after a sibilant grapheme and after a final o, which
+    is what `orthography::takes_es` already says for the verb path, so the
+    plural now asks it too.
+
+    It is in the rule and not in the guard because there is nothing to rank:
+    `childes` is not a word, and demoting its only reading would still leave
+    that reading first. With this, `childes` has no analysis at all and the
+    existing fallback reports the word whole. Being in the rule means the
+    lexical output changes too, which nothing else in this round does:
+    `childes` no longer analyzes as `child +N +PL`, and `clothes` is a
+    form of `clothe` rather than the plural of `cloth`. The regression baseline is
+    unchanged: of the 2,164,514 forms generated from `en_100k`, the same one as
+    before, `eighty`, cannot be read back, so the rule withdraws nothing the
+    generator produces. `box|es`, `kiss|es`, `church|es`, `potato|es` and
+    `hero|es` all stand.
+
+    The brief named the all-caps rule below as the fix for `CHILDES`. It is not:
+    `CHILDES` is seven letters and that rule stops at six. The two mechanisms
+    are both in, and this is the one that reaches it.
+
+42. **A plural reading of a one or two letter noun is demoted, and a short word
+    in capitals with nothing else behind it is emitted whole.** `SIS` came out
+    as `SI|S`, off the two-letter noun `si`, and `sis` is not a lexeme, so
+    there was nothing for the reading to lose to. The two halves work together:
+    the length condition says the reading is not one the layer wants to report,
+    and the all-caps rule in `WordSegmenter::segment_word` says what to report
+    instead, which is the word whole with gate `no_analysis`.
+
+    Six characters is the brief's bound and it is kept. A long word in capitals
+    is a word someone shouted, not an initialism, and the rule is deliberately
+    narrow in the other direction too: it fires only when every reading of the
+    word is one of the two guards demoted. `CATS` is still `CAT|S`, because
+    nothing demoted that reading, and no lowercase form is reached at all, so
+    `ads` is still `ad|s` and `sis` is still `si|s`. Without that second half
+    the rule would have taken the boundary off every inflected word in capitals,
+    which is what a first version of it did.
+
+## An open question: two guards, two tests for the same thing
+
+Condition 4 of the prefix guard compares frequencies with a margin of a quarter
+of a Zipf point, and condition 4 of the promotion guard, which asks the same
+question of a suffix reading, compares them with no margin at all and only for
+affixes of one or two characters. Both were measured, each on the words its own
+side gets wrong, and neither measurement looked at the other. There is no
+principle here that says a prefix should need a wider frequency gap than a
+suffix, and two different tests for one idea is the kind of thing that is
+usually an accident of the order the work was done in. The suffix side has
+never been run with a margin, nor the prefix side restricted by affix length,
+and the gold can now see both; until that is measured the asymmetry is recorded
+rather than explained.
