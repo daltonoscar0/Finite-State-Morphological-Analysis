@@ -1427,6 +1427,29 @@ static void add_prefix_fixture(Env& env) {
 
     // The two-letter noun under "SIS", and the plural it used to license
     add_weighted(env, "si",          N,   REG, 1.01f);
+
+    // The readings the margin withdraws, and the one the part of speech
+    // condition withdraws. Weights again from en_100k.tsv, so the gap between
+    // each word and its base is the real one; docs/LEXICON.md tabulates the
+    // margin at which each of these comes back.
+    add_weighted(env, "unusual",     ADJ, REG, 1.03f);
+    add_weighted(env, "usual",       ADJ, REG, 1.05f);
+    add_weighted(env, "repair",      N,   REG, 1.03f);
+    add_weighted(env, "repair",      V,   REG, 1.03f);
+    add_weighted(env, "pair",        N,   REG, 1.05f);
+    add_weighted(env, "pair",        V,   REG, 1.05f);
+    add_weighted(env, "review",      N,   REG, 1.08f);
+    add_weighted(env, "review",      V,   REG, 1.08f);
+    add_weighted(env, "view",        N,   REG, 1.09f);
+    add_weighted(env, "view",        V,   REG, 1.09f);
+    add_weighted(env, "reserve",     N,   REG, 1.04f);
+    add_weighted(env, "reserve",     V,   SE,  1.04f);
+    add_weighted(env, "serve",       N,   REG, 1.06f);
+    add_weighted(env, "serve",       V,   SE,  1.06f);
+    add_weighted(env, "upstairs",    ADJ, REG, 0.99f);
+    add_weighted(env, "upstairs",    N,   REG, 0.99f);
+    add_weighted(env, "upstair",     ADJ, REG, 0.80f);
+    add_weighted(env, "stair",       N,   REG, 0.94f);
 }
 
 /**
@@ -1552,6 +1575,26 @@ static void test_prefix_guard() {
     assert(demoted_of(derived, "unhappiness", "un|happ|iness") == 0);
     std::cout << "  ✓ condition 4: return and department go, rewrite and "
                  "unhappiness stand" << std::endl;
+
+    // The five words docs/LEXICON.md attributes to a condition each. Four of
+    // them are the frequency margin, on a base between 0.13 and 0.27 Zipf
+    // clear of the word; `upstairs` is the part of speech, since the material
+    // after `up-` is not a lexeme and the lemma `stair` is a noun where `up-`
+    // takes a verb.
+    const struct { const char* word; const char* split; } withdrawn[] = {
+        {"unusual",  "un|usual"},
+        {"repair",   "re|pair"},
+        {"review",   "re|view"},
+        {"reserve",  "re|serve"},
+        {"upstairs", "up|stair|s"},
+    };
+    for (const auto& c : withdrawn) {
+        assert(demoted_of(derived, c.word, c.split) == 1);
+        expect_split(derived, c.word, c.word);
+        expect_split(standard, c.word, c.word);
+        std::cout << "  ✓ " << c.split << " is demoted, " << c.word
+                  << " comes out whole" << std::endl;
+    }
 
     // A demoted reading is ranked down, not withdrawn
     bool kept_below = false;
