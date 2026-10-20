@@ -1428,6 +1428,37 @@ static void add_prefix_fixture(Env& env) {
     // The two-letter noun under "SIS", and the plural it used to license
     add_weighted(env, "si",          N,   REG, 1.01f);
 
+    // Condition 7, the stored base. `can` is carried with PRES_PART=able in
+    // every mined lexicon this project builds, a Wiktionary artifact, so
+    // `able` is in the irregular index and `unable` reads as un- plus the
+    // participle of `can` at 1.18 against `un|able` at 1.11. `axle` is the
+    // same pair with nothing stored under it, identical in every weight, so
+    // the verdict differing between the two is condition 7 alone.
+    auto can = std::make_shared<Lexeme>("can", V, StemClass::DOUBLE_CONS);
+    can->set_weight(1.18f);
+    can->add_irregular_form(Lexeme::Feature::PRES_PART, "able");
+    env.lexicon.insert_lexeme(can);
+    add_weighted(env, "able",        ADJ, REG, 1.11f);
+    add_weighted(env, "unable",      ADJ, REG, 1.05f);
+    add_weighted(env, "axle",        ADJ, REG, 1.11f);
+    add_weighted(env, "unaxle",      ADJ, REG, 1.05f);
+    // The two words the plural conditions decide, at their real weights.
+    // `clothes` is the -es condition: `cloth` does not end in a sibilant or an
+    // o, so the only plural reading left is the one through the verb
+    // `clothe`. `married` is condition 4 of the promotion guard, where the
+    // stored adjective outweighs the verb it would be derived from.
+    add_weighted(env, "clothe",      V,   SE,  0.91f);
+    add_weighted(env, "cloth",       N,   REG, 1.00f);
+    add_weighted(env, "marry",       V,   YF,  1.03f);
+    add_weighted(env, "married",     N,   REG, 1.08f);
+
+    // The index was built when the Env was constructed, before any of the
+    // above existed. Rebuilding appends rather than replaces, so the built-in
+    // forms arrive a second time; identical analyses are deduplicated in
+    // Analyzer::analyze, and the only reader that could care, is_irregular_form,
+    // stops at the first match.
+    env.analyzer.build_irregular_index();
+
     // The readings the margin withdraws, and the one the part of speech
     // condition withdraws. Weights again from en_100k.tsv, so the gap between
     // each word and its base is the real one; docs/LEXICON.md tabulates the
@@ -1520,17 +1551,17 @@ static void test_prefix_guard() {
                   << std::endl;
     }
 
-    // A prefix reading is never promoted, which is the policy the measurement
-    // in docs/LEXICON.md selected. The guard leaves `un|happ|iness` alone, and
-    // it still wins on the default ranking, where it carries the weight of
-    // `happy` against the weight of `unhappy`. Under --derived-first the
-    // suffix reading is promoted and it is not, so `unhapp|iness` is reported
-    // instead: one of the two boundaries MorphoLex marks either way.
+    // A prefix reading the guard licenses is promoted, which is the policy
+    // the measurement in docs/LEXICON.md selected. `un|happ|iness` carries
+    // both of the boundaries MorphoLex marks, and it wins on either ranking:
+    // on the default one by weight, since it carries the weight of `happy`
+    // against the weight of `unhappy`, and under the flag by promotion.
     assert(demoted_of(derived, "unhappiness", "un|happ|iness") == 0);
+    assert(promotable_of(derived, "unhappiness", "un|happ|iness") == 1);
     expect_split(standard, "unhappiness", "un|happ|iness");
-    expect_split(derived, "unhappiness", "unhapp|iness");
-    std::cout << "  ✓ unhappiness: un|happ|iness by weight, unhapp|iness "
-                 "under the flag" << std::endl;
+    expect_split(derived, "unhappiness", "un|happ|iness");
+    std::cout << "  ✓ unhappiness: un|happ|iness on both rankings"
+              << std::endl;
 
     // Condition 1, the length of the base, isolated on the word it was
     // written for: "me" is two letters, and every other condition passes,
@@ -1576,25 +1607,45 @@ static void test_prefix_guard() {
     std::cout << "  ✓ condition 4: return and department go, rewrite and "
                  "unhappiness stand" << std::endl;
 
-    // The five words docs/LEXICON.md attributes to a condition each. Four of
-    // them are the frequency margin, on a base between 0.13 and 0.27 Zipf
-    // clear of the word; `upstairs` is the part of speech, since the material
-    // after `up-` is not a lexeme and the lemma `stair` is a noun where `up-`
-    // takes a verb.
-    const struct { const char* word; const char* split; } withdrawn[] = {
-        {"unusual",  "un|usual"},
-        {"repair",   "re|pair"},
-        {"review",   "re|view"},
-        {"reserve",  "re|serve"},
-        {"upstairs", "up|stair|s"},
+    // The words docs/LEXICON.md attributes to a condition each, at the margin
+    // of a quarter of a Zipf point the sweep settled on. `review` is inside
+    // the margin at 0.13 Zipf and goes; `unusual`, `repair` and `reserve` are
+    // outside it at 0.27 and stand. `upstairs` goes to the part of speech
+    // condition, not the margin: the material after `up-` is not a lexeme and
+    // the lemma `stair` is a noun where `up-` takes a verb.
+    const struct { const char* word; const char* split; bool kept; }
+    margin_cases[] = {
+        {"review",   "re|view",    false},
+        {"upstairs", "up|stair|s", false},
+        {"unusual",  "un|usual",   true},
+        {"repair",   "re|pair",    true},
+        {"reserve",  "re|serve",   true},
     };
-    for (const auto& c : withdrawn) {
-        assert(demoted_of(derived, c.word, c.split) == 1);
-        expect_split(derived, c.word, c.word);
-        expect_split(standard, c.word, c.word);
-        std::cout << "  ✓ " << c.split << " is demoted, " << c.word
-                  << " comes out whole" << std::endl;
+    for (const auto& c : margin_cases) {
+        assert(demoted_of(derived, c.word, c.split) == (c.kept ? 0 : 1));
+        expect_split(derived, c.word, c.kept ? c.split : c.word);
+        expect_split(standard, c.word, c.kept ? c.split : c.word);
+        std::cout << "  ✓ " << c.word << " → "
+                  << (c.kept ? c.split : c.word) << std::endl;
     }
+
+    // Condition 7: a promoted prefix reading does not outrank a stored
+    // irregular form of the base. The fixture is the real one, a mined
+    // lexicon carrying `can` with PRES_PART=able, which puts `able` in the
+    // irregular index and reads `unable` as un- plus the participle of `can`
+    // at 1.18. Without the condition the promotion key puts `un|able` at 1.11
+    // above it, which is condition 5 defeated one layer in.
+    assert(demoted_of(derived, "unable", "un|able") == 0);
+    assert(promotable_of(derived, "unable", "un|able") == 0);
+    expect_split(derived, "unable", "unable");
+    expect_split(standard, "unable", "unable");
+    assert(derived.segment_word("unable")[0].gate == seg_gate::IRREGULAR);
+    // The same reading with nothing stored under it is promoted, so the
+    // verdict differing between these two is condition 7 and nothing else.
+    assert(promotable_of(derived, "unaxle", "un|axle") == 1);
+    expect_split(derived, "unaxle", "un|axle");
+    std::cout << "  ✓ unable stays the participle of can, un|axle is promoted"
+              << std::endl;
 
     // A demoted reading is ranked down, not withdrawn
     bool kept_below = false;
@@ -1646,6 +1697,34 @@ static void test_prefix_guard() {
     expect_split(derived, "cats", "cat|s");
     std::cout << "  ✓ CHILDES has no analysis, box|es and kiss|es stand"
               << std::endl;
+
+    // Every word the prefix round and the reader round name in a document,
+    // with what it comes out as on each ranking. The two columns differ for
+    // none of them, which is itself the point: the guard and the plural
+    // conditions are read by both rankings, so the only words whose reading
+    // depends on the flag are the ones promotion settles.
+    const struct { const char* word; const char* plain; const char* flagged; }
+    named[] = {
+        {"come",       "come",       "come"},
+        {"present",    "present",    "present"},
+        {"return",     "return",     "return"},
+        {"unusual",    "un|usual",   "un|usual"},
+        {"repair",     "re|pair",    "re|pair"},
+        {"review",     "review",     "review"},
+        {"reserve",    "re|serve",   "re|serve"},
+        {"upstairs",   "upstairs",   "upstairs"},
+        {"understand", "understand", "understand"},
+        {"SIS",        "SIS",        "SIS"},
+        {"CHILDES",    "CHILDES",    "CHILDES"},
+        {"clothes",    "clothe|s",   "clothe|s"},
+        {"married",    "married",    "married"},
+    };
+    for (const auto& c : named) {
+        expect_split(standard, c.word, c.plain);
+        expect_split(derived, c.word, c.flagged);
+        std::cout << "  ✓ " << c.word << ": " << c.plain << " by default, "
+                  << c.flagged << " under the flag" << std::endl;
+    }
 }
 
 // ── Group 2: property test over the lexicon ──────────────────────────────────
