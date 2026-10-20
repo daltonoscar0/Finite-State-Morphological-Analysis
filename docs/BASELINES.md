@@ -13,6 +13,7 @@ standards.
 
 ```bash
 make && make test
+make test-tools                                      # the gold conversions
 python3 tools/make_splits.py                         # about 4 minutes
 ~/venvs/tok/bin/python tools/train_baselines.py      # about 20 minutes
 ~/venvs/tok/bin/python tools/score_tokenizer.py      # about 8 minutes
@@ -24,7 +25,9 @@ python3 tools/make_splits.py                         # about 4 minutes
 `make_splits.py` and the analyzer side are standard library only.
 `train_baselines.py` and `score_tokenizer.py` need the virtualenv, for the
 libraries the baselines are trained with and for the spreadsheet reader
-MorphoLex needs. Results land in `~/data/tok/results/baselines.json` and
+MorphoLex needs. `make test-tools` is standard library and covers the gold
+conversions, including the MorphoLex parser; `--morpholex-reader legacy`
+reproduces every MorphoLex number recorded before decision 22. Results land in `~/data/tok/results/baselines.json` and
 `disagreements.tsv`, and the per-suffix report in `suffix_report.json`.
 Nothing is written inside the repository.
 
@@ -221,6 +224,10 @@ scored on the same forms and against the same alternation mask: 30,514 of the
 
 **MorphoLex, 10,058 forms. Independent: built by psycholinguists from a
 different pipeline and never used to build a lexicon.**
+
+*Legacy reader: these rows are scored against the 10,058 forms the
+MorphoLex reader produced before decision 22 fixed it. They are left as
+they were measured; `--morpholex-reader legacy` reproduces them.*
 
 | system | P | R | F1 | exact | P alt | R alt | F1 alt |
 |--------|--:|--:|---:|------:|------:|------:|-------:|
@@ -700,6 +707,10 @@ already has replaces a word it used to emit whole.
 
 **MorphoLex, 10,058 forms. Independent.**
 
+*Legacy reader: these rows are scored against the 10,058 forms the
+MorphoLex reader produced before decision 22 fixed it. They are left as
+they were measured; `--morpholex-reader legacy` reproduces them.*
+
 | system | P | R | F1 | exact | P alt | R alt | F1 alt |
 |--------|--:|--:|---:|------:|------:|------:|-------:|
 | **unigram-16k** | 0.566 | 0.712 | **0.631** | 0.433 | 0.568 | 0.715 | 0.633 |
@@ -1029,6 +1040,10 @@ withdrew were pieces too.
 **MorphoLex, 10,058 forms. Independent.** Unigram 16k at F1 0.631 is still
 the best baseline and was not re-scored.
 
+*Legacy reader: these rows are scored against the 10,058 forms the
+MorphoLex reader produced before decision 22 fixed it. They are left as
+they were measured; `--morpholex-reader legacy` reproduces them.*
+
 | system | P | R | F1 | exact | P alt | R alt | F1 alt |
 |--------|--:|--:|---:|------:|------:|------:|-------:|
 | analyzer-builtin | 0.971 | 0.092 | 0.168 | 0.087 | 0.972 | 0.092 | 0.169 |
@@ -1224,8 +1239,12 @@ two rejected policies are in `baselines_prefix_promoted.json` and
 | analyzer-en_100k-derived | 1.102 | 1.316 | 3.570 | 274.80 | 97,396 | 100% |
 | analyzer-en_all-derived | 1.103 | 1.320 | 3.569 | 274.87 | 97,634 | 100% |
 
-Round trip is exact for all four systems on all 482,177 strings encoded, and
-the library decoders agree with the scorer on every one.
+Round trip is exact for all four systems on all 482,406 strings encoded, and
+the library decoders agree with the scorer on every one. The string count is
+229 higher than the round before because the MorphoLex reader now produces more
+gold forms, and every gold form is a string the scorer encodes; nothing else in
+this table moves with it, and the whole of it was re-measured on the new gold to
+be sure.
 
 Pieces per token falls again, 1.109 to 1.102 at `en_100k` with the flag, and
 this time the drop is one word: `come` and `Come` are 16,967 of the test tokens
@@ -1235,8 +1254,31 @@ becoming a piece of its own.
 
 ### Morphological alignment
 
-**MorphoLex, 10,058 forms. Independent.** Unigram 16k at F1 0.631 is still the
-best baseline and was not re-scored.
+**MorphoLex, 12,828 forms. Independent.** Unigram 16k was last scored on the
+10,058 forms the legacy reader produced and was not re-scored here, so its F1
+of 0.631 is not comparable with this table.
+
+| system | P | R | F1 | exact | P alt | R alt | F1 alt |
+|--------|--:|--:|---:|------:|------:|------:|-------:|
+| analyzer-builtin | 0.950 | 0.111 | 0.199 | 0.103 | 0.952 | 0.111 | 0.199 |
+| analyzer-en_100k | 0.970 | 0.253 | 0.402 | 0.230 | 0.972 | 0.254 | 0.402 |
+| analyzer-en_100k-derived | 0.979 | 0.371 | 0.538 | 0.328 | 0.980 | 0.372 | 0.539 |
+| analyzer-en_all-derived | 0.978 | 0.376 | **0.543** | 0.330 | 0.980 | 0.376 | 0.544 |
+
+The 1,561 rows in that gold whose first morpheme is a prefix the analyzer
+strips, counted on their own, because 1,561 rows cannot move an aggregate of
+12,828 and are the only rows with an opinion about what this round changed:
+
+| system | prefix boundary found | of 1,561 |
+|--------|----------------------:|---------:|
+| analyzer-builtin | 555 | 0.356 |
+| analyzer-en_100k | 1,088 | 0.697 |
+| analyzer-en_100k-derived | 958 | 0.614 |
+| analyzer-en_all-derived | 929 | 0.595 |
+
+**Before the reader fix, the same four settings on the 10,058 forms the legacy
+reader produced.** These are the numbers this round was reported on, and
+`--morpholex-reader legacy` reproduces them exactly.
 
 | system | P | R | F1 | exact | P alt | R alt | F1 alt |
 |--------|--:|--:|---:|------:|------:|------:|-------:|
@@ -1263,18 +1305,48 @@ best baseline and was not re-scored.
 | **analyzer-en_100k-derived** | 0.814 | 0.413 | **0.548** | 0.342 |
 | analyzer-en_all-derived | 0.805 | 0.407 | 0.541 | 0.365 |
 
+Neither MorphyNet table moved with the reader fix, which touches the MorphoLex
+conversion alone; both are byte identical to the run reported above them.
+
 The inflectional gold is where this round shows up hardest: F1 0.826 to 0.885
 at `en_all`, and the whole of it is precision, 0.790 to 0.898. That gold marks
 one boundary per word and it is the inflectional one, so a prefix boundary in
 front of it was a false positive on every form: `re|turn|ed` against a gold of
 `return|ed`. The derivational gold moves the other way at `en_all`, 0.572 to
 0.541, because MorphyNet does carry prefix rows and this withdraws some of
-them. `docs/LEXICON.md` measures that cost directly, against the MorphoLex
-rows that carry a prefix, and does not argue it away.
+them. On the independent gold, now that it can be read, the same thing shows up
+and larger: 35,421 of the derivational rows are prefix-initial and the analyzer
+finds 24,286 of them at `en_all` against 35,012 before the round.
 
 ### Before and after, on the independent gold
 
-Four decimals, because the aggregate moves in the third and fourth place.
+Four decimals, on the 12,828 forms the fixed reader produces. Both columns are
+re-measured: the "before" binary is the commit this branch starts from, scored
+again on the new gold rather than carried over.
+
+| system | P before | P after | R before | R after | F1 before | F1 after | exact before | exact after | prefix found before | after |
+|--------|---------:|--------:|---------:|--------:|----------:|---------:|-------------:|------------:|--------------------:|------:|
+| analyzer-builtin | 0.9502 | 0.9503 | 0.1109 | 0.1110 | 0.1987 | 0.1988 | 1,325 | 1,326 | 558 | 555 |
+| analyzer-en_100k | 0.9651 | **0.9703** | 0.2678 | 0.2532 | **0.4193** | 0.4016 | 3,055 | 2,946 | 1,274 | 1,088 |
+| analyzer-en_100k-derived | 0.9705 | **0.9786** | 0.3923 | 0.3709 | **0.5587** | 0.5380 | 4,382 | 4,207 | 1,327 | 958 |
+| analyzer-en_all-derived | 0.9688 | **0.9777** | 0.3975 | 0.3758 | **0.5637** | 0.5429 | 4,414 | 4,228 | 1,338 | 929 |
+
+**On a gold standard that can see prefixes, this round costs F1 at every
+setting that loads a lexicon.** It buys precision, 0.9705 to 0.9786 at
+`en_100k` with the flag, and it pays for it in recall, 0.3923 to 0.3709, which
+is 175 exact matches and 369 of the 1,327 prefix boundaries the layer used to
+find. The two settings with the largest lexicons lose the most, because they
+had the most prefix readings to withdraw.
+
+That is the opposite of what the same comparison said before the reader was
+fixed, and the reversal is not a disagreement between two measurements. It is
+one measurement replacing another that could not see the thing being changed:
+of the 10,058 forms the legacy reader produced, 20 had a prefix as their first
+morpheme, so the F1 of 0.5443 below was decided almost entirely by suffix
+readings that stopped being reached through a spurious prefix.
+
+**Before the reader fix, the same comparison on the 10,058 forms.** These are
+the numbers this round was reported on.
 
 | system | P before | P after | R before | R after | F1 before | F1 after | exact before | exact after |
 |--------|---------:|--------:|---------:|--------:|----------:|---------:|-------------:|------------:|
@@ -1283,10 +1355,9 @@ Four decimals, because the aggregate moves in the third and fourth place.
 | analyzer-en_100k-derived | 0.9762 | **0.9884** | 0.3759 | 0.3756 | 0.5428 | **0.5443** | 3,452 | 3,486 |
 | analyzer-en_all-derived | 0.9742 | **0.9875** | 0.3808 | 0.3807 | 0.5475 | **0.5495** | 3,482 | 3,519 |
 
-Precision is the highest this layer has ever measured, 0.9884, and recall holds
-to a thousandth. Over the 10,058 forms, 54 change: 35 become exactly right, one
-is lost and 18 were wrong before and after. The 35 are all the same shape, a
-suffix reading that was being reached through a prefix that is not there:
+Over those 10,058 forms, 54 changed: 35 became exactly right, one was lost and
+18 were wrong before and after. The 35 are all the same shape, a suffix reading
+that was being reached through a prefix that is not there:
 
 ```
   de|light|ful     → delight|ful      re|mark|able   → remark|able
@@ -1295,12 +1366,10 @@ suffix reading that was being reached through a prefix that is not there:
   de|spot|ism      → despot|ism       sub|lime|ly    → sublime|ly
 ```
 
-The one loss is `unit`, where MorphoLex says `un|it` and both the
-three-character condition and the closed-class condition refuse it.
-`analyzer-en_100k` is the row where F1 falls, by 0.0011, and it is the same
-trade in the setting with the least to gain: the default ranking had few
-spurious prefixes to give up, because weight was already keeping most of those
-words whole.
+Those 35 are real and they survive the reader fix. What the fixed reader adds
+is the other side of the ledger, 2,770 rows of it, and `docs/LEXICON.md` has
+the policy sweep measured on all of it. No policy is chosen there: this round
+is the measurement, and the choice is the next one.
 
 ### Analyzer coverage and gates
 
@@ -1411,6 +1480,14 @@ the difference.
 
 ### Decisions, the prefix guard
 
+*Decisions 18 to 21 are under review, see decision 22. Each of them was
+settled on the 10,058 MorphoLex forms the legacy reader produced, and the
+fixed reader produces 12,828, of which 1,561 have an opinion about prefixes
+against the earlier 20. The decisions are left as they were written rather
+than quietly restated, and the measurement that will settle them is in
+`docs/LEXICON.md` under the policy sweep. Nothing in the analyzer changed with
+the reader.*
+
 18. **The prefix guard changes the default output, and that is documented
     rather than avoided.** Every earlier round could claim the default ranking
     was untouched, because the thing being fixed was a promotion and the
@@ -1453,3 +1530,93 @@ the difference.
     `docs/LEXICON.md` decisions 41 and 42 have the detail, including why the
     all-caps rule fires only when every reading of the word is demoted, which
     is what keeps `CAT|S`.
+
+### Decision, the reader fix
+
+22. **The MorphoLex reader could not see a prefix, and now can.** The database
+    writes the bracket that marks a morpheme's attachment pointing at what it
+    attached to, so a suffix is `>ness>` and a prefix `<un<`. The reader split
+    a parse on `>`, `{`, `}`, `(` and `)` and not on `<`, so every parse
+    carrying a prefix came back with a token like `<un<` in it, failed the test
+    that each token is a plain lowercase word, and was dropped. Adding `<` to
+    that set is the whole fix. `tools/test_eval_lexicon.py` covers it, with a
+    parse quoted from the database for each shape: a bare prefix, a prefix
+    inside the braces, a prefix with one and with two stacked suffixes, two
+    prefixes nested, two prefixes in a row, a prefix on a compound, a prefix
+    inside a root group, and the suffix-only shapes that must not move.
+
+    | Rows of the workbook | Legacy | Prefix-aware |
+    |---|---:|---:|
+    | word and parse both present | 68,623 | 68,623 |
+    | the word is not plain lowercase a-z | 1,095 | 1,095 |
+    | the parse cannot be read | 10,948 | 1 |
+    | the parse marks a bound root | 24 | 24 |
+    | one morpheme, so no boundary to score | 30,309 | 30,309 |
+    | the morphemes do not concatenate to the word | 16,189 | 24,366 |
+    | **kept** | **10,058** | **12,828** |
+
+    The gold grows by 2,770 forms and no form's segmentation changes: every one
+    of the 10,058 the legacy reader kept is kept, with the same boundaries.
+    1,561 of the 12,828 are prefix-initial under the analyzer's own inventory,
+    against 20 before.
+
+    The twenty newly scorable rows with the highest test-split count, as the
+    flattened boundaries they now contribute, which is what a reader should
+    check this against:
+
+    ```
+      11190  into         in|to            587  onto        on|to
+       1878  outside      out|side         568  amount      a|mount
+       1583  inside       in|side          534  perfect     per|fect
+       1030  afternoon    after|noon       516  include     in|clude
+        917  although     al|though        503  subject     sub|ject
+        725  especially   e|special|ly     473  enjoy       en|joy
+        718  except       ex|cept          466  perfectly   per|fect|ly
+        676  object       ob|ject          409  impossible  im|possible
+        626  alive        a|live           379  process     pro|cess
+        602  report       re|port          375  mistake     mis|take
+    ```
+
+    Most of that list is a prefix the analyzer does not strip and would not
+    want to: `in-`, `e-`, `ex-`, `ob-`, `a-`, `per-`, `en-`, `im-`, `pro-` and
+    `al-` are not in its inventory, so those rows are recall misses it cannot
+    reach. That is the gold getting harder rather than the layer getting worse,
+    and it is most of why recall and F1 fall against the legacy numbers in
+    every table below. Of the 2,770, 1,541 are prefix-initial under the
+    analyzer's own fifteen, and `report` at `re|port` is one of them: the
+    guard's refusal of that reading is now a measured miss.
+
+    It is 2,770 and not eleven thousand, which is what decision 20 guessed, and
+    the difference is the concatenation test: most of the 10,948 rows the
+    parser could not read would have been dropped anyway because MorphoLex
+    spells morphemes canonically and `ability` is `able` plus `ity`. That
+    guess was recorded as a reason not to do this work, which is the wrong way
+    round, and the count is now measured.
+
+    The rows still dropped are dropped for reasons that were always there. One
+    parse has a stray bracket, `daly` written `{(daly)]>`. Twenty-four mark a
+    bound root with an underscore, `cohere` written `{<co<(_here)}`, which says
+    the morpheme is not the free word `here`; taking it for one would be
+    reading an annotation as its opposite, so those rows stay out. The two
+    large groups, the single-morpheme rows and the rows whose morphemes do not
+    concatenate, are the gold saying there is no boundary to score and the
+    reader declining to guess at a canonical spelling, which is decision 18 in
+    `docs/LEXICON.md` and unchanged.
+
+    The old reader is kept as `--morpholex-reader legacy`, in both
+    `tools/eval_lexicon.py` and `tools/score_tokenizer.py`, so every MorphoLex
+    number recorded before this fix can be reproduced rather than described.
+    The three earlier rounds in this document are labelled with it and left
+    alone: re-measuring them would mean rebuilding four commits of the
+    analyzer, and what they record is what each round changed, which the legacy
+    reader still reproduces exactly.
+
+23. **The prefix-initial rows are counted on their own, and the inventory is
+    read from the source.** 1,561 rows out of 12,828 cannot move an aggregate,
+    and they are the only rows that have an opinion about prefix stripping, so
+    `score_tokenizer.py` reports how many of their prefix boundaries each
+    system finds alongside the aggregate. A row counts as prefix-initial when
+    its first morpheme is one of the forms `RULES/prefix_rule.h` lists, read
+    out of that file rather than copied into the tool, so the measurement
+    cannot drift from the inventory it is measuring. `--prefix-rules ''` turns
+    the counts off for a caller running from outside the repository.

@@ -603,6 +603,11 @@ Two properties hold by construction rather than by testing:
 Measured with the built-in lists plus `data/closed_class.tsv` plus `en_100k`,
 and before the guard below. `docs/BASELINES.md` has the numbers after it.
 
+*Legacy reader: the MorphoLex rows here are the 10,058 forms the reader
+produced before decision 22 in `docs/BASELINES.md` fixed it, and they are
+left as they were measured. `--morpholex-reader legacy` reproduces them.*
+
+
 | | Default | `--derived-first` |
 |---|---:|---:|
 | **MorphyNet inflection** (in distribution) | | |
@@ -766,6 +771,11 @@ measured and dropped if it cost correct splits. It does, and dropping it
 outright costs more. Measured over MorphoLex with the closed class plus
 `en_100k` and the flag on:
 
+*Legacy reader: the MorphoLex rows here are the 10,058 forms the reader
+produced before decision 22 in `docs/BASELINES.md` fixed it, and they are
+left as they were measured. `--morpholex-reader legacy` reproduces them.*
+
+
 | Condition 4 | P | R | F1 | exact | boundaries found |
 |---|---:|---:|---:|---:|---:|
 | as stated, any affix, strictly lower | 0.956 | 0.118 | 0.211 | 0.130 | 1,397 |
@@ -893,6 +903,149 @@ route: the lexicon does not hold the word, so there is no frequency to beat.
 
 ### Which policy for a prefix reading
 
+Two policies were measured when the guard was built, and the measurement was
+made on a gold standard that could not see a prefix. The MorphoLex reader has
+since been fixed, decision 22 in `docs/BASELINES.md`, and the sweep below is
+the same question asked again on the 12,828 forms it now produces, of which
+1,561 have a prefix as their first morpheme against the earlier 20.
+
+Ten rows, all at `data/closed_class.tsv` plus `en_100k` with
+`--derived-first`. Row 1 is the commit this branch starts from, which is the
+whole previous round and not only its ranking. Rows 2 to 10 differ from each
+other in two things and nothing else: whether a prefix reading may be
+promoted, and the frequency margin in condition 4. Row 3 is what the branch
+ships.
+
+| row | a prefix reading is | P | R | F1 | exact | prefix found |
+|----:|---|---:|---:|---:|------:|------------:|
+| 1 | promoted, unguarded (before this round) | 0.9705 | 0.3923 | **0.5587** | 4,382 | **1,327** |
+| 2 | promoted, guarded, margin 0.5 | 0.9767 | 0.3772 | 0.5443 | 4,264 | 1,095 |
+| 3 | never promoted, guarded, margin 0.5, shipped | **0.9786** | 0.3709 | 0.5380 | 4,207 | 958 |
+| 4 | never promoted, unguarded | 0.9764 | 0.3823 | 0.5495 | 4,307 | 1,097 |
+| 5 | promoted, guarded, margin 0.25 | 0.9760 | 0.3805 | 0.5475 | 4,293 | 1,142 |
+| 6 | promoted, guarded, margin 0.125 | 0.9757 | 0.3817 | 0.5488 | 4,305 | 1,160 |
+| 7 | promoted, guarded, margin 0 | 0.9755 | 0.3831 | 0.5501 | 4,319 | 1,182 |
+| 8 | never promoted, guarded, margin 0.25 | 0.9784 | 0.3733 | 0.5404 | 4,230 | 991 |
+| 9 | never promoted, guarded, margin 0.125 | 0.9784 | 0.3743 | 0.5415 | 4,240 | 1,004 |
+| 10 | never promoted, guarded, margin 0 | 0.9783 | 0.3752 | 0.5424 | 4,249 | 1,017 |
+
+`prefix found` is how many of the 1,561 prefix boundaries the row puts a
+boundary at. Row 3 is checked against the official `score_tokenizer.py` run of
+the shipped binary and agrees to every digit, which is what makes the other
+nine rows worth reading: they come from the same reader and the same boundary
+helpers, driven over the ten binaries in one pass.
+
+**The ordering is monotone and it runs against the shipped row.** F1 rises as
+the guard is relaxed, from 0.5380 at row 3 to 0.5587 at row 1, and so does the
+prefix count, from 958 to 1,327. Precision runs the other way, 0.9786 down to
+0.9705. Every one of the nine rows finds fewer prefix boundaries than row 1,
+and row 3, the shipped one, finds the fewest of the ten.
+
+And the words, which run the other way again. The eight the brief requires to
+come out whole or with one correct prefix, and the four it names as wrong
+splits:
+
+| row | the eight words | which are wrong | `co\|me` | `Co\|me` | `pre\|sent` | `re\|turn` |
+|----:|---|---|---|---|---|---|
+| 1 | 1 of 8 | `come`, `Come`, `understand`, `present`, `department`, `record`, `return` | yes | yes | yes | yes |
+| 2 | 8 of 8 | none | no | no | no | no |
+| 3 | 8 of 8 | none | no | no | no | no |
+| 4 | 4 of 8 | `come`, `Come`, `present`, `return` | yes | yes | yes | yes |
+| 5 | 8 of 8 | none | no | no | no | no |
+| 6 | 7 of 8 | `return` | no | no | no | yes |
+| 7 | 6 of 8 | `present`, `return` | no | no | yes | yes |
+| 8 | 8 of 8 | none | no | no | no | no |
+| 9 | 7 of 8 | `return` | no | no | no | yes |
+| 10 | 6 of 8 | `present`, `return` | no | no | yes | yes |
+
+`department` counts as right at `depart|ment`, which is a suffix reading with
+no prefix in it. Rows 2, 3, 5 and 8 are the four that get all eight, and of
+those row 5 has the highest F1 and the most prefix boundaries, 0.5475 and
+1,142 against row 3's 0.5380 and 958.
+
+And the test split, every row against row 3, over the 125,852 types:
+
+| row | types | tokens | splits here and not in row 3 | boundary moved | ten most frequent that start splitting |
+|----:|------:|-------:|---:|---:|---|
+| 1 | 2,884 | 69,041 | 907 types, 45,155 | 1,977 | `come`, `Come`, `SIS`, `understand`, `present`, `CHILDES`, `childes`, `return`, `interest`, `James` |
+| 2 | 1,419 | 15,951 | 3 types, 234 | 1,416 | `unable`, `Unable`, `disable` |
+| 4 | 540 | 29,995 | 536 types, 29,984 | 4 | `come`, `Come`, `present`, `return`, `pretend`, `upstairs`, `coat`, `remain`, `International`, `disappeared` |
+| 5 | 1,567 | 19,564 | 75 types, 2,957 | 1,492 | `pretend`, `remain`, `unable`, `unusual`, `interview`, `deserve`, `delay`, `repair`, `resolution`, `reserve` |
+| 6 | 1,622 | 22,287 | 106 types, 5,131 | 1,516 | `return`, `pretend`, `remain`, `International`, `international`, `unable`, `unusual`, `interview`, `deserve`, `delay` |
+| 7 | 1,700 | 24,805 | 147 types, 7,279 | 1,553 | `present`, `return`, `pretend`, `remain`, `International`, `international`, `unable`, `unusual`, `interview`, `deserve` |
+| 8 | 71 | 2,722 | 71 types, 2,722 | 0 | `pretend`, `remain`, `unusual`, `interview`, `deserve`, `delay`, `repair`, `resolution`, `reserve`, `Missus` |
+| 9 | 102 | 4,896 | 102 types, 4,896 | 0 | `return`, `pretend`, `remain`, `International`, `international`, `unusual`, `interview`, `deserve`, `delay`, `repair` |
+| 10 | 138 | 6,857 | 138 types, 6,857 | 0 | `present`, `return`, `pretend`, `remain`, `International`, `international`, `unusual`, `interview`, `deserve`, `delay` |
+
+Nothing in any row stops splitting against row 3, in either direction of the
+margin: row 3 is the most conservative of the ten. Row 1 is the only row whose
+diff carries words that are not about prefixes at all, `SIS`, `CHILDES` and
+`childes`, because it is the commit before the round and so also before the
+plural and `-es` conditions.
+
+The boundary-moved column is large in the promoted rows and zero in the
+never-promoted ones, which is the promotion key doing what it is for: when a
+prefix reading is promotable it outranks a suffix reading of the same word, so
+`unhappiness` moves between `un|happiness` and `unhapp|iness` without the word
+starting or stopping to split.
+
+**No policy is chosen here.** The sweep is the measurement; the choice is the
+next piece of work, and it needs a position on the question the two
+measurements disagree about, which is whether an etymological prefix that
+MorphoLex marks is a boundary a tokenizer wants.
+
+### Which condition rejects which word
+
+The conditions are tested in this order, which is not the order they are
+numbered in: the base length, then the closed-class list, then the lexeme and
+its part of speech, then the frequency margin. The first one to fail is the one
+that rejects, and the rest are not asked.
+
+| word | base | 1 length | 2 closed class | 3 lexeme and POS | 4 margin | rejected by | margin only? |
+|------|------|---|---|---|---|---|---|
+| `come` | `me` | **fails**, two letters | would fail, `me` is listed | not asked | would pass, 0.80 Zipf apart | length | no |
+| `Come` | `me` | **fails**, two letters | would fail | not asked | would pass | length | no |
+| `present` | `sent` | passes | passes | passes, `sent` is a noun and `pre-` takes one | **fails**, 0.00 Zipf apart | margin | **yes** |
+| `return` | `turn` | passes | passes | passes, `turn` is a verb and `re-` takes one | **fails**, 0.13 Zipf apart | margin | **yes** |
+| `unusual` | `usual` | passes | passes | passes, `usual` is an adjective and `un-` takes one | **fails**, 0.27 Zipf apart | margin | **yes** |
+| `repair` | `pair` | passes | passes | passes, `pair` is a verb | **fails**, 0.27 Zipf apart | margin | **yes** |
+| `review` | `view` | passes | passes | passes, `view` is a verb | **fails**, 0.13 Zipf apart | margin | **yes** |
+| `reserve` | `serve` | passes | passes | passes, `serve` is a verb | **fails**, 0.27 Zipf apart | margin | **yes** |
+| `upstairs` | `stairs` | passes | passes | **fails**: `stairs` is not a lexeme, and the lemma `stair` is a noun where `up-` takes a verb | would fail too, the word is commoner than `stair` | lexeme and POS | no |
+
+So of the four words the round was for, two are rejected by the margin alone
+and two by the length of the base. `co|me` is the one case where two conditions
+would each reject it on their own: `me` is two letters and it is in
+`data/closed_class.tsv`. The margin would have let it through, because `me` at
+Zipf 6.5 is 0.80 clear of `come` at 5.7, which is the same gap `agree` has over
+`disagree` and twice what the margin asks for.
+
+The margin value at which each withdrawn reading comes back, read off rows 3,
+8, 9 and 10, which differ in nothing else:
+
+| word | Zipf apart | accepted at margin | test tokens |
+|------|-----------:|--------------------|------------:|
+| `present` | 0.00 | 0 | 1,326 |
+| `return` | 0.13 | 0.125 | 972 |
+| `review` | 0.13 | 0.125 | 108 |
+| `unusual` | 0.27 | 0.25 | 206 |
+| `repair` | 0.27 | 0.25 | 124 |
+| `reserve` | 0.27 | 0.25 | 100 |
+| `come`, `Come` | 0.80 | never, it is not the margin | 16,967 |
+| `upstairs` | not reached | never, it is not the margin | 647 |
+
+The flip points match the arithmetic exactly, which is the check on this
+table: a reading is accepted when the margin is no larger than the gap, and
+`present` at a gap of zero needs the margin to be zero as well. MorphoLex
+marks a prefix on `review`, `repair`, `reserve`, `unusual` and `upstairs`, and
+marks none on `come`, `present` or `return`.
+
+### The policy measurement before the reader fix
+
+*Superseded by the sweep above, and kept because it is what the shipped policy
+was chosen on. Both tables below are the 10,058 forms the legacy reader
+produced; `--morpholex-reader legacy` reproduces them.*
+
 Two policies were measured, over `data/closed_class.tsv` plus `en_100k` with
 `--derived-first`, against the 10,058 MorphoLex forms:
 
@@ -926,54 +1079,53 @@ is 19,265 test tokens and four of the eight words this work is for. The
 thousandth of F1 between it and row three is the honest measure of how much of
 this the independent gold can see, and the next section is why.
 
-### What MorphoLex can and cannot see here
+### What MorphoLex could not see, and what the fix measured
 
-`tools/eval_lexicon.py` keeps a MorphoLex row only when its morphemes
-concatenate to the word, and it cannot parse the notation the database uses for
-a prefix that attaches leftwards: `<un<{(happy)}` and `{<re<(view)}` both come
-back empty, which is 10,972 of the 68,623 rows. Of the 10,058 rows that do
-score, 20 have one of the fifteen prefixes as their first morpheme, and most of
-those are accidents of spelling: `outer`, `union`, `unit`, `unify`, `unity`.
+*This is what the section above was written against, and it is now history:
+the reader was fixed in decision 22 of `docs/BASELINES.md` and the sweep at the
+top of this part is the same question asked on the whole database.*
 
-**So the gold the policy was chosen on is nearly blind to prefixes.** The F1
-differences above are real but they are side effects, almost all of them
-suffix readings that stopped being reached through a spurious prefix:
+The reader kept a row only when its morphemes concatenate to the word, and it
+could not parse the notation the database uses for a prefix: `<un<{(happy)}`
+and `{<re<(view)}` both came back empty, which was 10,972 of the 68,623 rows.
+Of the 10,058 rows that did score, 20 had one of the fifteen prefixes as their
+first morpheme, and most of those were accidents of spelling: `outer`, `union`,
+`unit`, `unify`, `unity`. So the gold the policy was chosen on was nearly blind
+to prefixes, and the F1 differences it showed were side effects, almost all of
+them suffix readings that stopped being reached through a spurious prefix:
 `de|light|ful` to `delight|ful`, `re|mark|able` to `remark|able`,
-`dis|cover|able` to `discover|able`. Over the 10,058 forms, 54 change, 35
-become exactly right, one is lost and 18 were wrong before and after. The one
-loss is `unit`, where MorphoLex really does say `un|it` and condition 1 and
-condition 3 both refuse it.
+`dis|cover|able` to `discover|able`.
 
-The rows the reader drops can still be read by hand, and they should be,
-because they are the only independent measurement of the thing that changed.
-Taking the alphabetic tokens of the parse left to right and keeping the row
-when they concatenate gives 1,562 forms whose first morpheme is one of the
-fifteen prefixes. Scored on those, with the same lexicon and flag:
+The rows the reader dropped were read by hand at the time, by taking the
+alphabetic tokens of the parse left to right and keeping the row when they
+concatenate, which gave 1,562 forms whose first morpheme is one of the fifteen
+prefixes:
 
 | a prefix reading is | P | R | F1 | exact | prefix boundaries found |
 |---|---:|---:|---:|------:|------------------------:|
 | promoted, unguarded (before) | 0.9564 | 0.6896 | **0.8014** | 937 | 1,328 |
-| (a) promoted, guarded | 0.9571 | 0.5863 | 0.7272 | 800 | 1,095 |
-| (b) never promoted, guarded | 0.9488 | 0.5428 | 0.6906 | 726 | 958 |
+| promoted, guarded | 0.9571 | 0.5863 | 0.7272 | 800 | 1,095 |
+| never promoted, guarded | 0.9488 | 0.5428 | 0.6906 | 726 | 958 |
 | never promoted, unguarded | 0.9474 | 0.6203 | 0.7497 | 827 | 1,098 |
 
-**This is the cost, and it is not small.** Prefix stripping was already
-precise on these rows, 0.956, and the two changes together withdraw 370 of the
-1,328 prefix boundaries it used to find: 230 of them to the ranking, which no
-longer promotes a prefix reading over a stored word, and 140 to the guard.
-`un|usual` (206 test tokens), `re|pair` (124), `re|view` (108) and `re|serve`
-(100) are the shape of what the guard takes: a prefix MorphoLex marks, on a
-word about as frequent as its base.
+The fixed reader finds 1,561 of those rows, one fewer, and the one it does not
+is `cohere`: the hand parse read `{<co<(_here)}` as `co` plus `here`, and the
+reader refuses the underscore, which is the right call and is why it is a
+stated condition rather than an accident. Where the two can be compared they
+agree. The last column above is the same count the sweep reports as `prefix
+found`, and the four rows that appear in both measurements give 1,328, 1,095,
+958 and 1,098 by hand against 1,327, 1,095, 958 and 1,097 from the reader, the
+difference being `cohere` in two of them. The hand measurement was right about
+the direction and right about the size; it is superseded because the sweep
+measures the whole gold rather than a subset of it, and comes from the
+repository's own reader.
 
-Both measurements are reported because they disagree, and the disagreement is
-structural rather than noise. MorphoLex is a type list built by
-psycholinguists and it marks the Latinate prefix in `re|view` and `re|port`;
-the test split is running text, and there the same policy is worth 69,041
-tokens of which `co|me` alone is 16,967. This layer feeds a tokenizer, so the
-token-weighted side is the one that decides, and `docs/BASELINES.md` lists
-what it bought and what it cost word by word. A rule that could tell `re|view`
-from `re|turn` is the next piece of work, and no frequency comparison is going
-to be it.
+What has not changed is that the two measurements disagree with the test split.
+MorphoLex is a type list built by psycholinguists and it marks the Latinate
+prefix in `re|view` and `re|port`; the test split is running text, and there
+the shipped policy is worth 69,041 tokens of which `co|me` alone is 16,967.
+A rule that could tell `re|view` from `re|turn` is the work that would settle
+it, and no frequency comparison is going to be that rule.
 
 ### On the test split
 
@@ -1033,6 +1185,11 @@ heard of, and the same is true of `-ic`, `-ist`, `-able`, `-less`, `-ism`,
 
 Counting the boundaries rather than the rows, and allowing a boundary to count
 as reachable if a known prefix starts the word or a known suffix ends it:
+
+*Legacy reader: the MorphoLex rows here are the 10,058 forms the reader
+produced before decision 22 in `docs/BASELINES.md` fixed it, and they are
+left as they were measured. `--morpholex-reader legacy` reproduces them.*
+
 
 | Gold | Boundaries | Reachable | Recall ceiling |
 |------|-----------:|----------:|---------------:|
@@ -1742,6 +1899,17 @@ noted.
     either ranking. It still cannot add or promote anything.
 
 ## Decisions, the prefix guard
+
+*Decisions 38 to 42 are under review, see decision 22 in `docs/BASELINES.md`.
+Each of them cites a number measured on the 10,058 MorphoLex forms the reader
+produced before it was fixed, and 20 of those rows had an opinion about a
+prefix. The sweep above re-measures the policy question on the 12,828 forms the
+fixed reader produces, where 1,561 do, and it points the other way: every row
+that guards anything costs prefix boundaries, and the shipped row costs the
+most. The decisions are left as they were written rather than quietly
+restated, and nothing in the analyzer changed with the reader. Decision 39 in
+particular, which picks a policy on a thousandth of F1, is the one the sweep
+puts in question.*
 
 38. **A prefix reading the guard rejects is demoted, not left to weight.** The
     promotion guard can afford to rank a blocked reading level with the whole
