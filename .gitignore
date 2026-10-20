@@ -4,4 +4,6 @@ morphology/
 analyzer
 test_*
 !test_*.cpp
+# The tool tests are sources, not built binaries.
+!tools/test_*.py
 .DS_Store

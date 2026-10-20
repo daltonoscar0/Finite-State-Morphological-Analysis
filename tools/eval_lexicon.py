@@ -60,6 +60,26 @@ from score_segmentation import (internal_boundaries, match_boundaries,  # noqa: 
 
 WORD_RE = re.compile(r"^[a-z]+$")
 
+# MorphoLex bracket characters, which are structure and not morphemes. The
+# legacy set leaves `<` out, which is the prefix direction, and so dropped
+# every row carrying a prefix; see read_morpholex and decision 22 in
+# docs/BASELINES.md.
+MORPHOLEX_BRACKETS = re.compile(r"[<>{}()]+")
+MORPHOLEX_BRACKETS_LEGACY = re.compile(r"[>{}()]+")
+
+# MorphoLex marks a bound root by prefixing it: `(_here)` in "cohere" says the
+# morpheme is not the free word "here".
+BOUND_ROOT_MARK = "_"
+
+MORPHOLEX_READERS = ("prefix", "legacy")
+MORPHOLEX_READER_DEFAULT = "prefix"
+
+# The prefixes the analyzer strips, read off the one place they are listed so
+# that a measurement of the prefix decision cannot drift from the inventory it
+# is measuring. The lines look like `{"un",    {PartOfSpeech::ADJECTIVE, ...`.
+DEFAULT_PREFIX_RULES = "RULES/prefix_rule.h"
+PREFIX_FORM_RE = re.compile(r'^\s*\{"([a-z]+)",')
+
 # An alphabetic token is a run of letters, which may carry an internal
 # apostrophe, and which does not begin straight after one.
 #
@@ -106,6 +126,47 @@ def open_gold(path):
     through for the same reason.
     """
     return open_text(existing(path))
+
+
+def read_prefix_inventory(path=DEFAULT_PREFIX_RULES):
+    """The prefix forms RULES/prefix_rule.h lists, in the order it lists them.
+
+    Used only for reporting: a gold row whose first morpheme is one of these is
+    a row that has an opinion about the analyzer's prefix stripping, and
+    counting those separately is the only way to see a prefix decision in an
+    aggregate dominated by suffixation. A missing file gives an empty list and
+    the metric is simply not reported, since a caller running from outside the
+    repository has no inventory to read.
+    """
+    forms = []
+    try:
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                found = PREFIX_FORM_RE.match(line)
+                if found:
+                    forms.append(found.group(1))
+    except OSError:
+        return []
+    return forms
+
+
+def prefix_initial_lengths(forms, prefixes):
+    """Map a gold form to the surface offsets a known prefix ends at.
+
+    `forms` is a gold mapping, word to a set of piece tuples. A word is
+    prefix-initial when some attested segmentation starts with a prefix the
+    analyzer strips, and the offset is the length of that piece, which is a
+    surface offset because the reader kept only rows whose morphemes
+    concatenate to the word.
+    """
+    known = set(prefixes)
+    out = {}
+    for word, segmentations in forms.items():
+        offsets = {len(pieces[0]) for pieces in segmentations
+                   if pieces and pieces[0] in known}
+        if offsets:
+            out[word] = offsets
+    return out
 
 
 def longest_common_prefix(a, b):
@@ -560,7 +621,7 @@ def print_policy(name, result):
 
 # ── MorphoLex, the independent check ────────────────────────────────────────
 
-def read_morpholex(path):
+def read_morpholex(path, reader=MORPHOLEX_READER_DEFAULT):
     """Read the MorphoLex spreadsheet, if it can be read reliably.
 
     An .xlsx file is a zip of XML, so the standard library can open it:
@@ -571,13 +632,15 @@ def read_morpholex(path):
 
         {(dis)>agree>(ment)}        prefix dis, root agree, suffix ment
         {((in)>flect)>(ion)}        nested, innermost root first
+        <un<{(happy)}               prefix un, root happy
 
-    Braces hold the whole parse, angle brackets separate a morpheme from what
-    follows it, parentheses mark an affix, and a bare token is a root. Nesting
-    records the order of attachment, which surface pieces do not carry, so the
-    conversion here flattens it: strip the braces and the nesting, take the
-    morphemes left to right, and keep the result only when the morphemes
-    concatenate to the word exactly.
+    Braces hold the whole parse, parentheses mark an affix, a bare token is a
+    root, and the angle brackets point at what the morpheme attached to: a
+    suffix is written `>ness>` and a prefix `<un<`. Nesting records the order
+    of attachment, which surface pieces do not carry, so the conversion here
+    flattens it: strip the brackets and the nesting, take the morphemes left to
+    right, and keep the result only when the morphemes concatenate to the word
+    exactly.
 
     That last condition is what makes this safe to report. MorphoLex gives
     morphemes in their canonical spelling, not as slices of the surface form,
@@ -587,10 +650,21 @@ def read_morpholex(path):
     guessing is exactly what would make an independent gold standard stop
     being independent.
 
+    Args:
+        path: The .xlsx file.
+        reader: "prefix" reads both bracket directions, which is the whole
+            database. "legacy" reads the suffix direction only, which is what
+            this function did before, and is kept so the numbers in
+            docs/BASELINES.md from before the fix can be reproduced exactly.
+
     Returns:
         (gold, stats). gold maps a word to a set of one piece tuple. stats
         records how many rows were read, kept and dropped, and why.
     """
+    if reader not in MORPHOLEX_READERS:
+        raise ValueError("unknown morpholex reader %r" % (reader,))
+    flatten = (flatten_morpholex if reader == "prefix"
+               else flatten_morpholex_legacy)
     import xml.etree.ElementTree as ElementTree
     import zipfile
 
@@ -646,9 +720,12 @@ def read_morpholex(path):
                 if not WORD_RE.match(word):
                     stats["skipped_not_lowercase_az"] += 1
                     continue
-                pieces = flatten_morpholex(parse)
+                pieces = flatten(parse)
                 if not pieces:
-                    stats["skipped_unparsable_parse"] += 1
+                    if BOUND_ROOT_MARK in parse:
+                        stats["skipped_bound_root_marker"] += 1
+                    else:
+                        stats["skipped_unparsable_parse"] += 1
                     continue
                 if len(pieces) < 2:
                     stats["skipped_single_morpheme"] += 1
@@ -666,25 +743,56 @@ def read_morpholex(path):
 def flatten_morpholex(parse):
     """Flatten a MorphoLex parse to a left-to-right morpheme list.
 
-    The notation marks roots with braces, morphemes with parentheses and
-    suffix attachment with angle brackets, and it nests to record the order of
-    attachment:
+    The notation marks roots with braces, morphemes with parentheses, and
+    attachment with angle brackets that point at what the morpheme attached
+    to. A suffix points left, `>ness>`; a prefix points left as well, which
+    written before its base comes out as `<un<`. It nests to record the order
+    of attachment:
 
         {(work)}(man){(like)}            work, man, like
         {(typo)}(graph)>ic>>al>>ly>      typo, graph, ic, al, ly
         {(theo)(log)>ic>>al>}>ly>        theo, log, ic, al, ly
+        <un<{(happy)}                    un, happy
+        {<re<(view)}>er>                 re, view, er
+        <un<{<de<(ceive)}                un, de, ceive
+        <micro<{(bio)(log)>ist>}         micro, bio, log, ist
 
     All of that is structure surface pieces do not carry, so it is dropped and
-    the morphemes are taken left to right. Nothing is required of the brackets
-    themselves: a parse can end in `}` or in `>` depending on whether the last
-    morpheme is a root or a suffix, and demanding a closing brace threw away
-    27,261 of the 68,623 rows. What makes the result trustworthy is the check
-    in the caller, that the morphemes concatenate to the word.
+    the morphemes are taken left to right, in the order the parse writes them,
+    which for every shape in the database is the order they appear in the word.
+    Nothing is required of the brackets themselves: a parse can end in `}` or
+    in `>` depending on whether the last morpheme is a root or a suffix, and
+    demanding a closing brace threw away 27,261 of the 68,623 rows. What makes
+    the result trustworthy is the check in the caller, that the morphemes
+    concatenate to the word.
 
-    Returns an empty list if any token is not a plain lowercase word.
+    Returns an empty list if any token is not a plain lowercase word. That is
+    what rejects the bound-root marker: `{<co<(_here)}` says the morpheme is
+    not the free word `here`, and taking it for one would be reading an
+    annotation as its opposite.
     """
+    return _morphemes(parse, MORPHOLEX_BRACKETS)
+
+
+def flatten_morpholex_legacy(parse):
+    """Flatten a parse reading the suffix direction only.
+
+    What flatten_morpholex did before the prefix direction was added, kept so
+    that the MorphoLex numbers recorded in docs/BASELINES.md and
+    docs/LEXICON.md from before the fix can be reproduced rather than
+    described. A prefix row comes back empty here, because `<un<` is not a
+    plain lowercase word:
+
+        <un<{(happy)}                    nothing
+        {(work)}(man){(like)}            work, man, like
+    """
+    return _morphemes(parse, MORPHOLEX_BRACKETS_LEGACY)
+
+
+def _morphemes(parse, brackets):
+    """Split a parse on `brackets` and keep the tokens, left to right."""
     morphemes = []
-    for token in re.split(r"[>{}()]+", parse):
+    for token in brackets.split(parse):
         token = token.strip().lower()
         if not token:
             continue
@@ -812,6 +920,12 @@ def main(argv=None):
     parser.add_argument("--inflection", default=DEFAULT_INFLECTION)
     parser.add_argument("--derivation", default=DEFAULT_DERIVATION)
     parser.add_argument("--morpholex", default=DEFAULT_MORPHOLEX)
+    parser.add_argument("--morpholex-reader", default=MORPHOLEX_READER_DEFAULT,
+                        choices=list(MORPHOLEX_READERS),
+                        help="'prefix' reads both bracket directions, which "
+                             "is the whole database; 'legacy' reads the suffix "
+                             "direction only, which reproduces the numbers "
+                             "recorded before the reader was fixed")
     parser.add_argument("--unfiltered-gold", action="store_true",
                         help="score every MorphyNet row, including the ones "
                              "whose stem is a mining artifact; see GoldFilter")
@@ -957,13 +1071,14 @@ def main(argv=None):
     if "morpholex" in stages:
         path = expand(args.morpholex)
         print("\n=== MorphoLex, HELD OUT and INDEPENDENT ===")
+        print(f"    reader: {args.morpholex_reader}")
         print("    Non-commercial licence: evaluation only, never used to")
         print("    build a lexicon.")
         if not os.path.isfile(path):
             print(f"    skipped: no file at {path}")
         else:
             try:
-                gold, stats = read_morpholex(path)
+                gold, stats = read_morpholex(path, args.morpholex_reader)
             except Exception as exc:                 # noqa: BLE001
                 print(f"    skipped: could not read the workbook: {exc}")
                 gold, stats = None, None
