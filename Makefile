@@ -46,7 +46,20 @@ MORPH_HDR = ANALYSIS/analysis.h \
             RULES/verb_rule.h \
             SYMBOLS/symbol.h
 
-.PHONY: all clean test test-tools
+# ── Interpreters for the measurement stages ─────────────────────────────────
+# The analyzer side is standard library only. The tokenizer libraries and the
+# MorphoLex spreadsheet reader live in ~/venvs/tok, and torch lives in
+# ~/venvs/lm, both outside the repository. Override on the command line if
+# they are somewhere else.
+TOK_PY = $(HOME)/venvs/tok/bin/python
+LM_PY  = $(HOME)/venvs/lm/bin/python
+
+MATCHED_DIR = $(HOME)/data/tok/matched
+LM_STEPS    = 6000
+
+.PHONY: all clean test test-tools \
+        matched matched-pretokenize matched-tokenizers matched-intrinsic \
+        matched-lm-benchmark matched-lm matched-results
 
 all: analyzer test_infra test_lex test_analyzer test_seg
 
@@ -89,3 +102,34 @@ test-tools:
 
 clean:
 	rm -f analyzer test_infra test_lex test_analyzer test_seg
+
+# ── The matched-vocabulary experiment ────────────────────────────────────────
+# One target per stage, in order. Each reads what the one before it wrote, so
+# they can be run separately and re-run without repeating the stage before.
+# Everything lands under $(MATCHED_DIR); nothing is written inside the
+# repository except results/matched_vocab.md.
+
+matched-pretokenize: analyzer
+	$(TOK_PY) scripts/pretokenize.py --out-dir $(MATCHED_DIR)
+
+matched-tokenizers:
+	$(TOK_PY) scripts/train_tokenizers.py --out-dir $(MATCHED_DIR)
+
+matched-intrinsic: analyzer
+	$(TOK_PY) scripts/score_intrinsic.py --matched-dir $(MATCHED_DIR)
+
+# Runs one cell for a few hundred steps and extrapolates to all twelve, so the
+# cost of the LM stage is known before it is paid.
+matched-lm-benchmark:
+	$(LM_PY) scripts/train_lm.py --matched-dir $(MATCHED_DIR) \
+	    --steps $(LM_STEPS) --benchmark 200
+
+matched-lm:
+	$(LM_PY) scripts/train_lm.py --matched-dir $(MATCHED_DIR) \
+	    --steps $(LM_STEPS)
+
+matched-results:
+	$(TOK_PY) scripts/results.py --matched-dir $(MATCHED_DIR)
+
+matched: matched-pretokenize matched-tokenizers matched-intrinsic \
+         matched-lm matched-results
