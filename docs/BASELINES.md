@@ -1657,3 +1657,245 @@ the difference.
     out of that file rather than copied into the tool, so the measurement
     cannot drift from the inventory it is measuring. `--prefix-rules ''` turns
     the counts off for a caller running from outside the repository.
+
+## The matched-vocabulary comparison
+
+Everything above compares the analyzer against the baselines as rival
+vocabularies, and answer 1 of the first round refuses to match their sizes
+because they cannot be matched: the analyzer's working inventory on test is
+three times the largest baseline's and is not bounded at all. This round
+stops treating it as a rival vocabulary.
+
+The analyzer runs as a **pre-tokenizer** instead. A subword model is then
+trained on the stream it produces, at a vocabulary size chosen in the usual
+way. Sizes are matched by construction, and the only variable left inside a
+pair of rows is whether the analyzer ran in front.
+
+    none      The cats walked.  ->  _The _cats _walked _.
+    analyzer  The cats walked.  ->  _The _cat s _walk ed _.
+
+Twelve tokenizers: {none, analyzer} x {Unigram, BPE} x {8k, 16k, 32k}. All
+twelve are new; the nine above were trained on a different stream through two
+different libraries and are not comparable with these.
+
+### Reproducing it
+
+```bash
+make matched-pretokenize     # about 20 minutes
+make matched-tokenizers      # about 7 minutes
+make matched-intrinsic       # about 20 minutes
+make matched-lm              # see the note on cost below
+make matched-results
+```
+
+Results land in `~/data/tok/matched/`, the tables in
+`results/matched_vocab.md`. Nothing is written inside the repository except
+that file.
+
+### The stream
+
+`scripts/pretokenize.py`. The word segmentation is the shared pretokenizer's,
+unchanged. An alphabetic word the analyzer reports with gate `decomposed` is
+replaced by its morphs; every other word, and every unit that is not a word,
+is left whole. Morphs are separated by spaces and the word-initial one carries
+U+2581.
+
+| | train | dev |
+|---|---:|---:|
+| lines | 11,588,684 | 1,168,153 |
+| units | 138,414,855 | 14,296,403 |
+| alphabetic word tokens | 100,889,382 | 10,612,789 |
+| word tokens the analyzer split | 10,076,063 | 1,072,375 |
+| units after splitting | 148,747,969 | 15,395,798 |
+
+Word types: 541,557 across train and dev, of which 95,836 are decomposed,
+74,346 come back as a stored whole lexeme, 4,087 as an irregular, 366,841
+with no analysis and 447 as passthrough. Every one of the 95,836
+decompositions concatenates back to its word exactly.
+
+U+2581 does not occur anywhere in the 718-character alphabet of the two
+splits, which `scripts/pretokenize.py` checks before it writes anything.
+
+### Morphological alignment
+
+Boundary precision, recall and F1 on the same three gold standards as every
+round above, through the same loader and the same scorer.
+
+**MorphoLex, 12,828 forms. Independent.**
+
+| system | P | R | F1 | exact |
+|--------|--:|--:|---:|------:|
+| none-unigram-8k | 0.479 | 0.780 | 0.594 | 0.318 |
+| analyzer-unigram-8k | 0.512 | 0.844 | 0.638 | 0.380 |
+| none-unigram-16k | 0.561 | 0.714 | 0.628 | 0.402 |
+| analyzer-unigram-16k | 0.607 | 0.805 | 0.692 | 0.496 |
+| none-unigram-32k | 0.649 | 0.614 | 0.631 | 0.426 |
+| **analyzer-unigram-32k** | 0.700 | 0.763 | **0.730** | 0.563 |
+| none-bpe-8k | 0.404 | 0.641 | 0.496 | 0.228 |
+| analyzer-bpe-8k | 0.487 | 0.765 | 0.595 | 0.322 |
+| none-bpe-16k | 0.446 | 0.579 | 0.504 | 0.296 |
+| analyzer-bpe-16k | 0.564 | 0.721 | 0.633 | 0.435 |
+| none-bpe-32k | 0.479 | 0.481 | 0.480 | 0.308 |
+| analyzer-bpe-32k | 0.642 | 0.651 | 0.646 | 0.483 |
+
+**MorphyNet inflection, 186,947 forms. IN DISTRIBUTION.**
+
+| system | P | R | F1 | exact |
+|--------|--:|--:|---:|------:|
+| none-unigram-8k | 0.182 | 0.629 | 0.282 | 0.033 |
+| analyzer-unigram-8k | 0.245 | 0.923 | 0.387 | 0.037 |
+| none-unigram-16k | 0.201 | 0.612 | 0.303 | 0.055 |
+| analyzer-unigram-16k | 0.277 | 0.932 | 0.427 | 0.057 |
+| none-unigram-32k | 0.229 | 0.622 | 0.335 | 0.083 |
+| **analyzer-unigram-32k** | 0.312 | 0.929 | **0.467** | 0.077 |
+| none-bpe-8k | 0.066 | 0.194 | 0.099 | 0.015 |
+| analyzer-bpe-8k | 0.186 | 0.625 | 0.287 | 0.032 |
+| none-bpe-16k | 0.064 | 0.165 | 0.092 | 0.021 |
+| analyzer-bpe-16k | 0.188 | 0.551 | 0.281 | 0.055 |
+| none-bpe-32k | 0.057 | 0.129 | 0.079 | 0.026 |
+| analyzer-bpe-32k | 0.191 | 0.484 | 0.274 | 0.083 |
+
+**MorphyNet derivation, 194,771 forms. IN DISTRIBUTION.**
+
+| system | P | R | F1 | exact |
+|--------|--:|--:|---:|------:|
+| none-unigram-8k | 0.231 | 0.782 | 0.356 | 0.108 |
+| analyzer-unigram-8k | 0.239 | 0.823 | 0.370 | 0.114 |
+| none-unigram-16k | 0.264 | 0.770 | 0.393 | 0.169 |
+| analyzer-unigram-16k | 0.280 | 0.824 | 0.418 | 0.173 |
+| none-unigram-32k | 0.302 | 0.762 | 0.433 | 0.234 |
+| **analyzer-unigram-32k** | 0.330 | 0.830 | **0.473** | 0.231 |
+| none-bpe-8k | 0.174 | 0.549 | 0.265 | 0.067 |
+| analyzer-bpe-8k | 0.198 | 0.627 | 0.301 | 0.089 |
+| none-bpe-16k | 0.185 | 0.510 | 0.272 | 0.105 |
+| analyzer-bpe-16k | 0.223 | 0.609 | 0.326 | 0.143 |
+| none-bpe-32k | 0.197 | 0.467 | 0.277 | 0.144 |
+| analyzer-bpe-32k | 0.243 | 0.574 | 0.342 | 0.198 |
+
+### Compression, fertility and compounds
+
+Fertility is pieces per alphabetic word token on the dev split; bytes/piece is
+over the whole dev unit stream. Compound recall is boundary recall restricted
+to gold boundaries where both sides are free-standing words of three
+characters or more and neither is an affix the rules know, which is the test
+`tools/suffix_report.py` uses to bucket a missed boundary as a compound seam.
+
+| system | vocab | fertility | bytes/piece | compound R | round trip |
+|--------|------:|----------:|------------:|-----------:|-----------:|
+| none-unigram-8k | 8000 | 1.2029 | 2.784 | 0.8172 | 100% |
+| analyzer-unigram-8k | 8000 | 1.2579 | 2.690 | 0.8289 | 100% |
+| none-unigram-16k | 16000 | 1.1386 | 2.907 | 0.7507 | 100% |
+| analyzer-unigram-16k | 16000 | 1.2089 | 2.777 | 0.7798 | 100% |
+| none-unigram-32k | 32000 | 1.1061 | 2.973 | 0.6366 | 100% |
+| analyzer-unigram-32k | 32000 | 1.1867 | 2.818 | 0.7109 | 100% |
+| none-bpe-8k | 8000 | 1.1896 | 2.811 | 0.7136 | 100% |
+| analyzer-bpe-8k | 8000 | 1.2369 | 2.728 | 0.7235 | 100% |
+| none-bpe-16k | 16000 | 1.1083 | 2.972 | 0.6761 | 100% |
+| analyzer-bpe-16k | 16000 | 1.1754 | 2.842 | 0.6752 | 100% |
+| none-bpe-32k | 32000 | 1.0587 | 3.080 | 0.5895 | 100% |
+| analyzer-bpe-32k | 32000 | 1.1422 | 2.908 | 0.5686 | 100% |
+
+Round trip is exact for all twelve on all 139,779 dev unit types and all
+382,548 gold forms. Every one of the twelve lands on its nominal vocabulary
+size exactly, so there is nothing to record under the usual caveat about a
+trainer undershooting.
+
+### What it shows
+
+**Analyzer pre-tokenization raises boundary F1 at every size, on every gold
+standard, for both subword models.** Eighteen comparisons, eighteen in the
+same direction. On the independent gold the gain runs from 0.044 to 0.166 of
+F1, and the best cell in the table, `analyzer-unigram-32k` at 0.730, is above
+anything either family has reached in this document: the best baseline
+vocabulary measured here is 0.631 and the analyzer used as a vocabulary of its
+own is 0.552.
+
+**The gain grows with vocabulary size, and that is the mechanism working.** On
+the independent gold, BPE gains 0.100 at 8k, 0.129 at 16k and 0.166 at 32k;
+Unigram 0.044, 0.064 and 0.099. A bigger vocabulary stores more whole words
+and so cuts less often, which is the precision-and-recall trade the earlier
+rounds measured. A morph boundary the subword model is not allowed to cross
+takes that choice away from it, and the larger the vocabulary the more often
+it would otherwise have declined to cut.
+
+**It costs fertility, by between 4.0% and 7.9%.** `analyzer-unigram-32k`
+emits 1.187 pieces per word token against 1.106, and bytes per piece falls
+from 2.973 to 2.818. That is the price of the hard boundaries, and it is paid
+in the same currency a language model's compute is measured in.
+
+**Compounds move both ways and the direction depends on the model.** Unigram
+gains at every size, up to +0.074 at 32k. BPE is flat at 16k and loses 0.021
+at 32k. The analyzer does not do compounds, so a compound is one unit in both
+conditions, and it cannot gain a seam directly. What it can do is change what
+the subword model has learned: `switchboards` becomes `switchboard` plus `s`
+in the stream, so `switchboard` is seen more often as a whole unit and is more
+likely to be stored whole. For Unigram the extra alignment elsewhere more than
+covers it; for BPE at 32k it does not.
+
+### Decisions, the matched-vocabulary comparison
+
+24. **The analyzer is a pre-tokenizer, not a vocabulary.** Answer 1 of the
+    first round refuses to match sizes, and refusing was right: there is no
+    size to match when one side's inventory is unbounded. This round changes
+    the question rather than the arithmetic. The analyzer proposes boundaries,
+    a subword model built to respect them chooses the vocabulary, and the
+    vocabulary budget is then the same on both sides by construction. That is
+    also the arrangement answer 2 said the layer was actually for.
+
+25. **A hard boundary is a space, and the trainers split on whitespace.**
+    There is no option on any of these trainers for "do not merge across
+    this", so the boundary is enforced by the shape of the input: stage 1 puts
+    a space at every morph boundary and the pre-tokenizer is
+    `WhitespaceSplit` before anything else. A piece that spanned a morph
+    boundary would have to contain a space, and none can. The scorer encodes
+    each unit separately as well, so the guarantee does not rest on the
+    library honouring its own pre-tokenizer.
+
+26. **The word-initial marker is U+2581, and its absence is checked rather
+    than assumed.** A marker that occurs in the corpus makes the stream
+    ambiguous and silently corrupts the reconstruction, so
+    `scripts/pretokenize.py` collects the alphabet of both splits, 718
+    characters, and refuses to write anything if the marker is in it. The
+    marker goes on the word-initial unit rather than on continuations so that
+    the `none` condition, where every unit is word-initial, has the same
+    format as the `analyzer` condition rather than a degenerate one.
+
+27. **Both models come from one library, so the nine baselines above are not
+    reused.** `tools/train_baselines.py` trains BPE through `tokenizers` and
+    Unigram through `sentencepiece`, which is the right choice when each
+    family is being shown at its best. It is the wrong choice here: the
+    comparison is a difference between two rows, and two libraries' defaults
+    sitting on one side of it would be a second variable. All twelve are
+    retrained through `tokenizers` with one pre-tokenizer, one alphabet and
+    one set of special tokens.
+
+28. **Byte level, rather than byte fallback.** The Unigram trainer in
+    `tokenizers` has no `byte_fallback`, so the two models could not have been
+    given the same coverage mechanism. A byte level step after the whitespace
+    split gives both the 256-byte alphabet instead, which is what makes round
+    trip exact for all twelve without either model needing an option the other
+    lacks. This is decision 4 above, applied to a different pair for the same
+    reason.
+
+29. **All twelve train on the same 5,000,000-line sample, not the full
+    split.** The Unigram trainer does not fit the whole stream in this
+    machine's memory beside everything else, and sampling one model's input
+    and not the other's would put a difference inside the comparison. The
+    sample is drawn by line number with a fixed seed, and the draw depends
+    only on how many lines have been seen, so the two conditions get the same
+    lines of the same corpus, segmented two ways.
+
+30. **A word is split only on gate `decomposed`.** The other gates are the
+    analyzer saying there is nothing to split: `lexicon_stem` is a stored
+    whole word, `irregular` a stored irregular form, `no_analysis` a word it
+    cannot reach. Taking the design's "confident analysis" to mean this gate
+    keeps the layer's precision, which is the property worth carrying into a
+    tokenizer, and it is why 10.0% of word tokens are split rather than all of
+    them.
+
+31. **Compound recall is computed from the gold alone.** The test is
+    `tools/suffix_report.py`'s, where a seam has free-standing words of three
+    characters or more on both sides and no known affix. Reading only the gold
+    means the same set of boundaries is used for every row, so the column
+    compares twelve systems on one target rather than twelve systems each on
+    its own.
