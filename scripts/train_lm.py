@@ -27,6 +27,18 @@ tokens, which is equal compute rather than equal text. A tokenizer with higher
 fertility therefore sees less text in the same budget. That is a real effect
 of the tokenizer and the table reports the text each run saw so it is visible
 rather than hidden.
+
+Training blocks are drawn uniformly from the whole encoded training split,
+never from a prefix of it. BabyLM is a concatenation of six corpora in order,
+BNC then CHILDES then Gutenberg then OpenSubtitles then Wikipedia and
+Switchboard, while dev is a mixture of all six. A prefix is therefore a
+different domain from the evaluation set, and worse, a different domain for
+each condition: the same token budget reaches a shorter prefix of the corpus
+when fertility is higher, so the analyzer condition would have been scored on
+domains it had seen less of. That is a difference between the rows with
+nothing to do with tokenization, which is exactly what this experiment exists
+to exclude. The first attempt at this stage did take a prefix, and the
+train-to-dev gap it produced, 3.73 nats against 5.64, is what gave it away.
 """
 
 import argparse
@@ -360,7 +372,10 @@ def main(argv=None):
 
     cache = os.path.join(matched, "lm_tokens")
     steps = args.benchmark or args.steps
-    limit = steps * BATCH * SEQ_LEN + SEQ_LEN
+    # A full run encodes the whole training split and samples blocks from all
+    # of it; see the note on corpus order at the top of this file. A benchmark
+    # only measures throughput, so it takes a prefix and saves the encoding.
+    limit = (steps * BATCH * SEQ_LEN + SEQ_LEN) if args.benchmark else None
 
     rows = []
     for record in index:
