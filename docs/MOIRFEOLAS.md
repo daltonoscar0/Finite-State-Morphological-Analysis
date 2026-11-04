@@ -15,9 +15,9 @@ What already existed in this repository before this round.
 | Irish initial-mutation FST | `~/code/Scalpel/mutation_fst.{h,cpp}` (sibling repo, not this one) |
 | bridge binary source | `tools/irish/ga_demutate_main.cpp` |
 | built bridge | `ga_demutate` (repo root, untracked, now gitignored) |
-| baseline scoring driver | `tools/irish/run_criochscore.py` |
-| hybrid scoring driver | `tools/irish/run_scalpel.py` |
-| full sweep driver | `tools/irish/run_sweep.py` |
+| baseline scoring driver | `tools/irish/run_criochscore.py`, retired |
+| hybrid scoring driver | `tools/irish/run_scalpel.py`, retired |
+| full sweep driver | `tools/irish/run_sweep.py`, retired |
 | earlier write-up | `docs/IRISH.md` |
 | earlier results | `~/data/tok/results/irish/` |
 
@@ -37,6 +37,15 @@ STALE_PRECORRECTION_uru_disagreements.csv
 ```
 
 New results for this round go to `~/data/tok/results/irish/corrected/`.
+
+**Retired code.** The three Python drivers under `tools/irish/` are deleted.
+They reimplemented her MoirfEolas loader and they expected the clone at
+`tools/irish/tknzn4Irish`, so both their metric and their paths are wrong for
+this round. They are replaced by `scripts/moirfeolas_score.py`,
+`scripts/moirfeolas_error_analysis.py` and `scripts/moirfeolas_email.py`,
+which is also where the rule for this round puts wrappers around her code.
+`tools/irish/ga_demutate_main.cpp`, the bridge to Scalpel's FST, is kept
+unchanged.
 
 ## The benchmark
 
@@ -141,3 +150,553 @@ on all eight figures rather than one.
 33,385. A word the tokenizer emits whole cannot show boundary behaviour, so it
 scores 0 on each affix it has and drags the mean down. This flag matters for
 the hybrid comparison and is dealt with explicitly in step 4.
+
+### Her three reference rows do not share one protocol
+
+Two of her three rows reproduce exactly, and they need different flags.
+
+| row | reproduces at | with |
+|-----|--------------:|------|
+| Unigram 8k | 43.32 | `--exclude-single-token`, no lowercasing |
+| gaBERT | 17.88 | all words, **plus** `--do-lower-case` |
+| Morfessor | not reproduced | no Morfessor model ships in the repo |
+
+gaBERT:
+
+```bash
+~/venvs/tok/bin/python -m criochscore.cli score \
+    --moirfeolas external/tknzn4Irish/data/MoirfEolas/MoirfEolas.csv \
+    --tokenizer DCU-NLP/bert-base-irish-cased-v1 --model-type huggingface \
+    --special-token "##" --do-lower-case \
+    --output-dir ~/data/tok/results/irish/corrected/baselines
+```
+
+That gives 17.88 / 50.00 / 29.21 / 17.27 / 8.57 / 14.61 / 22.06 / 9.61, eight
+of eight again. Under `--exclude-single-token` gaBERT is 29.59 instead, and
+without `--do-lower-case` it is 23.00. So the gaBERT row and the Unigram row
+in her 28 October table are not mutually comparable, and this is worth asking
+her about before anything goes in a paper next to them.
+
+Everything below uses the Unigram protocol, since Unigram is the row the
+hybrid is actually competing with and the only one whose back-off ships in
+her repo.
+
+## Step 4: the hybrid
+
+```bash
+c++ -std=c++17 -O2 -I$HOME/code/Scalpel -o ga_demutate \
+    tools/irish/ga_demutate_main.cpp $HOME/code/Scalpel/mutation_fst.cpp
+~/venvs/tok/bin/python scripts/moirfeolas_score.py \
+    --systems backoff hybrid fst_only identity \
+    --out ~/data/tok/results/irish/corrected/her_protocol.json \
+    --dump-per-word ~/data/tok/results/irish/corrected/per_word_her_protocol.json
+```
+
+About a minute. `scripts/moirfeolas_score.py` builds the token streams and
+hands them to her `find_morphological_info`, `calculate_morphological_score`
+and `compute_absorption`. It applies the same single-token filter her CLI
+applies, copied from `cli.py`.
+
+Layer 1 fires on 4,760 of 35,517 words (13.4%).
+
+### Overall CríochScore, all 23 settings
+
+| family | 8k | 16k | 32k | 43k | 64k |
+|--------|----|-----|-----|-----|-----|
+| BPE | 35.85 → **40.45** | 31.68 → **36.63** | 27.94 → **33.71** | | 23.47 → **31.92** |
+| Byte-BPE | 38.19 → **43.50** | 33.61 → **39.08** | 29.36 → **35.29** | | 26.67 → **33.80** |
+| SentencePieceBPE | 38.05 → **43.36** | 33.39 → **38.88** | 28.95 → **34.90** | | 26.00 → **33.52** |
+| SentencePieceULM | 42.84 → **47.11** | 37.51 → **42.29** | 32.84 → **38.00** | 31.71 → **36.97** | |
+| UnigramLM | **43.32** → **45.46** | 39.04 → **41.95** | 34.61 → **38.49** | | 33.96 → **37.80** |
+| WordPiece | 35.23 → **41.17** | 31.99 → **37.84** | 28.71 → **34.81** | | 25.63 → **33.16** |
+
+All 23 improve, by between 2.14 and 8.45 points. `UnigramLM 8k = 43.32` is
+Jane's reference cell. SentencePieceULM ships at 43k rather than 64k.
+
+Two of the paper's findings hold on the corrected data and in the hybrid
+column too: Unigram is the strongest conventional family, and the smallest
+vocabulary is the best one.
+
+**Best conventional setting 43.32, best hybrid setting 47.11**, both at 8k.
+Against her own best reference row the headline gain is +3.79 points; against
+the same back-off it is +4.27.
+
+### The two headline settings by category
+
+| system | overall | uru_only | prefix_only | suffix_only | uru+prefix | uru+suffix | prefix+suffix | all_affixes |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Unigram 8k alone | 43.32 | 50.00 | 66.12 | 40.70 | 43.03 | 50.83 | 46.81 | 35.98 |
+| Unigram 8k + Scalpel | **45.46** | 77.78 | 66.12 | 40.70 | 66.67 | 63.00 | 46.81 | 50.17 |
+| SP-ULM 8k alone | 42.84 | 50.00 | 63.21 | 42.59 | 26.52 | 36.10 | 48.28 | 29.09 |
+| SP-ULM 8k + Scalpel | **47.11** | 77.78 | 63.21 | 42.60 | 65.00 | 64.71 | 48.28 | 52.39 |
+
+Every category that contains an urú moves; `prefix_only`, `suffix_only` and
+`prefix+suffix` do not move at all. That is what the construction predicts,
+and it is a check rather than a result.
+
+The categories are very unevenly sized, and the two the hybrid moves most are
+the two smallest. Denominators under her protocol at Unigram 8k:
+
+| category | words |
+|----------|------:|
+| suffix_only | 20,633 |
+| prefix+suffix | 6,726 |
+| uru+suffix | 3,374 |
+| all_affixes | 1,664 |
+| prefix_only | 760 |
+| uru+prefix | 201 |
+| uru_only | 27 |
+
+`uru_only` is 27 words, so its 50.00 → 77.78 is 13.5 of 27 going to 21 of 27.
+Nothing should be concluded from that column on its own. `uru+suffix` at
+3,374 words and `all_affixes` at 1,664 are where the gain actually lives.
+
+It is also the honest reading of the headline: the suffix column is 96.9% of
+the data, Scalpel has no Irish derivational morphology, and the hybrid's
+suffix score is its back-off's suffix score. 47.11% is a mutation result
+wearing an aggregate's clothing.
+
+### The single-token filter does not confound the comparison
+
+`--exclude-single-token` filters on each system's own token count, so the
+hybrid and its back-off are scored on slightly different word sets: a word
+the back-off emits whole but the hybrid splits enters the hybrid's set and
+not the back-off's. At Unigram 8k that is 33,480 words against 33,385.
+
+Scored on one identical word set instead, filtered by the back-off's token
+count for both systems:
+
+```bash
+~/venvs/tok/bin/python scripts/moirfeolas_score.py --matched-set \
+    --systems backoff hybrid \
+    --out ~/data/tok/results/irish/corrected/matched_set.json
+```
+
+| setting | her protocol | matched word set | difference |
+|---------|-------------:|-----------------:|-----------:|
+| Unigram 8k + Scalpel | 45.46 | 45.44 | 0.02 |
+| SP-ULM 8k + Scalpel | 47.11 | 47.10 | 0.01 |
+
+Two hundredths of a point. The headline numbers can be read as a like-for-like
+comparison.
+
+## Step 5: absorption
+
+Her `absorption.py`, reached two ways. The wrapper can write her summary
+format so her own `criochscore absorption` subcommand runs on it unmodified:
+
+```bash
+~/venvs/tok/bin/python scripts/moirfeolas_score.py \
+    --families UnigramLM --sizes 8k --systems backoff hybrid \
+    --summary-dir ~/data/tok/results/irish/corrected/summaries
+
+~/venvs/tok/bin/python -m criochscore.cli absorption \
+    --summary ~/data/tok/results/irish/corrected/summaries/backoff_UnigramLM_8k_morphological_summary.json \
+              ~/data/tok/results/irish/corrected/summaries/hybrid_UnigramLM_8k_morphological_summary.json \
+    --moirfeolas external/tknzn4Irish/data/MoirfEolas/MoirfEolas.csv \
+    --output-dir ~/data/tok/results/irish/corrected
+```
+
+Both routes agree to the digit.
+
+| system | urú absorbed | urú mapping | suffix fully | suffix split | prefix fully | prefix split |
+|--------|-------------:|------------:|-------------:|-------------:|-------------:|-------------:|
+| Unigram 8k alone | 45.97 | 3.32 | 32.85 | 24.05 | 35.69 | 4.34 |
+| Unigram 8k + Scalpel | **12.26** | **0.00** | 33.05 | 23.93 | 33.86 | 4.34 |
+| SP-ULM 8k alone | 80.42 | 22.07 | 35.38 | 21.22 | 35.83 | 4.12 |
+| SP-ULM 8k + Scalpel | **12.26** | **0.00** | 36.04 | 21.51 | 34.93 | 3.97 |
+
+Eclipsis absorption is the failure mode the layer exists to remove, and it
+goes to 12.26% from wherever it started. It is the same 12.26% for every
+back-off, because layer 1 does not depend on layer 2. Urú mapping, the
+"fused with the next letter" case such as `bhf`, goes to exactly zero.
+
+Affix absorption barely moves in either direction, which is the same
+statement as the unchanged prefix and suffix columns.
+
+## Step 6: ablations
+
+The filter has to come off for this table. Under `--exclude-single-token` the
+FST-alone system is scored on only the 4,760 words it splits, and the
+no-segmentation system is scored on nothing at all, so neither row means
+anything. All-words mode puts every system on the same 35,517 words.
+
+```bash
+~/venvs/tok/bin/python scripts/moirfeolas_score.py --all-words \
+    --systems backoff hybrid fst_only identity \
+    --out ~/data/tok/results/irish/corrected/all_words.json \
+    --dump-per-word ~/data/tok/results/irish/corrected/per_word_all_words.json
+```
+
+| system | overall | uru_only | prefix_only | suffix_only | uru+prefix | uru+suffix | prefix+suffix | all_affixes |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| no segmentation at all | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
+| mutation FST alone | 5.97 | 55.56 | 0.00 | 0.00 | 45.24 | 43.68 | 0.00 | 30.14 |
+| Unigram 8k alone | 40.72 | 50.00 | 57.23 | 37.94 | 41.19 | 49.97 | 44.07 | 35.38 |
+| FST + Unigram 8k | 42.85 | 77.78 | 57.23 | 37.94 | 66.67 | 63.00 | 44.07 | 50.17 |
+| SP-ULM 8k alone | 40.81 | 50.00 | 57.23 | 40.39 | 25.00 | 35.21 | 46.20 | 28.30 |
+| FST + SP-ULM 8k | 45.07 | 77.78 | 57.23 | 40.39 | 65.00 | 64.71 | 46.20 | 52.39 |
+
+The attribution is clean. The FST alone gets 5.97% because it scores zero on
+both affix columns and 96.9% of the data has a suffix; it is strong only
+where it is competent, reaching 55.56% on `uru_only` and 45.24% on
+`uru+prefix` with no statistical model at all. The subword tokenizer alone
+gets 40.72%. Neither layer carries the result, and the hybrid is not
+explained by either one of them.
+
+These all-words numbers are also the direct check against the earlier run:
+`docs/IRISH.md` reported 40.81 → 45.07 for SentencePieceULM 8k and 40.72 →
+42.85 for UnigramLM 8k, which is what came out again here to two decimals.
+The earlier round's arithmetic was right; only its protocol and its reading of
+which dataset it had were wrong.
+
+## Step 7: error analysis
+
+```bash
+~/venvs/tok/bin/python scripts/moirfeolas_error_analysis.py \
+    --per-word ~/data/tok/results/irish/corrected/per_word_all_words.json \
+    --out ~/data/tok/results/irish/corrected/error_analysis.json
+```
+
+Run on the all-words dump, so that both systems have an opinion about all
+35,517 words and every word is comparable.
+
+### There are no words where the hybrid is worse than Unigram 8k
+
+The task asked for 50 of them. There are none.
+
+| comparison | worse | better | identical |
+|------------|------:|-------:|----------:|
+| hybrid vs Unigram 8k, same back-off | **0** | 1,807 | 33,710 |
+| hybrid vs SP-ULM 8k, same back-off | 222 | 3,372 | 31,923 |
+
+With Unigram 8k as the back-off, layer 1 does not cost a single word. That is
+not luck and it is not a bug in the comparison; it follows from three things.
+Layer 1 declines rather than guesses, so it emits no wrong mutation material
+anywhere in the dataset (0 of 5,361, below). Her `classify_prefix` starts at
+token index 1 exactly when the gold marks an urú, so a correct urú split
+leaves the prefix test aligned instead of shifted. And Unigram 8k happens to
+re-segment demutated bases the same way it segments the surface form, which
+is the part that does not hold for SentencePieceULM.
+
+So the buckets below are 50 sampled from the 1,807 better, and then, because
+a one-sided table is not an error analysis, 50 sampled from the 222 words the
+best hybrid setting does make worse. Sampling is `random.Random(20261104)`
+over the sorted word list, so it is reproducible.
+
+### 50 better, hybrid vs Unigram 8k
+
+All 1,807 fall in one bucket, and all 50 sampled do too.
+
+| bucket | of 1,807 | in sample |
+|--------|---------:|----------:|
+| eclipsis handling, urú recovered | 1,807 | 50 |
+| lenition handling | 0 | 0 |
+| lexicon gap | 0 | 0 |
+| over-segmentation | 0 | 0 |
+| other | 0 | 0 |
+
+| word | gold | Unigram 8k | hybrid |
+|------|------|-----------|--------|
+| `bPríomh-Acht` | `b` / — / `t` | `bPríomh \| - \| Acht` → 0.00 | `b \| Príomh \| - \| Acht` → 0.50 |
+| `bPaitinní` | `b` / — / `í` | `bP \| a \| it \| inn \| í` → 0.50 | `b \| Pa \| it \| inn \| í` → 1.00 |
+| `n-iomlán` | `n-` / — / `án` | `n \| - \| iomlán` → 0.25 | `n- \| iomlán` → 0.50 |
+
+Three mechanisms inside that one bucket, worth separating by eye: the
+eclipsis letter unfused from a following capital (`bP` to `b` + `P`), the
+hyphen reattached to the mutation rather than left stranded (`n` + `-` to
+`n-`), and the urú peeled off a long first token (`gcomhaont` to `g` +
+`comhaont`).
+
+### 50 worse, hybrid vs SentencePieceULM 8k
+
+| bucket | of 222 | in sample |
+|--------|-------:|----------:|
+| base re-encoding | 171 | 44 |
+| over-segmentation | 49 | 6 |
+| eclipsis handling (gold marks no urú) | 2 | 0 |
+| lenition handling | 0 | 0 |
+| lexicon gap | 0 | 0 |
+| other | 0 | 0 |
+
+**base re-encoding**, 171. Layer 2 encodes the demutated base in isolation
+and segments it differently from how it segmented the surface form. This is
+the cost of decision 2 and it has nothing to do with the mutation itself: the
+urú is right in all 171.
+
+| word | gold | SP-ULM 8k | hybrid |
+|------|------|-----------|--------|
+| `bpota` | `b` / — / `ta` | `b \| po \| ta` → 1.00 | `b \| pota` → 0.50 |
+| `dtairbhe` | `d` / — / `e` | `d \| tair \| bh \| e` → 1.00 | `d \| tairbhe` → 0.50 |
+| `bpoiblíocht` | `b` / — / `íocht` | `b \| po \| ib \| l \| íocht` → 1.00 | `b \| poiblí \| ocht` → 0.50 |
+
+In every case the base is short enough that the 8k vocabulary holds it whole,
+so the suffix boundary the surface form happened to expose disappears.
+
+**over-segmentation**, 49. Two of the three examples are the empty-token
+defect described below, not a segmentation choice.
+
+| word | gold | SP-ULM 8k | hybrid |
+|------|------|-----------|--------|
+| `dtaisbeánfar` | `d` / `tais` / `far` | `d \| tais \| be \| án \| far` → 1.00 | `d \| ␀ \| tais \| be \| án \| far` → 0.83 |
+| `dtaisbeántar` | `d` / `tais` / `tar` | `d \| tais \| be \| án \| tar` → 1.00 | `d \| ␀ \| tais \| be \| án \| tar` → 0.83 |
+| `hais` | `h` / `ais` / `ais` | `h \| ais` → 1.00 | `h \| a \| is` → 0.67 |
+
+**eclipsis handling where the gold marks no urú**, 2. `nIarnród` and
+`nIarnróid`. Real eclipsis of a capitalised vowel, which the gold does not
+record, so the correct split is scored as an error. The same gap produces 3
+wins elsewhere.
+
+### The urú column on its own
+
+Of the 5,361 words the gold gives an urú:
+
+| | count | share |
+|---|---:|---:|
+| Scalpel recovers it exactly | 4,700 | 87.7% |
+| Scalpel proposes no split | 661 | 12.3% |
+| Scalpel proposes different material | **0** | 0% |
+
+Zero wrong splits, on the corrected data as on the old. The 661 misses are
+four specific things:
+
+| cause | count | examples |
+|-------|------:|----------|
+| `d'` and `D'`, no rule in Scalpel | 639 | `d'fhéach`, `D'eisigh`, `d'fharraigí` |
+| `n-` before a consonant, non-standard spelling | 15 | `n-dara`, `n-domhan`, `n-gliú` |
+| `t-` before a consonant, non-standard spelling | 3 | `t-samhradh`, `t-saoróg` |
+| gold error | 4 | `téad`, `tuartha`, `tiarratas`, `tiompar` |
+
+### Lenition and the lexicon gap cannot appear in the buckets
+
+Both are cases where layer 1 declines, and declining leaves the word
+byte-identical, so neither can change a score. They are the two reasons the
+layer passes up a word, reported separately:
+
+| | count |
+|---|---:|
+| lenition-only reading, discarded by design | 6,803 |
+| of those, where the gold marks an urú | **0** |
+| gold marks an urú and layer 1 has no reading | 661 |
+
+The zero is the number that matters. Discarding lenition on 6,803 words costs
+nothing measurable on this benchmark, because MoirfEolas never records
+lenition in the urú column. Decision 3 survives the correction intact.
+
+### Two gold standard problems, unchanged by the correction
+
+**Scalpel finds 60 urú the gold misses**, all eclipsis of a capitalised vowel
+written without a hyphen: `nAcht`, `nAfracánach`, `nIasacht`, `nUachtarán`.
+The `SPECIAL_PREFIXES` table in `affixes.py` maps the bare `n` to
+`["d","g","D","G"]`, so eclipsed vowels are reachable only through the
+hyphenated `n-` entry and these 60 fall through. They are real eclipsis and
+the hybrid is penalised for splitting them correctly.
+
+**Four rows mark an urú that is not there.** `téad` (rope), `tuartha`,
+`tiarratas` and `tiompar` are ordinary t-initial words read as `t` plus a
+vowel. The mirror of the same gap: the rule that catches `tAthair` has no
+case condition.
+
+Both lists are in `error_analysis.json` under `uru_column`.
+
+## A defect in her scoring code, left in place
+
+`remove_specials` strips a leading `▁` from the first token unconditionally.
+When sentencepiece emits `▁` as a standalone piece, which it does for
+`taisbeánfar` → `['▁', 'tais', 'be', 'án', 'far']`, the first token becomes
+the empty string, and an empty first token then fails `classify_uru` and
+`classify_prefix` on position.
+
+| setting | words with an empty token, baseline | hybrid |
+|---------|------------------------------------:|-------:|
+| SentencePieceULM 8k | 3,605 | 4,350 |
+| SentencePieceULM 43k | 1,259 | 1,611 |
+| SentencePieceBPE 8k | 113 | 140 |
+| Byte-BPE 8k | 107 | 134 |
+| UnigramLM, all sizes | 0 | 0 |
+| BPE and WordPiece, all sizes | 0 | 0 |
+
+**This is not fixed and not compensated for.** It is her code, it affects her
+published baseline exactly as much as it affects the hybrid, and patching it
+would mean the numbers above no longer compare to anything she has reported.
+It is raised with her instead.
+
+The practical consequence is that the Unigram comparison is the clean one and
+the SentencePieceULM comparison is not, which is the reason `UnigramLM 8k` is
+the row quoted against her reference even though `SentencePieceULM 8k` is the
+better headline. It also accounts for most of the 49 over-segmentation
+regressions above.
+
+## Decisions
+
+1. **Her code runs the metric, all of it.** `scoring.py`, `absorption.py`,
+   `tokenizers_io.py` and `moirfeolas.py` are imported from the clone. The
+   earlier round reimplemented `load_moirfeolas` to avoid pandas; pandas is
+   now installed in `~/venvs/tok` and her loader is used instead, so no part
+   of the metric is a reimplementation. Her package is reached by
+   `PYTHONPATH`, never `pip install -e .`, so nothing is written inside her
+   repository.
+
+2. **The back-off sees the base, not the surface.** For a split word layer 2
+   encodes `críochnaithe`, not `gcríochnaithe`. The alternative, encoding the
+   surface and cutting the first token, would leave layer 2 conditioning on a
+   mutated form it was trained to see whole. This costs 171 words at
+   SentencePieceULM 8k and 0 at Unigram 8k, measured above, and it is the one
+   decision here with a quantified price.
+
+3. **Lenition is analysed and discarded.** Scalpel reads `bhean` as
+   `Len:bean` and this round throws it away, on 6,803 words. MoirfEolas marks
+   no lenition, and the count of discarded lenition readings that the gold
+   would have credited is 0, so the discard is free on this benchmark. It is
+   an argument for extending the benchmark, not the tokenizer.
+
+4. **The `d'` rule stays unimplemented.** 639 of the 661 misses are `d'`.
+   `d'` is the past-tense verbal particle, not an initial mutation, and
+   `mutation_fst` is documented as a pure mutation layer with no lexicon and
+   no triggers. Adding a particle would be the first exception to that
+   contract, so it is left out on purpose rather than by oversight.
+
+5. **`--exclude-single-token` on, because that is what reproduces her row.**
+   It is a defensible choice on its own terms, since a word emitted whole
+   cannot show boundary behaviour, but the reason it is on here is
+   reproduction and nothing else. All-words numbers are reported alongside
+   throughout, and the matched-set control shows the flag does not confound
+   the hybrid delta.
+
+6. **The empty-token defect is reported, not patched.** See above.
+
+7. **`external/` is gitignored rather than vendored.** 207 MB, and the rule
+   for this round is that nothing in it is edited. The commit hash is the
+   anchor.
+
+## Reproducing every number in this file
+
+```bash
+cd ~/code/morphology
+
+# 1. the benchmark
+git clone https://github.com/jndkns01/tknzn4Irish external/tknzn4Irish
+git -C external/tknzn4Irish checkout 0f31695c5315ce213cf4d5986a9c9c002ed740ef
+
+# 2. the environment
+~/venvs/tok/bin/pip install pandas transformers   # tokenizers, sentencepiece already present
+
+# 3. layer 1
+c++ -std=c++17 -O2 -I$HOME/code/Scalpel -o ga_demutate \
+    tools/irish/ga_demutate_main.cpp $HOME/code/Scalpel/mutation_fst.cpp
+
+export PYTHONPATH=external/tknzn4Irish/src
+R=~/data/tok/results/irish/corrected
+
+# 4. the reproduction gate: her Unigram 8k row, 43.32
+~/venvs/tok/bin/python -m criochscore.cli score \
+    --moirfeolas external/tknzn4Irish/data/MoirfEolas/MoirfEolas.csv \
+    --tokenizer external/tknzn4Irish/tokenizers/UnigramLM/unigram_tokenizer_8k.json \
+    --model-type standard --no-special-token --exclude-single-token \
+    --output-dir $R/baselines
+
+# 5. her gaBERT row, 17.88, on the other protocol
+~/venvs/tok/bin/python -m criochscore.cli score \
+    --moirfeolas external/tknzn4Irish/data/MoirfEolas/MoirfEolas.csv \
+    --tokenizer DCU-NLP/bert-base-irish-cased-v1 --model-type huggingface \
+    --special-token "##" --do-lower-case --output-dir $R/baselines
+
+# 6. the hybrid and the ablations, three framings
+~/venvs/tok/bin/python scripts/moirfeolas_score.py \
+    --systems backoff hybrid fst_only identity \
+    --out $R/her_protocol.json --dump-per-word $R/per_word_her_protocol.json
+~/venvs/tok/bin/python scripts/moirfeolas_score.py --matched-set \
+    --systems backoff hybrid --out $R/matched_set.json
+~/venvs/tok/bin/python scripts/moirfeolas_score.py --all-words \
+    --systems backoff hybrid fst_only identity \
+    --out $R/all_words.json --dump-per-word $R/per_word_all_words.json
+
+# 7. absorption through her own CLI
+~/venvs/tok/bin/python scripts/moirfeolas_score.py \
+    --families UnigramLM --sizes 8k --systems backoff hybrid --summary-dir $R/summaries
+~/venvs/tok/bin/python -m criochscore.cli absorption \
+    --summary $R/summaries/backoff_UnigramLM_8k_morphological_summary.json \
+              $R/summaries/hybrid_UnigramLM_8k_morphological_summary.json \
+    --moirfeolas external/tknzn4Irish/data/MoirfEolas/MoirfEolas.csv --output-dir $R
+
+# 8. error analysis, and the pasteable email block
+~/venvs/tok/bin/python scripts/moirfeolas_error_analysis.py \
+    --per-word $R/per_word_all_words.json --out $R/error_analysis.json
+~/venvs/tok/bin/python scripts/moirfeolas_email.py
+```
+
+Total runtime about five minutes. Nothing is written inside
+`external/tknzn4Irish`; results go to `~/data/tok/results/irish/corrected/`
+and the only repository output is `docs/moirfeolas_results_email.txt`.
+
+## What did not reproduce, and what was guessed
+
+**Morfessor did not reproduce, at all.** No Morfessor model ships in
+`tknzn4Irish` and the repo has no code to train one. Her row
+(37.29 / 72.22 / 60.93 / 33.92 / 26.90 / 45.70 / 43.37 / 27.12) is taken on
+trust and is not compared against anything here. It is also the row whose
+`uru_only` figure, 72.22%, is most out of line with the other two at 50.00%,
+and `uru_only` has only 27 words in it, before or after the single-token
+filter. 72.22% is 19.5 of 27 and 50.00% is 13.5 of 27. A category that thin
+should not be used to separate systems, in her table or in the hybrid's.
+
+**Her three reference rows do not share a protocol.** Unigram 8k needs
+`--exclude-single-token`; gaBERT needs all-words plus `--do-lower-case`.
+Both reproduce exactly under those different settings, so this is not a
+rounding question. Which protocol she intends for the table is the first
+thing to ask her.
+
+**Guessed: model type and special-token marker per family.** Her repo does
+not record which `--model-type` and `--special-token` each shipped tokenizer
+needs. The table in `scripts/moirfeolas_score.py` was inherited from the
+earlier round. It is not really a guess for UnigramLM, since `standard` plus
+`--no-special-token` reproduces her row on eight figures, but for the other
+five families it is inference from the file format and the family name. If
+`Byte-BPE` were meant to be scored with `--special-token "Ġ"` the numbers
+would not change, because her byte decoder strips `Ġ` before
+`remove_specials` sees it, but SentencePieceBPE and WordPiece would move if
+their markers are wrong.
+
+**Guessed: which of the two CSVs she means.** `MoirfEolas.csv`, on the
+strength of an eight-of-eight match. `MoirfEolas_replicable.csv` gives 43.37%
+overall, close enough that the headline alone cannot tell them apart.
+
+**Guessed: that "Unigram 8k" means `UnigramLM`, not `SentencePieceULM`.**
+Both are unigram models and both ship at 8k. `UnigramLM` is the one that
+reproduces her number, so this one is settled by the data.
+
+**Not attempted: anything downstream.** This is intrinsic alignment only, the
+same scope as the paper. No language model was trained. Her proposed MT
+experiments are where the question of whether any of this matters downstream
+gets answered.
+
+**Unresolved: the 60 missed eclipsed capitalised vowels and the 4 spurious
+`t` rows.** Both look like a one-line change to `SPECIAL_PREFIXES` in
+`affixes.py`, and both penalise the hybrid for being right. Not patched,
+because nothing inside `external/tknzn4Irish` is edited in this round.
+
+## Open questions for Jane
+
+1. Which protocol do the 28 October numbers use? Unigram 8k reproduces only
+   with `--exclude-single-token` and gaBERT only without it and with
+   `--do-lower-case`. Should the table be regenerated on one setting?
+2. Can the Morfessor model, or the script that trains it, go in the repo? It
+   is the only reference row that cannot be checked.
+3. `remove_specials` can produce an empty first token on sentencepiece
+   models, 3,605 of 35,517 words at SentencePieceULM 8k, which then fails
+   every position-anchored comparison. Worth a patch, and if so the
+   SentencePiece rows in the paper would move.
+4. The 60 eclipsed capitalised vowels the gold misses, and the 4 rows that
+   mark an urú on an ordinary t-initial word. Both look like one case
+   condition in `SPECIAL_PREFIXES`. Worth a patch?
+5. Is the `n-dara` / `t-samhradh` spelling intentional in the corpus, or an
+   artifact of the ParaCrawl extraction? `ndara` and `tsamhradh` are the
+   Caighdeán forms, and these 18 words are the only misses that are not `d'`.
+6. Lenition: Scalpel analyses it already, and discarding it costs nothing
+   measurable because MoirfEolas does not mark it. Is extending MoirfEolas to
+   mark lenition something worth doing together, and does it belong in the
+   LoResLM submission or after it?
+7. She asked how Scalpel is built and whether it is Irish-only. It is not:
+   the mutation layer is Irish, the tokenizer and segmenter are language
+   neutral, and the morphological analyzer on top is English. See
+   `docs/BASELINES.md`.

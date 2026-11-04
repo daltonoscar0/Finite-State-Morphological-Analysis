@@ -68,26 +68,36 @@ def bucket(word, gold, base_row, hyb_row, split, cands):
     one back-off such a word cannot differ at all. If it does differ, the two
     systems have different back-offs and layer 1 is not the cause; that is
     ``backoff-difference`` and nothing finer can be attributed to it.
+
+    The urú column and the prefix/suffix columns can move in opposite
+    directions on the same word: layer 1 recovers the urú, and layer 2 then
+    segments the base worse than it segmented the surface. The bucket names
+    whichever movement explains the net change, so a word whose total went
+    down is never filed under a column that went up.
     """
     gold_uru = gold[0]
     b_status, _, b_tokens = base_row
     h_status, _, h_tokens = hyb_row
     uru_moved = b_status[0] != h_status[0]
-    pre_moved = b_status[1] != h_status[1]
-    suf_moved = b_status[2] != h_status[2]
+    affix_moved = b_status[1] != h_status[1] or b_status[2] != h_status[2]
+    uru_gain = SCORE[h_status[0]] - SCORE[b_status[0]]
+    net_gain = hyb_row[1] - base_row[1]
 
     if word not in split:
         return "backoff-difference"
-
     if not gold_uru:
         return "gold-missing-eclipsis"
+
+    # Attribute to the prefix/suffix columns when they are what moved the
+    # total: either the urú did not move, or it moved the other way.
+    if affix_moved and (not uru_moved or (uru_gain > 0) != (net_gain > 0)):
+        return ("over-segmentation" if len(h_tokens) > len(b_tokens)
+                else "base-reencoding")
     if uru_moved:
-        better_uru = SCORE[h_status[0]] > SCORE[b_status[0]]
-        return "eclipsis-recovered" if better_uru else "eclipsis-regressed"
-    if pre_moved or suf_moved:
-        if len(h_tokens) > len(b_tokens):
-            return "over-segmentation"
-        return "base-reencoding"
+        return "eclipsis-recovered" if uru_gain > 0 else "eclipsis-regressed"
+    if affix_moved:
+        return ("over-segmentation" if len(h_tokens) > len(b_tokens)
+                else "base-reencoding")
     return "other"
 
 

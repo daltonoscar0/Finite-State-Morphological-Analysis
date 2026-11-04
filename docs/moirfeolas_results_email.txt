@@ -1,0 +1,151 @@
+Scalpel Irish hybrid on the corrected MoirfEolas
+================================================
+
+Dataset:   tknzn4Irish data/MoirfEolas/MoirfEolas.csv
+Commit:    0f31695c5315ce213cf4d5986a9c9c002ed740ef
+Protocol:  criochscore score --exclude-single-token, which is what
+           reproduces your Unigram 8k row on all eight figures.
+System:    Scalpel's Irish initial-mutation FST (eclipsis, h-prefix,
+           t-prefix) as a pre-tokenizer, with a subword tokenizer from
+           your repo as the back-off. Lenition is analysed and
+           discarded, since MoirfEolas does not mark it.
+
+Columns:   overall / uru_only / prefix_only / suffix_only /
+           uru+prefix / uru+suffix / prefix+suffix / all_affixes
+
+Your numbers, reproduced here
+-----------------------------
+  Unigram 8k (yours, 28 Oct)         43.32 / 50.00 / 66.12 / 40.70 / 43.03 / 50.83 / 46.81 / 35.98
+  Unigram 8k (reproduced)            43.32 / 50.00 / 66.12 / 40.70 / 43.03 / 50.83 / 46.81 / 35.98
+
+  Eight of eight to two decimal places.
+
+  gaBERT (yours, 28 Oct)             17.88 / 50.00 / 29.21 / 17.27 /  8.57 / 14.61 / 22.06 /  9.61
+  gaBERT (reproduced)                17.88 / 50.00 / 29.21 / 17.27 /  8.57 / 14.61 / 22.06 /  9.61
+
+  gaBERT reproduces only WITHOUT --exclude-single-token and WITH
+  --do-lower-case. With --exclude-single-token it is 29.59 overall.
+  So the two rows in your table appear to come from different
+  protocols; the Unigram row is the one I matched.
+
+  Morfessor (yours, 28 Oct)          37.29 / 72.22 / 60.93 / 33.92 / 26.90 / 45.70 / 43.37 / 27.12
+  Not reproduced: no Morfessor model is in the repo.
+
+The hybrid, your protocol (--exclude-single-token)
+--------------------------------------------------
+  Unigram 8k, back-off alone         43.32 / 50.00 / 66.12 / 40.70 / 43.03 / 50.83 / 46.81 / 35.98
+  Unigram 8k + Scalpel mutation      45.46 / 77.78 / 66.12 / 40.70 / 66.67 / 63.00 / 46.81 / 50.17
+
+  SentencePieceULM 8k alone          42.84 / 50.00 / 63.21 / 42.59 / 26.52 / 36.10 / 48.28 / 29.09
+  SentencePieceULM 8k + Scalpel      47.11 / 77.78 / 63.21 / 42.60 / 65.00 / 64.71 / 48.28 / 52.39
+
+  Best hybrid setting is SentencePieceULM 8k at 47.11, against the best
+  conventional setting at 43.32.
+
+Every setting, overall CríochScore
+----------------------------------
+  family                size    alone  +Scalpel   delta
+  BPE                     8k    35.85     40.45   +4.59
+  BPE                    16k    31.68     36.63   +4.95
+  BPE                    32k    27.94     33.71   +5.77
+  BPE                    64k    23.47     31.92   +8.45
+  Byte-BPE                8k    38.19     43.50   +5.32
+  Byte-BPE               16k    33.61     39.08   +5.47
+  Byte-BPE               32k    29.36     35.29   +5.93
+  Byte-BPE               64k    26.67     33.80   +7.13
+  SentencePieceBPE        8k    38.05     43.36   +5.31
+  SentencePieceBPE       16k    33.39     38.88   +5.49
+  SentencePieceBPE       32k    28.95     34.90   +5.94
+  SentencePieceBPE       64k    26.00     33.52   +7.52
+  SentencePieceULM        8k    42.84     47.11   +4.27
+  SentencePieceULM       16k    37.51     42.29   +4.78
+  SentencePieceULM       32k    32.84     38.00   +5.16
+  SentencePieceULM       43k    31.71     36.97   +5.26
+  UnigramLM               8k    43.32     45.46   +2.14
+  UnigramLM              16k    39.04     41.95   +2.91
+  UnigramLM              32k    34.61     38.49   +3.88
+  UnigramLM              64k    33.96     37.80   +3.84
+  WordPiece               8k    35.23     41.17   +5.94
+  WordPiece              16k    31.99     37.84   +5.86
+  WordPiece              32k    28.71     34.81   +6.11
+  WordPiece              64k    25.63     33.16   +7.53
+
+  All 23 settings improve, by between 2.14 and 8.45 points.
+
+Ablations (all words, no --exclude-single-token, so every
+system shares one word set of 35,517)
+---------------------------------------------------------
+  no segmentation at all              0.00 /  0.00 /  0.00 /  0.00 /  0.00 /  0.00 /  0.00 /  0.00
+  mutation FST alone, no back-off     5.97 / 55.56 /  0.00 /  0.00 / 45.24 / 43.68 /  0.00 / 30.14
+  subword alone (Unigram 8k)         40.72 / 50.00 / 57.23 / 37.94 / 41.19 / 49.97 / 44.07 / 35.38
+  FST + subword (Unigram 8k)         42.85 / 77.78 / 57.23 / 37.94 / 66.67 / 63.00 / 44.07 / 50.17
+  subword alone (SP-ULM 8k)          40.81 / 50.00 / 57.23 / 40.39 / 25.00 / 35.21 / 46.20 / 28.30
+  FST + subword (SP-ULM 8k)          45.07 / 77.78 / 57.23 / 40.39 / 65.00 / 64.71 / 46.20 / 52.39
+
+  The FST alone reaches 5.97 because it has no suffix ability at all
+  and 96.9% of the data has a suffix. Neither layer carries the
+  result on its own.
+
+  --exclude-single-token cannot be used for this table: it would
+  score the FST-alone row on only the 4,760 words it splits.
+
+Absorption (your absorption.py, your protocol)
+----------------------------------------------
+  system                            uru uru map sfx ful sfx spl pfx ful pfx spl
+  Unigram 8k alone                45.97    3.32   32.85   24.05   35.69    4.34
+  Unigram 8k + Scalpel            12.26    0.00   33.05   23.93   33.86    4.34
+  SP-ULM 8k alone                 80.42   22.07   35.38   21.22   35.83    4.12
+  SP-ULM 8k + Scalpel             12.26    0.00   36.04   21.51   34.93    3.97
+
+  Urú absorption is the diagnostic the layer is built for, and it is
+  the same 12.26 for every back-off, because layer 1 does not depend
+  on layer 2. Prefix and suffix absorption barely move: the layer
+  does not touch those columns.
+
+The urú column on its own
+-------------------------
+  gold marks an urú on 5361 words:
+    recovered exactly        4700  87.7%
+    different material          0  0.0%
+    no split proposed         661  12.3%
+
+  Zero wrong splits. The layer declines rather than guesses.
+
+  The misses:
+    d' particle, no rule in Scalpel                   639
+    n- before a consonant, non-standard spelling       15
+    other                                               4
+    t- before a consonant, non-standard spelling        3
+
+  Two things that look like gold gaps rather than system errors:
+    60 words where Scalpel finds eclipsis the gold does not mark,
+    all eclipsis of a capitalised vowel written without a hyphen:
+      nAcht, nAchtanna, nAfracánach, nAglachlach, nAirmhitear, nAirí
+    4 words the gold gives an urú that is not there (téad, tuartha,
+    tiarratas, tiompar), ordinary t-initial words read as t + vowel.
+
+Where the hybrid differs from its back-off, word by word
+--------------------------------------------------------
+  Unigram 8k:         0 worse, 1807 better, 33710 identical
+  SentencePieceULM 8k: 222 worse, 3372 better, 31923 identical
+
+  With Unigram 8k as the back-off the layer does not make a single
+  word worse. With SentencePieceULM it makes 222 worse, and almost
+  all of those are the back-off re-segmenting the demutated base
+  differently from the surface form, not a mutation error.
+
+Two things you may want to know about the scoring code
+------------------------------------------------------
+  1. remove_specials on a sentencepiece model strips a leading '_'
+     from the first token unconditionally, so when sentencepiece
+     emits '_' as a standalone piece the first token becomes the
+     empty string. It then fails every position-anchored comparison.
+     3,605 of 35,517 words at SentencePieceULM 8k, in the baseline
+     as well as in my hybrid. UnigramLM is unaffected, which is why
+     I lead with the Unigram comparison.
+
+  2. MoirfEolas_replicable.csv scores 43.37 overall at Unigram 8k,
+     within rounding of your 43.32. It is a different table though,
+     and the category breakdown separates them: it has no uru_only
+     category at all. Worth checking the headline alone is never
+     used to identify which table a number came from.
