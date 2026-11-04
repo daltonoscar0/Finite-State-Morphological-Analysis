@@ -7,3 +7,7 @@ test_*
 # The tool tests are sources, not built binaries.
 !tools/test_*.py
 .DS_Store
+# Jane Adkins' tknzn4Irish, cloned not vendored: 207 MB, and it must not be
+# edited. docs/MOIRFEOLAS.md records the clone command and the commit hash.
+external/
+ga_demutate
