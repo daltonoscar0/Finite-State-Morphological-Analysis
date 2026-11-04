@@ -235,6 +235,10 @@ def main():
     ap.add_argument("--dump-per-word", default=None,
                     help="Write {system: {word: [statuses, score, tokens]}} here, "
                          "for the error analysis.")
+    ap.add_argument("--summary-dir", default=None,
+                    help="Write one <system>_morphological_summary.json per system, "
+                         "in the format her 'criochscore absorption' subcommand "
+                         "reads, so her absorption script can be run on it directly.")
     args = ap.parse_args()
 
     affix = load_moirfeolas(args.moirfeolas)
@@ -288,6 +292,11 @@ def main():
                     w: [list(statuses), s, r["_score_info"][w][3]]
                     for w, (statuses, s) in r["_per_word"].items()
                 }
+                if args.summary_dir:
+                    d = Path(args.summary_dir)
+                    d.mkdir(parents=True, exist_ok=True)
+                    (d / f"{key}_morphological_summary.json").write_text(
+                        json.dumps(r["_score_info"], ensure_ascii=False, indent=2))
                 del r["_per_word"], r["_score_info"]
                 out[key] = r
 
