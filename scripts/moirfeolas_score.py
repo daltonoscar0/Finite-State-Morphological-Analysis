@@ -63,8 +63,16 @@ FAMILIES = {
 
 SIZES = ["8k", "16k", "32k", "43k", "64k"]
 
-# Tags whose material MoirfEolas records in the urú column. "Len" is excluded.
+# Tags whose material MoirfEolas records in the urú column. "Len" is excluded:
+# the gold does not mark lenition, so emitting it can only cost.
 SPLIT_TAGS = ("Ecl", "HPref", "TPref")
+
+# Lenition last, so eclipsis still outranks it on a word that reads as both.
+SPLIT_TAGS_WITH_LENITION = SPLIT_TAGS + ("Len",)
+
+# The d' / D' verbal particle. Scalpel has no rule for it (decision 4) and
+# --simulate-dprime injects it as a synthetic reading to price that decision.
+DPRIME_TAG = "Dpart"
 
 
 # --------------------------------------------------------------------------
@@ -84,29 +92,79 @@ def demutate_all(words):
     return out
 
 
-def pick(word, candidates):
+def add_dprime(words, demut):
+    """Inject a synthetic d'/D' reading, to price decision 4.
+
+    d' is the past-tense verbal particle, not an initial mutation, so
+    mutation_fst has no rule for it. The gold records it in the urú column
+    anyway, and it is 639 of the 661 words layer 1 misses.
+    """
+    out = dict(demut)
+    for w in words:
+        if w[:2] in ("d'", "D'") and len(w) > 2:
+            out[w] = [(DPRIME_TAG, w[2:])] + list(out.get(w, []))
+    return out
+
+
+def pick(word, candidates, tags=SPLIT_TAGS, concatenative_only=True):
     """Choose one mutation reading, or None.
 
     Eclipsis outranks lenition: the over-generating analyser reads 'bhfear'
-    as both Len:bfear and Ecl:fear, and only the second is real. The base
-    must be a literal suffix of the surface, so the emitted material plus
-    the base reconstruct the word exactly.
+    as both Len:bfear and Ecl:fear, and only the second is real. Tags are
+    tried in the order given, so whichever list is passed sets the ranking.
+    A candidate that fails the concatenative test is skipped rather than
+    accepted, so a later candidate can still win its tag.
     """
-    for tag in SPLIT_TAGS:
+    for tag in tags:
         for cand_tag, base in candidates:
-            if cand_tag == tag and base and word.endswith(base) and len(base) < len(word):
-                return cand_tag, base
+            if cand_tag != tag or not base or base == word:
+                continue
+            marker, _, concat = marker_and_base(word, base)
+            if not marker or (concatenative_only and not concat):
+                continue
+            return cand_tag, base
     return None
 
 
-def mutation_splits(words, demut):
-    """word -> (tag, material, base) for every word layer 1 fires on."""
+def marker_and_base(word, base):
+    """Split ``word`` into the material a mutation added and the stem.
+
+    Eclipsis, h-prefix, t-prefix and d' all prepend, so the marker is a
+    genuine prefix and marker + base reconstructs the surface exactly.
+    Lenition does not: it inserts an h after the first consonant, so
+    'bhean' reads as 'bean' and the added 'h' sits at index 1. Trimming the
+    shared prefix and suffix finds the added material in both cases.
+
+    Returns ``(marker, base, concatenative)``. ``concatenative`` is True when
+    marker + base == word, which is what the plain hybrid requires.
+    """
+    i = 0
+    while i < len(word) and i < len(base) and word[i] == base[i]:
+        i += 1
+    j = 0
+    while (j < len(word) - i and j < len(base) - i
+           and word[len(word) - 1 - j] == base[len(base) - 1 - j]):
+        j += 1
+    marker = word[i:len(word) - j]
+    return marker, base, marker + base == word
+
+
+def mutation_splits(words, demut, tags=SPLIT_TAGS, concatenative_only=True):
+    """word -> (tag, marker, base) for every word layer 1 fires on.
+
+    With ``concatenative_only`` the marker must be a literal prefix of the
+    surface, so the token stream still concatenates back to the word. That
+    is the plain hybrid, and it excludes lenition by construction. Dropping
+    the constraint is the rearranging variant.
+    """
     split = {}
     for w in words:
-        chosen = pick(w, demut.get(w, []))
-        if chosen:
-            tag, base = chosen
-            split[w] = (tag, w[: len(w) - len(base)], base)
+        chosen = pick(w, demut.get(w, []), tags, concatenative_only)
+        if not chosen:
+            continue
+        tag, base = chosen
+        marker, base, _ = marker_and_base(w, base)
+        split[w] = (tag, marker, base)
     return split
 
 
@@ -136,11 +194,11 @@ def tl(mapping):
     return {w: (len(t), t) for w, t in mapping.items()}
 
 
-def system_backoff(words, encode, split):
+def system_backoff(words, encode, splits):
     return tl(encode(words))
 
 
-def system_hybrid(words, encode, split):
+def _layered(words, encode, split):
     # Encode every string the back-off actually sees: unsplit words whole,
     # split words by their base only. Decision 2 in docs/MOIRFEOLAS.md.
     to_encode = sorted({split[w][2] if w in split else w for w in words})
@@ -148,34 +206,56 @@ def system_hybrid(words, encode, split):
     out = {}
     for w in words:
         if w in split:
-            _, material, base = split[w]
-            out[w] = [material] + enc[base]
+            _, marker, base = split[w]
+            out[w] = [marker] + enc[base]
         else:
             out[w] = enc[w]
     return tl(out)
 
 
-def system_fst_only(words, encode, split):
+def system_hybrid(words, encode, splits):
+    return _layered(words, encode, splits["concat"])
+
+
+def system_hybrid_splinter(words, encode, splits):
+    """The rearranging variant: tokens no longer concatenate to the surface.
+
+    Lenition is an infix, so no boundary split can isolate it. Emitting the
+    added material as its own token and leaving the stem contiguous is the
+    only way to reach it, at the cost of the token stream no longer
+    reconstructing the word. MoirfEolas does not mark lenition yet, so
+    against the current gold this is expected to lose: see the write-up.
+    """
+    return _layered(words, encode, splits["splinter"])
+
+
+def system_fst_only(words, encode, splits):
+    split = splits["concat"]
     out = {}
     for w in words:
         if w in split:
-            _, material, base = split[w]
-            out[w] = [material, base]
+            _, marker, base = split[w]
+            out[w] = [marker, base]
         else:
             out[w] = [w]
     return tl(out)
 
 
-def system_identity(words, encode, split):
+def system_identity(words, encode, splits):
     return tl({w: [w] for w in words})
 
 
 SYSTEMS = {
     "backoff": system_backoff,
     "hybrid": system_hybrid,
+    "hybrid_splinter": system_hybrid_splinter,
     "fst_only": system_fst_only,
     "identity": system_identity,
 }
+
+# Systems that do not depend on the back-off, so they are scored once rather
+# than once per family.
+BACKOFF_FREE = ("fst_only", "identity")
 
 
 # --------------------------------------------------------------------------
@@ -239,6 +319,10 @@ def main():
                     help="Write one <system>_morphological_summary.json per system, "
                          "in the format her 'criochscore absorption' subcommand "
                          "reads, so her absorption script can be run on it directly.")
+    ap.add_argument("--simulate-dprime", action="store_true",
+                    help="Inject a synthetic d'/D' reading. Scalpel has no rule "
+                         "for the verbal particle (decision 4) and this prices "
+                         "that decision without shipping it.")
     args = ap.parse_args()
 
     affix = load_moirfeolas(args.moirfeolas)
@@ -246,9 +330,22 @@ def main():
     print(f"Loaded {len(words)} words from {args.moirfeolas}")
 
     demut = demutate_all(words)
-    split = mutation_splits(words, demut)
-    print(f"Layer 1 fires on {len(split)} / {len(words)} words "
-          f"({len(split) / len(words) * 100:.1f}%)")
+    tags = SPLIT_TAGS
+    if args.simulate_dprime:
+        demut = add_dprime(words, demut)
+        tags = (DPRIME_TAG,) + tags
+        print("Simulating the d' rule: synthetic readings injected.")
+
+    splits = {
+        "concat": mutation_splits(words, demut, tags),
+        "splinter": mutation_splits(
+            words, demut,
+            tags + ("Len",) if "Len" not in tags else tags,
+            concatenative_only=False),
+    }
+    for name, s in splits.items():
+        print(f"Layer 1 ({name}) fires on {len(s)} / {len(words)} words "
+              f"({len(s) / len(words) * 100:.1f}%)")
 
     mode = ("all words" if args.all_words else
             "matched set (back-off token count)" if args.matched_set else
@@ -265,18 +362,16 @@ def main():
                 continue
 
             # The back-off's own token counts, needed for the matched set.
-            backoff_tl = system_backoff(words, encode, split)
+            backoff_tl = system_backoff(words, encode, splits)
             keep = {w for w, v in backoff_tl.items() if v[0] > 1}
 
             for name in args.systems:
-                # fst_only and identity do not depend on the back-off, so
-                # they are scored once rather than once per family.
-                key = (f"{name}" if name in ("fst_only", "identity")
+                key = (f"{name}" if name in BACKOFF_FREE
                        else f"{name}_{family}_{size}")
                 if key in out:
                     continue
 
-                token_lens = SYSTEMS[name](words, encode, split)
+                token_lens = SYSTEMS[name](words, encode, splits)
                 if args.all_words:
                     pass
                 elif args.matched_set:
@@ -284,7 +379,7 @@ def main():
                 else:
                     token_lens = exclude_single(token_lens)
 
-                label = (name if name in ("fst_only", "identity")
+                label = (name if name in BACKOFF_FREE
                          else f"{name} {family} {size}")
                 r = score(token_lens, affix, label)
                 report(r)

@@ -29,7 +29,7 @@ LABEL_W = 34
 
 
 def fmt(label, values):
-    cells = " / ".join("  n/a" if v is None else f"{v:>5.2f}" for v in values)
+    cells = " / ".join("   n/a" if v is None else f"{v:>6.2f}" for v in values)
     return f"  {label:<{LABEL_W}} {cells}"
 
 
@@ -42,11 +42,30 @@ def block(title, lines):
     return "\n".join([title, "-" * width, *lines, ""])
 
 
+def len_rows():
+    """Summarise the lenition export, so the email cannot drift from the CSV."""
+    import collections
+    import csv as _csv
+    path = RESULTS / "lenition_candidates.csv"
+    with open(path, encoding="utf-8") as f:
+        rows = list(_csv.DictReader(f))
+    cons = collections.Counter(r["lenited"].lower() for r in rows)
+    return {
+        "n": len(rows),
+        "in_corpus": sum(int(r["base_in_corpus"]) for r in rows),
+        "in_mf": sum(int(r["base_in_moirfeolas"]) for r in rows),
+        "ambiguous": sum(1 for r in rows if r["also_reads_as"]),
+        "gold_uru": sum(1 for r in rows if r["gold_uru"]),
+        "by_cons": sorted(cons.items(), key=lambda x: -x[1]),
+    }
+
+
 def main():
     her = json.loads((RESULTS / "her_protocol.json").read_text())
     allw = json.loads((RESULTS / "all_words.json").read_text())
     matched = json.loads((RESULTS / "matched_set.json").read_text())
     err = json.loads((RESULTS / "error_analysis.json").read_text())
+    dprime = json.loads((RESULTS / "dprime_her_protocol.json").read_text())
 
     header = (
         "Scalpel Irish hybrid on the corrected MoirfEolas\n"
@@ -193,6 +212,73 @@ def main():
          "  word worse. With SentencePieceULM it makes 222 worse, and almost",
          "  all of those are the back-off re-segmenting the demutated base",
          "  differently from the surface form, not a mutation error.",
+         ]))
+
+    # 7b. Lenition, which is the thing you said you wanted.
+    lenr = len_rows()
+    out.append(block(
+        "Lenition: what Scalpel already has",
+        ["  Scalpel analyses lenition today and the hybrid throws it away,",
+         "  because MoirfEolas has no column that can credit it. The analysis",
+         f"  covers {lenr['n']} of the 35,517 words ({lenr['n'] / 35517 * 100:.1f}%).",
+         "",
+         f"    stem occurs on its own in data/GA   {lenr['in_corpus']:>6}  "
+         f"{lenr['in_corpus'] / lenr['n'] * 100:.1f}%",
+         f"    stem is itself a MoirfEolas row     {lenr['in_mf']:>6}  "
+         f"{lenr['in_mf'] / lenr['n'] * 100:.1f}%",
+         f"    word has a competing reading        {lenr['ambiguous']:>6}  "
+         f"{lenr['ambiguous'] / lenr['n'] * 100:.1f}%",
+         f"    word already carries a gold uru     {lenr['gold_uru']:>6}",
+         "",
+         "  Lenited consonants, which come out as exactly the nine that can",
+         "  take a seimhiu and nothing else:",
+         "    " + ", ".join(f"{c} {k}" for c, k in lenr["by_cons"]),
+         "",
+         "  I have attached lenition_candidates.csv: one row per word with",
+         "  the stem, the lenited consonant, and the two attestation flags",
+         "  above, so the readings can be checked in bulk rather than by eye.",
+         "",
+         "  Splitting lenition costs score against the current gold, which is",
+         "  the point. Tokens no longer concatenate back to the surface,",
+         "  since lenition is an infix: 'bhean' is 'h' plus 'bean', not a",
+         "  boundary. This is the Splinter-style rearrangement:",
+         "",
+         fmt("Unigram 8k + Scalpel, no lenition", values(her["hybrid_UnigramLM_8k"])),
+         fmt("Unigram 8k + Scalpel, lenition too",
+             values(her["hybrid_splinter_UnigramLM_8k"])),
+         "",
+         "  Overall falls 45.46 to 44.32. Every urú category is unchanged to",
+         "  two decimals and the entire loss is in suffix_only, 40.70 to",
+         f"  38.95, because none of the {lenr['n']} lenited words carries a gold",
+         "  urú or a gold prefix. So the cost is pure unrewarded work: the",
+         "  split is linguistically right and the gold has nowhere to put it.",
+         "",
+         "  The cost scales with vocabulary size, smallest where it matters:",
+         "    Unigram      8k -1.14   16k -1.30   32k -1.44   64k -1.54",
+         "    BPE          8k -0.78   16k -1.57   32k -2.90   64k -5.57",
+         "",
+         "  If MoirfEolas gains a lenition column, the marker is recovered",
+         "  exactly on all of these by construction, so this is the number",
+         "  that should move most.",
+         ]))
+
+    # 7c. The d' rule.
+    out.append(block(
+        "The d' particle, measured but not shipped",
+        ["  639 of the 661 urú misses are d' / D'. Scalpel has no rule for it",
+         "  because d' is the past-tense verbal particle, not an initial",
+         "  mutation, and the FST is documented as a pure mutation layer.",
+         "  Simulating the one rule that would catch it:",
+         "",
+         fmt("Unigram 8k + Scalpel", values(her["hybrid_UnigramLM_8k"])),
+         fmt("Unigram 8k + Scalpel + d'", values(dprime["hybrid_UnigramLM_8k"])),
+         fmt("SP-ULM 8k + Scalpel", values(her["hybrid_SentencePieceULM_8k"])),
+         fmt("SP-ULM 8k + Scalpel + d'", values(dprime["hybrid_SentencePieceULM_8k"])),
+         "",
+         "  Worth +0.52 and +0.47, and it takes uru_only to 100.00. Left out",
+         "  on purpose rather than by oversight, but if you think the gold is",
+         "  right to record d' in the urú column then the argument for keeping",
+         "  it out of a mutation layer gets weaker.",
          ]))
 
     # 8. Caveats.

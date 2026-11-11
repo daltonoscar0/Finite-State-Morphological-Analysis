@@ -42,8 +42,9 @@ New results for this round go to `~/data/tok/results/irish/corrected/`.
 They reimplemented her MoirfEolas loader and they expected the clone at
 `tools/irish/tknzn4Irish`, so both their metric and their paths are wrong for
 this round. They are replaced by `scripts/moirfeolas_score.py`,
-`scripts/moirfeolas_error_analysis.py` and `scripts/moirfeolas_email.py`,
-which is also where the rule for this round puts wrappers around her code.
+`scripts/moirfeolas_error_analysis.py`, `scripts/moirfeolas_email.py` and
+`scripts/irish_lenition_candidates.py`, which is also where the rule for this
+round puts wrappers around her code.
 `tools/irish/ga_demutate_main.cpp`, the bridge to Scalpel's FST, is kept
 unchanged.
 
@@ -603,12 +604,12 @@ R=~/data/tok/results/irish/corrected
 
 # 6. the hybrid and the ablations, three framings
 ~/venvs/tok/bin/python scripts/moirfeolas_score.py \
-    --systems backoff hybrid fst_only identity \
+    --systems backoff hybrid hybrid_splinter fst_only identity \
     --out $R/her_protocol.json --dump-per-word $R/per_word_her_protocol.json
 ~/venvs/tok/bin/python scripts/moirfeolas_score.py --matched-set \
     --systems backoff hybrid --out $R/matched_set.json
 ~/venvs/tok/bin/python scripts/moirfeolas_score.py --all-words \
-    --systems backoff hybrid fst_only identity \
+    --systems backoff hybrid hybrid_splinter fst_only identity \
     --out $R/all_words.json --dump-per-word $R/per_word_all_words.json
 
 # 7. absorption through her own CLI
@@ -619,11 +620,23 @@ R=~/data/tok/results/irish/corrected
               $R/summaries/hybrid_UnigramLM_8k_morphological_summary.json \
     --moirfeolas external/tknzn4Irish/data/MoirfEolas/MoirfEolas.csv --output-dir $R
 
-# 8. error analysis, and the pasteable email block
+# 8. the d' rule, priced in both frames
+~/venvs/tok/bin/python scripts/moirfeolas_score.py --simulate-dprime \
+    --systems hybrid --out $R/dprime_her_protocol.json
+~/venvs/tok/bin/python scripts/moirfeolas_score.py --simulate-dprime --all-words \
+    --systems hybrid --out $R/dprime_all_words.json
+
+# 9. the lenition export for Jane
+~/venvs/tok/bin/python scripts/irish_lenition_candidates.py
+
+# 10. error analysis, and the pasteable email block
 ~/venvs/tok/bin/python scripts/moirfeolas_error_analysis.py \
     --per-word $R/per_word_all_words.json --out $R/error_analysis.json
 ~/venvs/tok/bin/python scripts/moirfeolas_email.py
 ```
+
+Step 6 must include `hybrid_splinter` in `--systems` for steps 9 and 10 to
+have the lenition numbers available.
 
 Total runtime about five minutes. Nothing is written inside
 `external/tknzn4Irish`; results go to `~/data/tok/results/irish/corrected/`
@@ -700,3 +713,118 @@ because nothing inside `external/tknzn4Irish` is edited in this round.
    the mutation layer is Irish, the tokenizer and segmenter are language
    neutral, and the morphological analyzer on top is English. See
    `docs/BASELINES.md`.
+
+## Lenition, and the rearranging variant
+
+Added 10 November, after Jane said she wants to account for lenition in the
+dataset.
+
+### Why lenition cannot be a boundary split
+
+Eclipsis, the h-prefix, the t-prefix and `d'` all prepend material, so the
+marker is a genuine prefix and `marker + base` reconstructs the surface
+exactly. Lenition does not: it inserts an `h` after the first consonant, so
+`bhean` reads as `bean` with the `h` sitting at index 1. No boundary split can
+isolate it, which is why `pick()` required `word.endswith(base)` and why
+lenition fell out of the hybrid by construction rather than by choice.
+
+`marker_and_base()` trims the shared prefix and the shared suffix to find the
+added material in both cases, and reports whether `marker + base == word`.
+The `hybrid_splinter` system drops that constraint, so its token stream no
+longer concatenates back to the word. That is the Splinter-style
+rearrangement: move the mutation marker out, leave the stem contiguous.
+
+`hybrid_splinter` is a strict superset of `hybrid`. All 4,760 concatenative
+readings are preserved identically and 6,803 lenition-only words are added,
+for 11,563 of 35,517 (32.6%).
+
+### What it costs against the current gold
+
+```bash
+~/venvs/tok/bin/python scripts/moirfeolas_score.py \
+    --systems backoff hybrid hybrid_splinter fst_only identity \
+    --out ~/data/tok/results/irish/corrected/her_protocol.json
+```
+
+| system | overall | uru_only | prefix_only | suffix_only | uru+prefix | uru+suffix | prefix+suffix | all_affixes |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Unigram 8k + Scalpel | 45.46 | 77.78 | 66.12 | 40.70 | 66.67 | 63.00 | 46.81 | 50.17 |
+| Unigram 8k + Scalpel + lenition | 44.32 | 77.78 | 66.12 | **38.95** | 66.67 | 63.00 | 46.81 | 50.17 |
+
+Every column is identical to two decimals except `suffix_only`, which falls
+1.75 points. That is not a coincidence and it is the whole argument: **none of
+the 6,803 lenited words carries a gold urú or a gold prefix**, so the only
+column that can move is the suffix one, and it moves down because the stem is
+now encoded in isolation. The split is linguistically correct and the gold has
+nowhere to record it.
+
+The cost by setting, `hybrid` to `hybrid_splinter`:
+
+| family | 8k | 16k | 32k | 43k | 64k |
+|--------|---:|----:|----:|----:|----:|
+| UnigramLM | −1.14 | −1.30 | −1.44 | | −1.54 |
+| SentencePieceULM | −0.96 | −1.21 | −1.23 | −1.36 | |
+| SentencePieceBPE | −0.72 | −1.45 | −2.63 | | −4.65 |
+| Byte-BPE | −0.70 | −1.44 | −2.74 | | −4.40 |
+| WordPiece | −0.72 | −1.49 | −3.01 | | −4.95 |
+| BPE | −0.78 | −1.57 | −2.90 | | −5.57 |
+
+Smallest at 8k, which is the setting that matters, and growing with
+vocabulary size because a larger vocabulary is more likely to hold the stem
+whole and therefore has more suffix boundary to lose.
+
+This is the number to watch if MoirfEolas gains a lenition column. The marker
+is recovered exactly on all 6,803 by construction, so a column that credits
+it would turn the largest measured cost in this file into the largest gain.
+
+### The candidate export
+
+```bash
+~/venvs/tok/bin/python scripts/irish_lenition_candidates.py
+```
+
+Writes `~/data/tok/results/irish/corrected/lenition_candidates.csv`, one row
+per lenition reading, for checking in bulk and for seeding the column.
+
+| | count | share |
+|---|---:|---:|
+| lenition candidates | 6,803 | 19.2% of the table |
+| stem occurs on its own in `data/GA` | 4,245 | 62.4% |
+| stem is itself a MoirfEolas row | 3,005 | 44.2% |
+| word has a competing reading | 0 | 0% |
+| word already carries a gold urú | 0 | 0% |
+
+Lenited consonants: `c` 1,855, `f` 757, `t` 733, `b` 634, `d` 626, `m` 626,
+`s` 589, `g` 513, `p` 470. Exactly the nine that can take a séimhiú and
+nothing else, which is the cheapest available check that the export is not
+over-generating.
+
+Zero ambiguous readings: every word that also had an eclipsis reading was
+taken by the ordinary ranking first, so the export and the scored system
+never disagree about which words are lenited.
+
+## The `d'` rule, priced under her protocol
+
+`docs/IRISH.md` measured this at 45.07 to 45.52, which is the all-words frame
+and not comparable to anything in her table. Re-measured:
+
+```bash
+~/venvs/tok/bin/python scripts/moirfeolas_score.py --simulate-dprime \
+    --systems hybrid --out ~/data/tok/results/irish/corrected/dprime_her_protocol.json
+```
+
+| system | overall | uru_only | uru+prefix | uru+suffix | all_affixes |
+|---|---:|---:|---:|---:|---:|
+| Unigram 8k + Scalpel | 45.46 | 77.78 | 66.67 | 63.00 | 50.17 |
+| Unigram 8k + Scalpel + `d'` | **45.98** | 100.00 | 73.81 | 66.05 | 52.95 |
+| SP-ULM 8k + Scalpel | 47.11 | 77.78 | 65.00 | 64.71 | 52.39 |
+| SP-ULM 8k + Scalpel + `d'` | **47.58** | 100.00 | 71.43 | 67.45 | 55.04 |
+
+Worth +0.52 and +0.47, and it takes `uru_only` to 100.00. The all-words run
+of the same flag gives 45.52 for SP-ULM 8k, which is the old figure to the
+digit, so the simulation matches what the earlier round did.
+
+Decision 4 stands: `d'` is a verbal particle, not an initial mutation, and
+`mutation_fst` is a pure mutation layer. But the gold records it in the urú
+column, and if Jane considers that correct then the case for keeping it out
+of a mutation layer is weaker than it looked. Worth settling on the call.
