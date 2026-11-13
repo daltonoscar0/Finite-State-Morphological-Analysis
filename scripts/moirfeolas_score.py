@@ -270,11 +270,32 @@ def exclude_single(token_lens):
 def score(token_lens, affix, label):
     score_info = find_morphological_info(token_lens, affix)
     per_word, final, _, averages = calculate_morphological_score(score_info)
+
+    # How many words sit behind each category average. The averages alone
+    # hide that uru_only is 27 words and suffix_only is twenty thousand.
+    counts = {name: 0 for name in CATEGORIES}
+    for word in score_info:
+        uru, prefix, suffix = affix[word]
+        key = {(1, 0, 0): "uru_only", (0, 1, 0): "prefix_only",
+               (0, 0, 1): "suffix_only", (1, 1, 0): "uru+prefix",
+               (1, 0, 1): "uru+suffix", (0, 1, 1): "prefix+suffix",
+               (1, 1, 1): "all_affixes"}.get(
+                   (int(bool(uru)), int(bool(prefix)), int(bool(suffix))))
+        if key:
+            counts[key] += 1
+
+    # remove_specials turns a standalone sentencepiece '_' piece into an
+    # empty first token, which then fails every position-anchored test.
+    # Her behaviour, not corrected here: see docs/MOIRFEOLAS.md.
+    n_empty = sum(1 for _, toks in token_lens.values() if any(t == "" for t in toks))
+
     return {
         "label": label,
         "n_evaluated": len(score_info),
         "overall": final * 100,
         "categories": {k: (v * 100 if v is not None else None) for k, v in averages.items()},
+        "category_counts": counts,
+        "n_empty_token_words": n_empty,
         "absorption": compute_absorption(score_info, affix),
         "_per_word": per_word,
         "_score_info": score_info,
