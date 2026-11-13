@@ -828,3 +828,20 @@ Decision 4 stands: `d'` is a verbal particle, not an initial mutation, and
 `mutation_fst` is a pure mutation layer. But the gold records it in the urú
 column, and if Jane considers that correct then the case for keeping it out
 of a mutation layer is weaker than it looked. Worth settling on the call.
+
+## Pre-call gate, 12 November 2026
+
+Re-verified before the 13 November call, with `ga_demutate` rebuilt from
+`~/code/Scalpel` at `fac4da4` rather than reusing the binary from the earlier
+session. `external/tknzn4Irish` is at `0f31695`, clean, and the working tree
+is clean.
+
+| | expected | got |
+|---|---:|---:|
+| Unigram 8k alone | 43.32 | 43.32 |
+| Unigram 8k + Scalpel | 45.46 | 45.46 |
+| SP-ULM 8k + Scalpel | 47.11 | 47.11 |
+| `hybrid_splinter` Unigram 8k | 44.32 | 44.32 |
+| Unigram 8k + Scalpel + `d'` | 45.98 | 45.98 |
+
+Five of five.
