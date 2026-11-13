@@ -99,6 +99,7 @@ test: all
 # tools need python3 anyway, so a caller touching them runs this as well.
 test-tools:
 	python3 tools/test_eval_lexicon.py
+	python3 tools/test_ga_mutation_split.py
 
 clean:
 	rm -f analyzer test_infra test_lex test_analyzer test_seg

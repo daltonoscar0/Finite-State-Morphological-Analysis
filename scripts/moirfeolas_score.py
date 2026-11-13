@@ -26,13 +26,30 @@ credit. See docs/MOIRFEOLAS.md.
 """
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO = ROOT / "external" / "tknzn4Irish"
 sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(ROOT / "scripts"))
+
+# Layer 1 lives in its own standard-library-only module so the split algebra
+# and its inverse can be tested without her scorer or pandas installed.
+from ga_mutation_split import (                                 # noqa: E402,F401
+    BRIDGE,
+    DPRIME_TAG,
+    SPLIT_TAGS,
+    SPLIT_TAGS_WITH_LENITION,
+    VOWELS,
+    add_dprime,
+    demutate_all,
+    marker_and_base,
+    mutation_splits,
+    pick,
+    rebuild,
+    rebuild_untagged,
+)
 
 from criochscore.absorption import compute_absorption          # noqa: E402
 from criochscore.moirfeolas import load_moirfeolas             # noqa: E402
@@ -47,7 +64,6 @@ from criochscore.tokenizers_io import (                        # noqa: E402
 )
 
 MOIRFEOLAS = REPO / "data" / "MoirfEolas" / "MoirfEolas.csv"
-BRIDGE = ROOT / "ga_demutate"
 RESULTS = Path.home() / "data" / "tok" / "results" / "irish" / "corrected"
 
 # The six families she ships, with the model type and special-token marker
@@ -62,111 +78,6 @@ FAMILIES = {
 }
 
 SIZES = ["8k", "16k", "32k", "43k", "64k"]
-
-# Tags whose material MoirfEolas records in the urú column. "Len" is excluded:
-# the gold does not mark lenition, so emitting it can only cost.
-SPLIT_TAGS = ("Ecl", "HPref", "TPref")
-
-# Lenition last, so eclipsis still outranks it on a word that reads as both.
-SPLIT_TAGS_WITH_LENITION = SPLIT_TAGS + ("Len",)
-
-# The d' / D' verbal particle. Scalpel has no rule for it (decision 4) and
-# --simulate-dprime injects it as a synthetic reading to price that decision.
-DPRIME_TAG = "Dpart"
-
-
-# --------------------------------------------------------------------------
-# Layer 1: Scalpel's mutation FST, via the bridge binary.
-# --------------------------------------------------------------------------
-
-def demutate_all(words):
-    """word -> [(tag, base), ...], in the analyser's own candidate order."""
-    proc = subprocess.run(
-        [str(BRIDGE)], input="\n".join(words),
-        capture_output=True, text=True, check=True,
-    )
-    out = {}
-    for line in proc.stdout.splitlines():
-        parts = line.split("\t")
-        out[parts[0]] = [tuple(c.split(":", 1)) for c in parts[1:]]
-    return out
-
-
-def add_dprime(words, demut):
-    """Inject a synthetic d'/D' reading, to price decision 4.
-
-    d' is the past-tense verbal particle, not an initial mutation, so
-    mutation_fst has no rule for it. The gold records it in the urú column
-    anyway, and it is 639 of the 661 words layer 1 misses.
-    """
-    out = dict(demut)
-    for w in words:
-        if w[:2] in ("d'", "D'") and len(w) > 2:
-            out[w] = [(DPRIME_TAG, w[2:])] + list(out.get(w, []))
-    return out
-
-
-def pick(word, candidates, tags=SPLIT_TAGS, concatenative_only=True):
-    """Choose one mutation reading, or None.
-
-    Eclipsis outranks lenition: the over-generating analyser reads 'bhfear'
-    as both Len:bfear and Ecl:fear, and only the second is real. Tags are
-    tried in the order given, so whichever list is passed sets the ranking.
-    A candidate that fails the concatenative test is skipped rather than
-    accepted, so a later candidate can still win its tag.
-    """
-    for tag in tags:
-        for cand_tag, base in candidates:
-            if cand_tag != tag or not base or base == word:
-                continue
-            marker, _, concat = marker_and_base(word, base)
-            if not marker or (concatenative_only and not concat):
-                continue
-            return cand_tag, base
-    return None
-
-
-def marker_and_base(word, base):
-    """Split ``word`` into the material a mutation added and the stem.
-
-    Eclipsis, h-prefix, t-prefix and d' all prepend, so the marker is a
-    genuine prefix and marker + base reconstructs the surface exactly.
-    Lenition does not: it inserts an h after the first consonant, so
-    'bhean' reads as 'bean' and the added 'h' sits at index 1. Trimming the
-    shared prefix and suffix finds the added material in both cases.
-
-    Returns ``(marker, base, concatenative)``. ``concatenative`` is True when
-    marker + base == word, which is what the plain hybrid requires.
-    """
-    i = 0
-    while i < len(word) and i < len(base) and word[i] == base[i]:
-        i += 1
-    j = 0
-    while (j < len(word) - i and j < len(base) - i
-           and word[len(word) - 1 - j] == base[len(base) - 1 - j]):
-        j += 1
-    marker = word[i:len(word) - j]
-    return marker, base, marker + base == word
-
-
-def mutation_splits(words, demut, tags=SPLIT_TAGS, concatenative_only=True):
-    """word -> (tag, marker, base) for every word layer 1 fires on.
-
-    With ``concatenative_only`` the marker must be a literal prefix of the
-    surface, so the token stream still concatenates back to the word. That
-    is the plain hybrid, and it excludes lenition by construction. Dropping
-    the constraint is the rearranging variant.
-    """
-    split = {}
-    for w in words:
-        chosen = pick(w, demut.get(w, []), tags, concatenative_only)
-        if not chosen:
-            continue
-        tag, base = chosen
-        marker, base, _ = marker_and_base(w, base)
-        split[w] = (tag, marker, base)
-    return split
-
 
 # --------------------------------------------------------------------------
 # Layer 2: a conventional tokenizer, loaded and encoded by her code.

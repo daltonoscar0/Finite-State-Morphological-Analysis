@@ -845,3 +845,71 @@ is clean.
 | Unigram 8k + Scalpel + `d'` | 45.98 | 45.98 |
 
 Five of five.
+
+## Round trip: is the splinter split lossless?
+
+Added 12 November. A Splinter-style rearrangement is only legitimate if a
+decoder can undo it, so this is the first thing that will be asked about
+`hybrid_splinter`. The plain hybrid is lossless by construction, because
+`pick()` refuses any reading whose marker is not a literal prefix.
+`hybrid_splinter` drops that constraint to reach lenition, so for that scheme
+losslessness is a claim and not a guarantee.
+
+The inverse lives in `scripts/ga_mutation_split.py`, which is now a
+standard-library-only module holding all of layer 1 so the split algebra can
+be tested without her scorer or pandas installed:
+
+```python
+def rebuild(tag, marker, base):
+    if tag == "Len":
+        return base[:1] + marker + base[1:]   # the h goes back inside
+    return marker + base                      # everything else prepends
+```
+
+```bash
+~/venvs/tok/bin/python scripts/moirfeolas_roundtrip.py
+```
+
+| scheme | tag | words | rebuilt exactly | failures |
+|--------|-----|------:|----------------:|---------:|
+| concat | Ecl | 3,195 | 3,195 | 0 |
+| concat | HPref | 1,066 | 1,066 | 0 |
+| concat | TPref | 499 | 499 | 0 |
+| concat | **total** | **4,760** | **4,760** | **0** |
+| splinter | Ecl | 3,195 | 3,195 | 0 |
+| splinter | HPref | 1,066 | 1,066 | 0 |
+| splinter | TPref | 499 | 499 | 0 |
+| splinter | Len | 6,803 | 6,803 | 0 |
+| splinter | **total** | **11,563** | **11,563** | **0** |
+
+16,323 round trips, zero failures, no exceptions to list.
+
+### Does the inverse need the tag?
+
+No, on this data. The only ambiguous marker is `h`: an h-prefix sits before a
+vowel (`hainm` is `h` + `ainm`) and a lenition `h` sits after a consonant
+(`bhean` is `bean` with an `h` after the `b`). Every other marker belongs to
+exactly one mutation, since lenition's marker is always `h`. Reading the first
+letter of the stem separates the two cases:
+
+```python
+def rebuild_untagged(marker, base):
+    if marker == "h" and base and base[0] not in VOWELS:
+        return base[:1] + marker + base[1:]
+    return marker + base
+```
+
+That also recovers 11,563 of 11,563, and the discriminator is genuinely
+exercised: 1,066 h-prefixes and 6,803 lenitions, all with marker `h`, are
+separated only by the stem's first letter.
+
+**The conservative reading is still to carry the tag.** The untagged inverse
+works because of an Irish phonological rule, that lenition applies to
+consonants and the h-prefix to vowels, and not because of any property of the
+encoding. A stem that began with a vowel and took lenition, or a loanword
+spelled outside the Caighdeán, would break it silently. The tag costs one
+symbol and removes the assumption, so `hybrid_splinter` emits and relies on
+the tag; `rebuild_untagged` exists to answer the question, not to be used.
+
+Covered by `tools/test_ga_mutation_split.py`, 25 tests, standard library only,
+wired into `make test-tools`.
