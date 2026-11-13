@@ -629,10 +629,25 @@ R=~/data/tok/results/irish/corrected
 # 9. the lenition export for Jane
 ~/venvs/tok/bin/python scripts/irish_lenition_candidates.py
 
-# 10. error analysis, and the pasteable email block
+# 10. error analysis
 ~/venvs/tok/bin/python scripts/moirfeolas_error_analysis.py \
     --per-word $R/per_word_all_words.json --out $R/error_analysis.json
-~/venvs/tok/bin/python scripts/moirfeolas_email.py
+
+# 11. gaBERT under all four protocol combinations
+~/venvs/tok/bin/python scripts/moirfeolas_gabert.py
+
+# 12. the round trip, and the patched-scorer comparison
+~/venvs/tok/bin/python scripts/moirfeolas_roundtrip.py
+~/venvs/tok/bin/python scripts/moirfeolas_patched_scorer.py
+
+# 13. the two written outputs, both generated from the JSON above
+~/venvs/tok/bin/python scripts/moirfeolas_email.py            # long version
+~/venvs/tok/bin/python scripts/moirfeolas_email.py --short    # one screen
+~/venvs/tok/bin/python scripts/moirfeolas_callsheet.py        # docs/CALL_2026-11-13.md
+~/venvs/tok/bin/python scripts/moirfeolas_lenition_sample.py  # docs/lenition_sample.md
+
+# tests, standard library only, no venv needed
+make test-tools
 ```
 
 Step 6 must include `hybrid_splinter` in `--systems` for steps 9 and 10 to
@@ -1077,3 +1092,55 @@ counts above are the real measurement of what it does.
 ```bash
 ~/venvs/tok/bin/python scripts/moirfeolas_patched_scorer.py
 ```
+
+## Pre-call session, 12 November: what failed and what was guessed
+
+Everything asked for in this round completed. The items below are the places
+where a judgement was made rather than a fact established.
+
+**Guessed: that `--exclude-single-token` is the protocol to use.** It
+reproduces her Unigram row on eight of eight figures, so it is right for that
+row. It is also contradicted by her gaBERT row, which needs the opposite.
+Scoring the hybrid under the Unigram protocol is a choice, and it is the
+first question on the call sheet.
+
+**Guessed: that `d'fh` should keep its special case under the case-sensitive
+comparison.** `_apply_special_prefixes` previously folded case on both sides,
+and the `d'` entry lists `fh`, `Fh` and `FH` but not `fH`. The patch leaves
+that as it is, on the grounds that three explicit spellings is the author
+signalling intent. A word spelled `d'fHéach` would now miss, and none occurs
+in the data.
+
+**Guessed: that unknown tags in a `--layer1 tsv` file should be dropped.**
+The alternative is a mapping table from another analyser's categories onto
+Scalpel's, which would be friendlier and would also quietly decide what a
+second analyser means by each of its labels. Dropping and reporting is the
+conservative option; the count is printed so nothing is lost silently.
+
+**Not done: the stratified lenition sample is not a correctness judgement.**
+60 rows are laid out for checking by eye and 10 short unattested stems are
+listed as the place to look first. One of those, `bhur`, is a clear false
+positive. Nobody has gone through the other 6,802.
+
+**Not patched: a third empty-token source.** `decode_bpe_token` returns `''`
+for a standalone `Ġ`, which is the same defect as patch (a) in a different
+function, and it accounts for the 107 empty-token words Byte-BPE still has
+after patch (a) is applied. Out of scope for the brief, and worth a second
+opinion before fixing.
+
+**Not reproducible, still: Morfessor.** No model and no training script in
+the repo, so one of her three reference rows cannot be checked at all.
+
+**Unverified: Splinter itself.** The rearranging variant here is built from
+the description in my own email to her rather than from a reading of the
+Splinter paper. The construction stands on its own and round-trips exactly,
+but calling it "Splinter-style" is a claim about someone else's method that
+has not been checked against their paper.
+
+**A correction to the record.** My email of 10 November described the layer
+as one that "identifies and separates initial mutations (lenition, eclipsis,
+and prefixed h- and t-)". It identifies lenition but the scored system does
+not separate it. Every headline number in this file is eclipsis and the h-
+and t-prefixes only. That needs saying on the call before the figures are
+read, because the wording suggests four mutations are being split and three
+are.
