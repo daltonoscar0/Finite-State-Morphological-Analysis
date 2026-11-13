@@ -24,9 +24,10 @@ Your numbers, reproduced here
   gaBERT (reproduced)                 17.88 /  50.00 /  29.21 /  17.27 /   8.57 /  14.61 /  22.06 /   9.61
 
   gaBERT reproduces only WITHOUT --exclude-single-token and WITH
-  --do-lower-case. With --exclude-single-token it is 29.59 overall.
-  So the two rows in your table appear to come from different
-  protocols; the Unigram row is the one I matched.
+  --do-lower-case. Holding the lowercasing and adding the flag gives
+  20.34; dropping both gives 23.00; the flag without lowercasing
+  gives 29.59. So the two rows in your table appear to come
+  from different protocols; the Unigram row is the one I matched.
 
   Morfessor (yours, 28 Oct)           37.29 /  72.22 /  60.93 /  33.92 /  26.90 /  45.70 /  43.37 /  27.12
   Not reproduced: no Morfessor model is in the repo.

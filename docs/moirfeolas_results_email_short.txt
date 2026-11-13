@@ -1,0 +1,37 @@
+Scalpel Irish hybrid on the corrected MoirfEolas
+MoirfEolas.csv at tknzn4Irish 0f31695
+
+One question before any of the numbers mean anything. Your three
+published rows do not reproduce under a single protocol:
+
+  Unigram 8k   43.32  only with --exclude-single-token
+  gaBERT       17.88  only with all words plus --do-lower-case
+               (add --exclude-single-token and it is 20.34)
+  Morfessor    not reproducible here, no model ships in the repo
+
+Both of the first two are exact on all eight columns, so this is not
+a rounding question. Which protocol is the paper using? Everything
+below uses the Unigram one.
+
+Columns: overall / uru_only / prefix_only / suffix_only /
+uru+prefix / uru+suffix / prefix+suffix / all_affixes
+
+  Unigram 8k                      43.32 /  50.00 /  66.12 /  40.70 /  43.03 /  50.83 /  46.81 /  35.98
+  Unigram 8k + Scalpel            45.46 /  77.78 /  66.12 /  40.70 /  66.67 /  63.00 /  46.81 /  50.17
+  SP-ULM 8k + Scalpel             47.11 /  77.78 /  63.21 /  42.60 /  65.00 /  64.71 /  48.28 /  52.39
+
+What the scored system actually does: it splits eclipsis and the h-
+and t-prefixes only, it identifies lenition but does not split it,
+and it has no suffix analysis at all, so the suffix column is the
+back-off's own number and not a result of mine.
+
+Absorption: uru absorbed 45.97 to 12.26 at Unigram 8k, with prefix and
+  suffix absorption moving less than two points either way.
+d': simulating the one rule for the verbal particle is worth +0.52
+  (45.46 to 45.98) and takes uru_only to 100.00.
+Lenition: 6803 candidates exported, 62.4% of stems attested on
+  their own in data/GA, attached as lenition_candidates.csv.
+
+Also attached: moirfeolas_results_email.txt, the long version with
+all 23 settings, the ablations, the error analysis, and two notes on
+the scoring code that affect your own numbers as much as mine.

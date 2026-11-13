@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS = Path.home() / "data" / "tok" / "results" / "irish" / "corrected"
 DEST = ROOT / "docs" / "moirfeolas_results_email.txt"
+DEST_SHORT = ROOT / "docs" / "moirfeolas_results_email_short.txt"
 
 COMMIT = "0f31695c5315ce213cf4d5986a9c9c002ed740ef"
 
@@ -60,12 +61,13 @@ def len_rows():
     }
 
 
-def main():
+def build_long():
     her = json.loads((RESULTS / "her_protocol.json").read_text())
     allw = json.loads((RESULTS / "all_words.json").read_text())
     matched = json.loads((RESULTS / "matched_set.json").read_text())
     err = json.loads((RESULTS / "error_analysis.json").read_text())
     dprime = json.loads((RESULTS / "dprime_her_protocol.json").read_text())
+    gabert = json.loads((RESULTS / "gabert.json").read_text())
 
     header = (
         "Scalpel Irish hybrid on the corrected MoirfEolas\n"
@@ -93,12 +95,15 @@ def main():
          "  Eight of eight to two decimal places.",
          "",
          fmt("gaBERT (yours, 28 Oct)", REFERENCE["gaBERT"]),
-         fmt("gaBERT (reproduced)", [17.88, 50.00, 29.21, 17.27, 8.57, 14.61, 22.06, 9.61]),
+         fmt("gaBERT (reproduced)", values(gabert["lower_all"])),
          "",
          "  gaBERT reproduces only WITHOUT --exclude-single-token and WITH",
-         "  --do-lower-case. With --exclude-single-token it is 29.59 overall.",
-         "  So the two rows in your table appear to come from different",
-         "  protocols; the Unigram row is the one I matched.",
+         "  --do-lower-case. Holding the lowercasing and adding the flag gives",
+         f"  {gabert['lower_excl']['overall']:.2f}; dropping both gives "
+         f"{gabert['cased_all']['overall']:.2f}; the flag without lowercasing",
+         f"  gives {gabert['cased_excl']['overall']:.2f}. So the two rows in your "
+         "table appear to come",
+         "  from different protocols; the Unigram row is the one I matched.",
          "",
          fmt("Morfessor (yours, 28 Oct)", REFERENCE["Morfessor"]),
          "  Not reproduced: no Morfessor model is in the repo.",
@@ -299,8 +304,103 @@ def main():
          "     used to identify which table a number came from.",
          ]))
 
-    DEST.write_text("\n".join(out))
-    print(f"wrote {DEST}")
+    return "\n".join(out)
+
+
+# --------------------------------------------------------------------------
+# The short version: one screen, the protocol question first, nothing that
+# cannot be read off the result JSON.
+# --------------------------------------------------------------------------
+
+MAX_SHORT_LINES = 45
+
+
+def build_short():
+    her = json.loads((RESULTS / "her_protocol.json").read_text())
+    dprime = json.loads((RESULTS / "dprime_her_protocol.json").read_text())
+    gabert = json.loads((RESULTS / "gabert.json").read_text())
+    gabert = json.loads((RESULTS / "gabert.json").read_text())
+    lenr = len_rows()
+
+    uni = her["backoff_UnigramLM_8k"]
+    uni_h = her["hybrid_UnigramLM_8k"]
+    spu_h = her["hybrid_SentencePieceULM_8k"]
+    uni_d = dprime["hybrid_UnigramLM_8k"]
+    ab0 = uni["absorption"]
+    ab1 = uni_h["absorption"]
+
+    w = 30
+
+    def r3(label, res):
+        cells = " / ".join(f"{v:>6.2f}" for v in values(res))
+        return f"  {label:<{w}} {cells}"
+
+    lines = [
+        "Scalpel Irish hybrid on the corrected MoirfEolas",
+        f"MoirfEolas.csv at tknzn4Irish {COMMIT[:7]}",
+        "",
+        "One question before any of the numbers mean anything. Your three",
+        "published rows do not reproduce under a single protocol:",
+        "",
+        f"  Unigram 8k   {uni['overall']:.2f}  only with --exclude-single-token",
+        f"  gaBERT       {gabert['lower_all']['overall']:.2f}  only with all words plus --do-lower-case",
+        f"               (add --exclude-single-token and it is "
+        f"{gabert['lower_excl']['overall']:.2f})",
+        "  Morfessor    not reproducible here, no model ships in the repo",
+        "",
+        "Both of the first two are exact on all eight columns, so this is not",
+        "a rounding question. Which protocol is the paper using? Everything",
+        "below uses the Unigram one.",
+        "",
+        "Columns: overall / uru_only / prefix_only / suffix_only /",
+        "uru+prefix / uru+suffix / prefix+suffix / all_affixes",
+        "",
+        r3("Unigram 8k", uni),
+        r3("Unigram 8k + Scalpel", uni_h),
+        r3("SP-ULM 8k + Scalpel", spu_h),
+        "",
+        "What the scored system actually does: it splits eclipsis and the h-",
+        "and t-prefixes only, it identifies lenition but does not split it,",
+        "and it has no suffix analysis at all, so the suffix column is the",
+        "back-off's own number and not a result of mine.",
+        "",
+        f"Absorption: uru absorbed {ab0['uru_absorbed_%']:.2f} to "
+        f"{ab1['uru_absorbed_%']:.2f} at Unigram 8k, with prefix and",
+        f"  suffix absorption moving less than two points either way.",
+        f"d': simulating the one rule for the verbal particle is worth "
+        f"{uni_d['overall'] - uni_h['overall']:+.2f}",
+        f"  ({uni_h['overall']:.2f} to {uni_d['overall']:.2f}) and takes uru_only to "
+        f"{uni_d['categories']['uru_only']:.2f}.",
+        f"Lenition: {lenr['n']} candidates exported, "
+        f"{lenr['in_corpus'] / lenr['n'] * 100:.1f}% of stems attested on",
+        "  their own in data/GA, attached as lenition_candidates.csv.",
+        "",
+        "Also attached: moirfeolas_results_email.txt, the long version with",
+        "all 23 settings, the ablations, the error analysis, and two notes on",
+        "the scoring code that affect your own numbers as much as mine.",
+    ]
+    return "\n".join(lines)
+
+
+def main():
+    import argparse
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--short", action="store_true",
+                    help=f"Write the {MAX_SHORT_LINES}-line version to "
+                         f"{DEST_SHORT.name} instead of the full file.")
+    args = ap.parse_args()
+
+    text, dest = ((build_short(), DEST_SHORT) if args.short
+                  else (build_long(), DEST))
+
+    if "—" in text or "–" in text:
+        raise SystemExit("refusing to write: text contains an em or en dash")
+    n = len(text.split("\n"))
+    if args.short and n > MAX_SHORT_LINES:
+        raise SystemExit(f"short version is {n} lines, limit is {MAX_SHORT_LINES}")
+
+    dest.write_text(text)
+    print(f"wrote {dest} ({n} lines)")
 
 
 if __name__ == "__main__":
