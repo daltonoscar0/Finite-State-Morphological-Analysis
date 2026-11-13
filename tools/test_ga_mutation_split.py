@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
 
 from ga_mutation_split import (  # noqa: E402
+    read_tsv_readings,
     SPLIT_TAGS, SPLIT_TAGS_WITH_LENITION, add_dprime, marker_and_base,
     mutation_splits, pick, rebuild, rebuild_untagged,
 )
@@ -190,6 +191,72 @@ class DPrime(unittest.TestCase):
 
     def test_does_not_fire_on_a_bare_particle(self):
         self.assertEqual(add_dprime(["d'"], {}), {})
+
+
+class TsvProvider(unittest.TestCase):
+    """Reading another analyser's batch output as layer 1."""
+
+    def _read(self, text, words=None):
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".tsv", delete=False,
+                                         encoding="utf-8") as f:
+            f.write(text)
+            path = f.name
+        try:
+            return read_tsv_readings(path, words)
+        finally:
+            os.unlink(path)
+
+    def test_reads_one_reading_per_row(self):
+        readings, info = self._read(
+            "gcarr\tEcl\tcarr\n"
+            "bhean\tLen\tbean\n")
+        self.assertEqual(readings["gcarr"], [("Ecl", "carr")])
+        self.assertEqual(readings["bhean"], [("Len", "bean")])
+        self.assertEqual(info["dropped_by_tag"], {})
+
+    def test_several_rows_for_one_word_keep_file_order(self):
+        readings, _ = self._read(
+            "bhfear\tLen\tbfear\n"
+            "bhfear\tEcl\tfear\n")
+        self.assertEqual(readings["bhfear"], [("Len", "bfear"), ("Ecl", "fear")])
+
+    def test_header_row_is_skipped(self):
+        readings, _ = self._read("word\ttag\tbase\ngcarr\tEcl\tcarr\n")
+        self.assertEqual(list(readings), ["gcarr"])
+
+    def test_blank_and_comment_lines_are_skipped(self):
+        readings, _ = self._read("\n# a note\ngcarr\tEcl\tcarr\n\n")
+        self.assertEqual(list(readings), ["gcarr"])
+
+    def test_unknown_tags_are_dropped_and_counted_not_guessed(self):
+        # Another analyser's tag set has no defined position in the ranking,
+        # so an unrecognised tag is reported rather than silently ranked.
+        readings, info = self._read(
+            "gcarr\tEcl\tcarr\n"
+            "foo\tECLIPSIS\tbar\n"
+            "baz\tECLIPSIS\tqux\n")
+        self.assertEqual(list(readings), ["gcarr"])
+        self.assertEqual(info["dropped_by_tag"], {"ECLIPSIS": 2})
+        self.assertEqual(info["tags_seen"], ["ECLIPSIS", "Ecl"])
+
+    def test_words_outside_the_scored_list_are_ignored(self):
+        readings, _ = self._read(
+            "gcarr\tEcl\tcarr\nbhean\tLen\tbean\n", words=["gcarr"])
+        self.assertEqual(list(readings), ["gcarr"])
+
+    def test_a_short_row_is_an_error_rather_than_a_silent_skip(self):
+        with self.assertRaises(ValueError):
+            self._read("gcarr\tEcl\n")
+
+    def test_output_feeds_straight_into_the_split(self):
+        readings, _ = self._read(
+            "gcarr\tEcl\tcarr\nbhean\tLen\tbean\n")
+        words = ["gcarr", "bhean"]
+        s = mutation_splits(words, readings, SPLIT_TAGS_WITH_LENITION,
+                            concatenative_only=False)
+        self.assertEqual(s["gcarr"], ("Ecl", "g", "carr"))
+        self.assertEqual(s["bhean"], ("Len", "h", "bean"))
 
 
 if __name__ == "__main__":

@@ -45,6 +45,74 @@ def demutate_all(words):
     return out
 
 
+# --------------------------------------------------------------------------
+# Layer 1 providers. A provider is a callable taking the word list and
+# returning {word: [(tag, base), ...]} in candidate order. Anything that can
+# produce that shape can be scored, which is how a second analyser gets
+# compared without its toolchain being installed here.
+# --------------------------------------------------------------------------
+
+KNOWN_TAGS = frozenset(SPLIT_TAGS_WITH_LENITION) | {DPRIME_TAG}
+
+
+def read_tsv_readings(path, words=None, known_tags=KNOWN_TAGS):
+    """Read ``word <tab> tag <tab> base`` rows from an external analyser.
+
+    One row per reading, so a word with several candidates has several rows
+    and their file order is the candidate order. Blank lines and lines
+    starting with '#' are skipped, as is a header row whose first field is
+    literally 'word'.
+
+    Tags outside ``known_tags`` are dropped rather than guessed at, because
+    the ranking in ``pick`` is by tag and an unrecognised tag has no defined
+    position in it. The count of dropped rows is returned so the caller can
+    report it instead of silently scoring less than it was given.
+    """
+    readings, dropped, seen_tags = {}, {}, set()
+    wanted = set(words) if words is not None else None
+
+    with open(path, encoding="utf-8") as f:
+        for lineno, line in enumerate(f, 1):
+            line = line.rstrip("\n").rstrip("\r")
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) < 3:
+                raise ValueError(
+                    f"{path}:{lineno}: expected 3 tab-separated fields "
+                    f"(word, tag, base), got {len(parts)}")
+            word, tag, base = parts[0], parts[1], parts[2]
+            if lineno == 1 and word == "word" and tag == "tag":
+                continue
+            seen_tags.add(tag)
+            if tag not in known_tags:
+                dropped[tag] = dropped.get(tag, 0) + 1
+                continue
+            if wanted is not None and word not in wanted:
+                continue
+            readings.setdefault(word, []).append((tag, base))
+
+    return readings, {"dropped_by_tag": dropped, "tags_seen": sorted(seen_tags)}
+
+
+def provider_scalpel(words, **_):
+    """Scalpel's mutation FST, through the ga_demutate bridge binary."""
+    return demutate_all(words), {}
+
+
+def provider_tsv(words, tsv_path=None, **_):
+    """Any external analyser's batch output, as a three-column TSV."""
+    if not tsv_path:
+        raise SystemExit("--layer1 tsv needs --layer1-tsv PATH")
+    return read_tsv_readings(tsv_path, words)
+
+
+PROVIDERS = {
+    "scalpel": provider_scalpel,
+    "tsv": provider_tsv,
+}
+
+
 def add_dprime(words, demut):
     """Inject a synthetic d'/D' reading, to price decision 4.
 

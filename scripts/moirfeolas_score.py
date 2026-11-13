@@ -37,6 +37,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 # Layer 1 lives in its own standard-library-only module so the split algebra
 # and its inverse can be tested without her scorer or pandas installed.
 from ga_mutation_split import (                                 # noqa: E402,F401
+    PROVIDERS,
     BRIDGE,
     DPRIME_TAG,
     SPLIT_TAGS,
@@ -251,6 +252,19 @@ def main():
                     help="Write one <system>_morphological_summary.json per system, "
                          "in the format her 'criochscore absorption' subcommand "
                          "reads, so her absorption script can be run on it directly.")
+    ap.add_argument("--layer1", choices=sorted(PROVIDERS), default="scalpel",
+                    help="Which analyser supplies layer 1. 'scalpel' is the "
+                         "mutation FST through the bridge binary. 'tsv' reads "
+                         "word/tag/base rows from a file, so another "
+                         "analyser's batch output can be scored through the "
+                         "same pipeline without installing its toolchain.")
+    ap.add_argument("--layer1-tsv", default=None,
+                    help="Path for --layer1 tsv.")
+    ap.add_argument("--dump-layer1-tsv", default=None,
+                    help="Write the chosen provider's readings out in the "
+                         "word/tag/base format --layer1 tsv reads, then stop. "
+                         "Doubles as the format example to hand another "
+                         "analyser's author.")
     ap.add_argument("--simulate-dprime", action="store_true",
                     help="Inject a synthetic d'/D' reading. Scalpel has no rule "
                          "for the verbal particle (decision 4) and this prices "
@@ -261,7 +275,27 @@ def main():
     words = list(affix.keys())
     print(f"Loaded {len(words)} words from {args.moirfeolas}")
 
-    demut = demutate_all(words)
+    demut, info = PROVIDERS[args.layer1](words, tsv_path=args.layer1_tsv)
+    print(f"Layer 1 provider: {args.layer1}"
+          + (f" ({args.layer1_tsv})" if args.layer1_tsv else ""))
+    if info.get("tags_seen"):
+        print(f"  tags in the file: {', '.join(info['tags_seen'])}")
+    for tag, n in sorted(info.get("dropped_by_tag", {}).items()):
+        print(f"  dropped {n} rows with unrecognised tag {tag!r}")
+
+    if args.dump_layer1_tsv:
+        dest = Path(args.dump_layer1_tsv)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        n = 0
+        with open(dest, "w", encoding="utf-8") as f:
+            f.write("word\ttag\tbase\n")
+            for word in words:
+                for tag, base in demut.get(word, []):
+                    f.write(f"{word}\t{tag}\t{base}\n")
+                    n += 1
+        print(f"wrote {n} readings to {dest}")
+        return
+
     tags = SPLIT_TAGS
     if args.simulate_dprime:
         demut = add_dprime(words, demut)

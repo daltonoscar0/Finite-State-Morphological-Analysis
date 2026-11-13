@@ -913,3 +913,58 @@ the tag; `rebuild_untagged` exists to answer the question, not to be used.
 
 Covered by `tools/test_ga_mutation_split.py`, 25 tests, standard library only,
 wired into `make test-tools`.
+
+## A pluggable layer 1
+
+Added 12 November, so Elaine Uí Dhonnchadha's analyser can be compared
+without her toolchain being installed here.
+
+Layer 1 is now a provider: a callable taking the word list and returning
+`{word: [(tag, base), ...]}` in candidate order, plus a dict of diagnostics.
+Two ship:
+
+| `--layer1` | what it reads |
+|------------|---------------|
+| `scalpel` (default) | the mutation FST, through the `ga_demutate` bridge |
+| `tsv` | `word <tab> tag <tab> base` rows from `--layer1-tsv` |
+
+One row per reading, so a word with several candidates has several rows and
+their file order is the candidate order. A header row, blank lines and `#`
+comments are skipped. A row with fewer than three fields is an error rather
+than a silent skip.
+
+`--dump-layer1-tsv` writes the current provider's readings in that format,
+which doubles as the example to hand to another analyser's author:
+
+```bash
+~/venvs/tok/bin/python scripts/moirfeolas_score.py \
+    --dump-layer1-tsv ~/data/tok/results/irish/corrected/layer1_scalpel.tsv
+~/venvs/tok/bin/python scripts/moirfeolas_score.py \
+    --layer1 tsv --layer1-tsv ~/data/tok/results/irish/corrected/layer1_scalpel.tsv \
+    --systems backoff hybrid hybrid_splinter fst_only identity --out /tmp/via_tsv.json
+```
+
+Scalpel emits 11,990 readings over the 35,517 words. Scoring those back
+through the TSV provider produces a result file byte-identical to the native
+provider's, which is the self-test that the two paths agree.
+
+**Unknown tags are dropped, not guessed.** The ranking in `pick` is by tag
+and an unrecognised tag has no defined position in it, so a row tagged
+`ECLIPSIS` rather than `Ecl` is counted and reported rather than mapped onto
+something. Whoever supplies the TSV has to use Scalpel's tag names
+(`Ecl`, `HPref`, `TPref`, `Len`, `Dpart`). This is the conservative choice
+and it is a guess about what a second analyser will emit: a mapping table
+would be friendlier, but silently renaming another system's categories is
+how a comparison stops meaning anything.
+
+### Regression
+
+The refactor must not move a number. Both result files were regenerated and
+compared against the versions from before it:
+
+| file | sha256 before | sha256 after | verdict |
+|------|---------------|--------------|---------|
+| `her_protocol.json` | `37c035ba…` | `37c035ba…` | identical |
+| `all_words.json` | `d409368c…` | `d409368c…` | identical |
+
+Byte-for-byte, not just to two decimals.
