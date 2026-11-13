@@ -968,3 +968,112 @@ compared against the versions from before it:
 | `all_words.json` | `d409368c…` | `d409368c…` | identical |
 
 Byte-for-byte, not just to two decimals.
+
+## Two patches for her repo, prepared not sent
+
+Added 12 November. Both are in `patches/`, as `git format-patch` files
+carrying my git identity and nothing else. They were made in a separate
+working copy at `~/code/tknzn4Irish-patches`; `external/tknzn4Irish` is never
+touched, and that copy's `origin` has been removed so nothing can be pushed
+by accident. Her existing `tests/` layout and plain-pytest style are matched.
+
+```
+patches/0001-Do-not-leave-an-empty-first-token-when-stripping-a-s.patch
+patches/0001-Make-the-following-letter-test-case-sensitive-so-a-b.patch
+patches/0002-Read-eclipsis-of-a-capitalised-vowel-written-without.patch
+```
+
+Branch `fix-special-prefixes-case` is deliberately two commits rather than
+one, because the two halves have very different standing and she should be
+able to take the first without buying the second.
+
+### Patch (a), the empty first token
+
+`remove_specials` strips a leading `▁` and keeps the result even when it is
+empty. A standalone `▁` piece therefore becomes a token that carries none of
+the word but still occupies position 0, so `classify_uru` fails outright and
+`classify_prefix` is read one slot late and degrades from "tokenized exactly"
+to "tokenized in parts". The patch drops the emptied token, as long as
+something is left.
+
+**These are patched-scorer numbers. They are not comparable with any other
+table in this file, and not with anything she has published, because the code
+that produced them is not the code that produced those.**
+
+| row | her code | with patch (a) | delta | empty-token words before |
+|-----|---------:|---------------:|------:|-------------------------:|
+| UnigramLM 8k | 43.32 | 43.32 | 0.00 | 0 |
+| SentencePieceULM 8k | 42.84 | 43.65 | **+0.81** | 3,605 |
+| SentencePieceULM 16k | 37.51 | 38.30 | +0.79 | 2,700 |
+| SentencePieceULM 32k | 32.84 | 33.51 | +0.67 | 1,555 |
+| SentencePieceULM 43k | 31.71 | 32.33 | +0.61 | 1,259 |
+| SentencePieceBPE 8k | 38.05 | 38.08 | +0.02 | 113 |
+| Byte-BPE 8k | 38.19 | 38.19 | 0.00 | 107 |
+| WordPiece 8k | 35.23 | 35.23 | 0.00 | 0 |
+
+UnigramLM is the control and does not move, which is the check that the patch
+only touches what it claims to. Every SentencePiece row gains, and the four
+SentencePiece rows in her paper would move by between 0.61 and 0.81 points.
+
+**A third instance of the same bug is not patched.** Byte-BPE still shows 107
+empty-token words afterwards, because those come from `decode_bpe_token`,
+which strips `Ġ` with `str.replace` and returns `''` for a standalone `Ġ`
+token. That is a different function on a different code path. It is left
+alone because the brief was `remove_specials`, and because a second opinion
+on the right fix is worth having first. Worth raising on the call.
+
+### Patch (b), the case condition
+
+Two commits.
+
+**Commit 1, `Make the following-letter test case-sensitive`.** The table in
+`SPECIAL_PREFIXES` distinguishes `t` from `T` and `a` from `A`, but
+`_apply_special_prefixes` compares with `.lower()` on both sides, so every
+case distinction in it is discarded. `_find_candidates`, the other pass over
+the same table, already compares case-sensitively, so the two disagreed.
+With the comparison fixed, the bare `t` entry can drop lower-case vowels: the
+t-prefix before a lower-case vowel is written with a hyphen (`an t-arán`), so
+a bare `t` before one is just an ordinary word. `D` and `G` had to be added
+to the `n-` entry, which had been matching `n-Dia` only through the folded
+lower-case `d`.
+
+Measured over the 35,517 words, rebuilding the affix table:
+
+| | rows |
+|---|---:|
+| rows whose reading changes | 874 |
+| of those, now matching her corrected `MoirfEolas.csv` | **871** |
+| of those, now differing from it | 3 |
+
+The three are `téad`, `tuartha` and `tiarratas`, which are the spurious `t`
+rows already identified above: ordinary t-initial words that the gold marks
+with an urú. So the patch disagrees with the gold on exactly the rows where
+the gold is wrong, and agrees with it on 871 rows that she appears to have
+corrected by hand in the `cleaning data` commit. This commit is the
+uncontroversial half.
+
+**Commit 2, `Read eclipsis of a capitalised vowel`.** Eclipsis of a vowel
+takes a hyphen when the vowel is lower case (`ár n-athair`) and none when it
+is capitalised (`i nÉirinn`), so the bare `n` entry needs the capitals. It
+depends on commit 1: without the case-sensitive comparison, adding `A` to the
+`n` list would read `naoi` and `nua` as eclipsis.
+
+This commit changes 52 further rows, all gaining urú `n`, and **all 52
+disagree with her current gold**, which marks no urú on them. That is the
+disagreement already recorded above, where Scalpel finds eclipsis the gold
+misses. The patch is a proposal that those readings are right, not a bug fix,
+and it should not be merged unless she agrees. Keeping it as a separate
+commit is the point.
+
+### Effect of patch (b) on scoring the shipped table
+
+None, to two decimals, on every row measured. Patch (b) changes how a
+MoirfEolas table is *built*, and `MoirfEolas.csv` is a data file that the
+scorer reads rather than regenerates. Its only path into scoring is
+`compute_absorption`, which imports `SPECIAL_PREFIXES` for the urú-mapping
+figure, and that does not move either on these rows. The 874 and 52 row
+counts above are the real measurement of what it does.
+
+```bash
+~/venvs/tok/bin/python scripts/moirfeolas_patched_scorer.py
+```

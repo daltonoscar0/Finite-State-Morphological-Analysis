@@ -1,0 +1,100 @@
+From 87fabbd182ea458e2afd5c4b9b69e3f33637cf00 Mon Sep 17 00:00:00 2001
+From: Oscar Dalton <daltonoscar0@gmail.com>
+Date: Thu, 12 Nov 2026 22:30:30 -0500
+Subject: [PATCH] Do not leave an empty first token when stripping a standalone
+ whitespace marker
+
+---
+ src/criochscore/tokenizers_io.py | 13 ++++++--
+ tests/test_tokenizers_io.py      | 55 ++++++++++++++++++++++++++++++++
+ 2 files changed, 66 insertions(+), 2 deletions(-)
+ create mode 100644 tests/test_tokenizers_io.py
+
+diff --git a/src/criochscore/tokenizers_io.py b/src/criochscore/tokenizers_io.py
+index c944950..7f6b306 100644
+--- a/src/criochscore/tokenizers_io.py
++++ b/src/criochscore/tokenizers_io.py
+@@ -142,8 +142,17 @@ def remove_specials(
+                 processed.append(tok[len(special_token):] if tok.startswith(special_token) else tok)
+         else:
+             first = tokens_list[0]
+-            processed = [first[1:] if first.startswith(special_token) else first]
+-            processed.extend(tokens_list[1:])
++            stripped = first[1:] if first.startswith(special_token) else first
++            # SentencePiece can emit the whitespace marker as a piece of its
++            # own, e.g. 'taisbeánfar' -> ['▁', 'tais', 'be', 'án', 'far'].
++            # Stripping the marker then leaves an empty first token, which
++            # carries no characters of the word but still occupies position
++            # 0, so classify_uru and classify_prefix both compare against ''
++            # and fail. Drop it instead, as long as something is left.
++            if stripped == "" and len(tokens_list) > 1:
++                processed = list(tokens_list[1:])
++            else:
++                processed = [stripped] + list(tokens_list[1:])
+ 
+         new_dict[word] = (len(processed), processed)
+ 
+diff --git a/tests/test_tokenizers_io.py b/tests/test_tokenizers_io.py
+new file mode 100644
+index 0000000..9834037
+--- /dev/null
++++ b/tests/test_tokenizers_io.py
+@@ -0,0 +1,55 @@
++from criochscore.scoring import classify_prefix, classify_uru
++from criochscore.tokenizers_io import remove_specials
++
++
++def test_wordpiece_marker_stripped_from_continuations():
++    token_lens = {"capaillín": (3, ["capaill", "##í", "##n"])}
++    assert remove_specials(token_lens, "##") == {
++        "capaillín": (3, ["capaill", "í", "n"])
++    }
++
++
++def test_whitespace_marker_stripped_from_the_first_token():
++    token_lens = {"gcarr": (3, ["▁gc", "ar", "r"])}
++    assert remove_specials(token_lens, "▁") == {"gcarr": (3, ["gc", "ar", "r"])}
++
++
++def test_no_special_token_leaves_tokens_alone():
++    token_lens = {"gcarr": (2, ["gc", "arr"])}
++    assert remove_specials(token_lens, None) == {"gcarr": (2, ["gc", "arr"])}
++
++
++def test_standalone_whitespace_marker_does_not_leave_an_empty_token():
++    # SentencePiece emits the marker as a piece of its own for some words:
++    # 'dtaisbeánfar' -> ['▁d', 'tais', ...] but 'taisbeánfar' -> ['▁',
++    # 'tais', ...]. Stripping used to leave '' sitting at position 0.
++    token_lens = {"taisbeánfar": (5, ["▁", "tais", "be", "án", "far"])}
++    assert remove_specials(token_lens, "▁") == {
++        "taisbeánfar": (4, ["tais", "be", "án", "far"])
++    }
++
++
++def test_an_empty_first_token_costs_score_on_both_anchored_columns():
++    # Why the above matters. An empty token carries none of the word but
++    # still occupies position 0, so both position-anchored classifications
++    # are read one slot late.
++    with_empty = ["", "tais", "be", "án", "far"]
++    without = ["tais", "be", "án", "far"]
++
++    # The urú test only looks at tokens[0], so it fails outright.
++    assert classify_uru("t", with_empty)[0] == "tokenized incorrectly"
++    assert classify_uru("t", ["t"] + without)[0] == "tokenized exactly"
++
++    # The prefix test walks forward accumulating tokens, so it still finds
++    # the prefix but only as a concatenation: full credit becomes half.
++    assert classify_prefix("tais", with_empty, "")[0] == "tokenized in parts"
++    assert classify_prefix("tais", without, "")[0] == "tokenized exactly"
++
++
++def test_a_word_that_is_only_a_marker_keeps_one_token():
++    # Degenerate, but the function must not return an empty token list:
++    # every downstream classifier indexes tokens[0] and tokens[-1].
++    token_lens = {"x": (1, ["▁"])}
++    out = remove_specials(token_lens, "▁")
++    assert out["x"][0] == 1
++    assert len(out["x"][1]) == 1
+-- 
+2.50.1 (Apple Git-155)
+

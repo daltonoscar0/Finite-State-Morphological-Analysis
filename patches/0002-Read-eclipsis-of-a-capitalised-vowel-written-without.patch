@@ -1,0 +1,81 @@
+From 2bd71605d1bad60157a85f34491c14247d436ab1 Mon Sep 17 00:00:00 2001
+From: Oscar Dalton <daltonoscar0@gmail.com>
+Date: Thu, 12 Nov 2026 22:34:00 -0500
+Subject: [PATCH 2/2] Read eclipsis of a capitalised vowel written without a
+ hyphen
+
+---
+ src/criochscore/affixes.py              |  9 +++++-
+ tests/test_affixes_eclipsed_capitals.py | 40 +++++++++++++++++++++++++
+ 2 files changed, 48 insertions(+), 1 deletion(-)
+ create mode 100644 tests/test_affixes_eclipsed_capitals.py
+
+diff --git a/src/criochscore/affixes.py b/src/criochscore/affixes.py
+index 40f732c..75b7e45 100644
+--- a/src/criochscore/affixes.py
++++ b/src/criochscore/affixes.py
+@@ -21,7 +21,14 @@ SPECIAL_PREFIXES: dict[str, list[str]] = {
+            "d", "g", "D", "G"],
+     "m": ["b", "B"],
+     "g": ["c", "C"],
+-    "n": ["d", "g", "D", "G"],
++    # Eclipsis of a vowel is written with a hyphen when the vowel is lower
++    # case ("ár n-athair") and without one when it is capitalised ("i
++    # nÉirinn"), so the bare "n" has to accept capitals. Lower-case vowels
++    # stay out: they belong to the "n-" entry, and admitting them here
++    # would read every ordinary n-initial word ("nua", "naoi") as eclipsis.
++    # This relies on the following-letter test being case-sensitive.
++    "n": ["d", "g", "D", "G",
++          "A", "E", "I", "O", "U", "Á", "É", "Í", "Ó", "Ú"],
+     "bh": ["f", "F"],
+     "b": ["p", "P"],
+     "d": ["t", "T"],
+diff --git a/tests/test_affixes_eclipsed_capitals.py b/tests/test_affixes_eclipsed_capitals.py
+new file mode 100644
+index 0000000..4307fb2
+--- /dev/null
++++ b/tests/test_affixes_eclipsed_capitals.py
+@@ -0,0 +1,40 @@
++"""Eclipsis of a capitalised vowel, which is written without a hyphen."""
++
++from criochscore.affixes import build_combined_affix
++
++SUFFIXES = ["acht", "aí", "án", "as", "eanna", "í", "ithe", "tha"]
++
++
++def uru(word, suffixes=None):
++    combined = build_combined_affix([word], [], suffixes or SUFFIXES)
++    return combined.get(word, ("", "", ""))[0]
++
++
++def test_eclipsed_capital_vowel_without_a_hyphen():
++    # "i nÉirinn", "ár nIasacht": the capital marks the word boundary, so
++    # the Caighdean uses no hyphen and the bare "n" has to accept it.
++    assert uru("nIasacht") == "n"
++
++
++def test_several_more_eclipsed_capitals():
++    assert uru("nUachtaran", suffixes=["an"]) == "n"
++    assert uru("nOllscoileanna") == "n"
++    assert uru("nAturnaetha") == "n"
++
++
++def test_lower_case_vowels_still_need_the_hyphen():
++    # Admitting lower-case vowels to the bare "n" would read every
++    # n-initial word as eclipsis, which is why they stay with "n-".
++    assert uru("nua", suffixes=["a"]) == ""
++    assert uru("naoi", suffixes=["i"]) == ""
++    assert uru("neart", suffixes=["t"]) == ""
++    assert uru("nocht", suffixes=["cht"]) == ""
++
++
++def test_the_hyphenated_form_is_unaffected():
++    assert uru("n-iomlan", suffixes=["an"]) == "n-"
++
++
++def test_eclipsed_d_and_g_still_work():
++    assert uru("ndearna", suffixes=["a"]) == "n"
++    assert uru("ngaoth", suffixes=["th"]) == "n"
+-- 
+2.50.1 (Apple Git-155)
+

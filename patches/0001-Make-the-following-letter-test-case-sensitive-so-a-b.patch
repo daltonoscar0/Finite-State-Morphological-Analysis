@@ -1,0 +1,127 @@
+From a3d3b684fefd8e72b35f931c37a47560a172953c Mon Sep 17 00:00:00 2001
+From: Oscar Dalton <daltonoscar0@gmail.com>
+Date: Thu, 12 Nov 2026 22:32:49 -0500
+Subject: [PATCH 1/2] Make the following-letter test case-sensitive, so a bare
+ t is not read as a t-prefix before a lower-case vowel
+
+---
+ src/criochscore/affixes.py | 21 +++++++++++---
+ tests/test_affixes_case.py | 59 ++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 76 insertions(+), 4 deletions(-)
+ create mode 100644 tests/test_affixes_case.py
+
+diff --git a/src/criochscore/affixes.py b/src/criochscore/affixes.py
+index e519fe8..40f732c 100644
+--- a/src/criochscore/affixes.py
++++ b/src/criochscore/affixes.py
+@@ -14,8 +14,11 @@ from pathlib import Path
+ # Hardcoded urú / special-prefix rules: prefix -> list of letters the prefix
+ # is only "real" in front of (e.g. "n-" only counts before a vowel or d/g).
+ SPECIAL_PREFIXES: dict[str, list[str]] = {
++    # "D" and "G" are listed alongside "d" and "g" because the test below
++    # is case-sensitive: without them "n-Dia" stops matching.
+     "n-": ["a", "A", "e", "E", "i", "I", "o", "O", "u", "U",
+-           "á", "Á", "é", "É", "í", "Í", "ó", "Ó", "ú", "Ú", "d", "g"],
++           "á", "Á", "é", "É", "í", "Í", "ó", "Ó", "ú", "Ú",
++           "d", "g", "D", "G"],
+     "m": ["b", "B"],
+     "g": ["c", "C"],
+     "n": ["d", "g", "D", "G"],
+@@ -28,8 +31,12 @@ SPECIAL_PREFIXES: dict[str, list[str]] = {
+           "á", "Á", "é", "É", "í", "Í", "ó", "Ó", "ú", "Ú"],
+     "t-": ["a", "A", "e", "E", "i", "I", "o", "O", "u", "U",
+            "á", "Á", "é", "É", "í", "Í", "ó", "Ó", "ú", "Ú", "S", "s"],
+-    "t": ["a", "A", "e", "E", "i", "I", "o", "O", "u", "U",
+-          "á", "Á", "é", "É", "í", "Í", "ó", "Ó", "ú", "Ú", "S", "s"],
++    # Mirror image of "n". The t-prefix before a lower-case vowel is
++    # written with a hyphen ("an t-arán"), so the bare "t" must not accept
++    # one: that is what reads "téad" (rope) and "tuartha" as t + vowel.
++    # Capitals are kept ("an tAthair"), and so is s, where the t-prefix
++    # takes no hyphen at either case ("an tsamhraidh", "an tSrutháin").
++    "t": ["A", "E", "I", "O", "U", "Á", "É", "Í", "Ó", "Ú", "S", "s"],
+     "d'": ["fh", "Fh", "FH", "a", "A", "e", "E", "i", "I", "o", "O", "u", "U",
+            "á", "Á", "é", "É", "í", "Í", "ó", "Ó", "ú", "Ú"],
+     "D'": ["fh", "Fh", "FH", "a", "A", "e", "E", "i", "I", "o", "O", "u", "U",
+@@ -203,7 +210,13 @@ def _apply_special_prefixes(
+                 max_len = max(len(a) for a in allowed_letters)
+                 following_letters = word[len(sprefix):len(sprefix) + max_len]
+ 
+-            if not any(following_letters.lower().startswith(a.lower()) for a in allowed_letters):
++            # Case-sensitive, so the capitalisation distinctions in
++            # SPECIAL_PREFIXES actually take effect. Folding both sides
++            # made "t" match "téad" through its own "T" entry, and left
++            # the bare "n" unable to tell "nÉirinn" from "neart" by case.
++            # _find_candidates already compares case-sensitively, so this
++            # also makes the two passes agree.
++            if not any(following_letters.startswith(a) for a in allowed_letters):
+                 continue
+ 
+             new_uru = sprefix
+diff --git a/tests/test_affixes_case.py b/tests/test_affixes_case.py
+new file mode 100644
+index 0000000..f8e2f3f
+--- /dev/null
++++ b/tests/test_affixes_case.py
+@@ -0,0 +1,59 @@
++"""The urú rules are case-sensitive, and SPECIAL_PREFIXES encodes that."""
++
++from criochscore.affixes import build_combined_affix
++
++SUFFIXES = ["adh", "acht", "aí", "án", "amh", "e", "éad", "in", "radh", "tha"]
++
++
++def uru(word, prefixes=None, suffixes=None):
++    combined = build_combined_affix(
++        [word], prefixes or [], suffixes or SUFFIXES)
++    return combined.get(word, ("", "", ""))[0]
++
++
++# --- the t-prefix -----------------------------------------------------------
++
++def test_ordinary_t_initial_word_is_not_a_t_prefix():
++    # 'téad' is rope. The t-prefix before a lower-case vowel is written
++    # with a hyphen ("an t-arán"), so a bare t before one is just the word.
++    assert uru("téad") == ""
++
++
++def test_another_ordinary_t_initial_word():
++    assert uru("tuartha") == ""
++
++
++def test_hyphenated_t_prefix_still_counts():
++    assert uru("t-arán", suffixes=["án"]) == "t-"
++
++
++def test_t_prefix_before_a_capital_still_counts():
++    assert uru("tAitheantas", suffixes=["as"]) == "t"
++
++
++def test_t_prefix_before_s_still_counts_at_either_case():
++    # The t-prefix takes no hyphen before s: "an tsamhraidh", "an tSrutháin".
++    assert uru("tsamhradh") == "t"
++    assert uru("tSruthain", suffixes=["in"]) == "t"
++
++
++# --- the comparison itself --------------------------------------------------
++
++def test_the_following_letter_test_is_case_sensitive():
++    # 'm' is eclipsis only before b. A capital B is listed and a lower-case
++    # b is listed, so both count; 'é' is listed for neither and must not
++    # match through the capital entry of some other rule.
++    assert uru("mBiobla", suffixes=["a"]) == "m"
++    assert uru("téad") == ""
++
++
++def test_unaffixed_words_are_untouched():
++    assert uru("madra", suffixes=["a"]) == ""
++    assert uru("nua", suffixes=["a"]) == ""
++
++
++def test_hyphenated_eclipsis_before_a_capital_d_still_counts():
++    # The case-sensitive test means every letter the rule accepts has to be
++    # listed at both cases: "n-Dia" matched only through a lower-case 'd'
++    # before.
++    assert uru("n-Dia", suffixes=["ia"]) == "n-"
+-- 
+2.50.1 (Apple Git-155)
+
