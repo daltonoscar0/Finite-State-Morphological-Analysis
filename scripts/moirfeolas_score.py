@@ -52,6 +52,8 @@ from ga_mutation_split import (                                 # noqa: E402,F40
     rebuild_untagged,
 )
 
+from ga_clitic import CLITIC_TAG, add_clitic_readings          # noqa: E402
+
 from criochscore.absorption import compute_absorption          # noqa: E402
 from criochscore.moirfeolas import load_moirfeolas             # noqa: E402
 from criochscore.scoring import (                              # noqa: E402
@@ -266,9 +268,16 @@ def main():
                          "Doubles as the format example to hand another "
                          "analyser's author.")
     ap.add_argument("--simulate-dprime", action="store_true",
-                    help="Inject a synthetic d'/D' reading. Scalpel has no rule "
-                         "for the verbal particle (decision 4) and this prices "
-                         "that decision without shipping it.")
+                    help="Inject a synthetic d'/D' reading. Superseded by the "
+                         "real rule (--clitics); kept so the old numbers can "
+                         "still be regenerated.")
+    ap.add_argument("--clitics", dest="clitics", action="store_true",
+                    default=True,
+                    help="Split the elided proclitics d'/m'/b' into their own "
+                         "segment. On by default: it raises four categories "
+                         "and lowers none.")
+    ap.add_argument("--no-clitics", dest="clitics", action="store_false",
+                    help="The pre-Stage-2 behaviour, for the ablation.")
     args = ap.parse_args()
 
     affix = load_moirfeolas(args.moirfeolas)
@@ -297,7 +306,12 @@ def main():
         return
 
     tags = SPLIT_TAGS
-    if args.simulate_dprime:
+    if args.clitics:
+        demut, n_clitic = add_clitic_readings(words, demut)
+        tags = (CLITIC_TAG,) + tags
+        print(f"Clitic splitting on: {n_clitic} words read as d'/m'/b' "
+              f"+ stem.")
+    elif args.simulate_dprime:
         demut = add_dprime(words, demut)
         tags = (DPRIME_TAG,) + tags
         print("Simulating the d' rule: synthetic readings injected.")
