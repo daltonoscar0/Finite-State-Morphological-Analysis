@@ -130,8 +130,11 @@ def prefix_lenition(word, attested=None, prefixes=LENITING_PREFIXES,
         # 'nUachtarán', 'tSeáin', 'hÉireann'. So an interior capital inside
         # the matched region means the match has run across a mutation
         # boundary, not over a prefix: 'nua' must not match 'nUachtarán'
-        # and hand back 'nUa' + 'ctarán'.
-        if any(c.isupper() for c in word[1:len(p)]):
+        # and hand back 'nUa' + 'ctarán'. An all-caps word is a rendering
+        # choice rather than a boundary, and the FST accepts those
+        # ('BHFUIL'), so it is exempt. MoirfEolas has none, but running text
+        # does.
+        if not word.isupper() and any(c.isupper() for c in word[1:len(p)]):
             continue
         start = _boundary(word, len(p))
         if start >= len(word):

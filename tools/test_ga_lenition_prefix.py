@@ -77,6 +77,12 @@ class TestPrefixLenition(unittest.TestCase):
         self.assertIsNone(prefix_lenition("tSeáin", ATTESTED))
         self.assertIsNone(prefix_lenition("nGaeilge", ATTESTED))
 
+    def test_all_caps_is_not_a_mutation_boundary(self):
+        # An all-caps rendering must still split; only a lowercase marker
+        # before a retained capital signals a mutation.
+        self.assertEqual(prefix_lenition("SEANBHEAN", {"bean"}),
+                         ("SEAN", "BEAN"))
+
     def test_no_prefix_means_no_firing(self):
         self.assertIsNone(prefix_lenition("bhean", ATTESTED))
         self.assertIsNone(prefix_lenition("cathair", ATTESTED))
