@@ -32,8 +32,7 @@ DPRIME_TAG = "Dpart"
 # Layer 1: Scalpel's mutation FST, via the bridge binary.
 # --------------------------------------------------------------------------
 
-def demutate_all(words):
-    """word -> [(tag, base), ...], in the analyser's own candidate order."""
+def _run_bridge(words):
     proc = subprocess.run(
         [str(BRIDGE)], input="\n".join(words),
         capture_output=True, text=True, check=True,
@@ -42,6 +41,45 @@ def demutate_all(words):
     for line in proc.stdout.splitlines():
         parts = line.split("\t")
         out[parts[0]] = [tuple(c.split(":", 1)) for c in parts[1:]]
+    return out
+
+
+def demutate_all(words, skipped=None, chunk=20000):
+    """word -> [(tag, base), ...], in the analyser's own candidate order.
+
+    The bridge aborts rather than returning on some inputs: a hyphenated
+    mutation marker in front of an all-caps stem trips the self-check
+    ``assert(inverse_ok_cp(...))`` at mutation_fst.cpp:201, because analysis
+    accepts 'n-APP' but generation uppercases the inserted marker and loses
+    the hyphen, so the round-trip test the analyser applies to its own output
+    fails. Four forms in data/GA do it: n-APP, n-EOS, n-IOTA, t-AMHÁIN.
+
+    One aborting word must not take a 272,000-word run with it, so the input
+    is processed in chunks and a failing chunk is bisected until the
+    individual offenders are isolated and set aside. Offenders are appended
+    to ``skipped`` if given, so a caller can report them rather than silently
+    scoring fewer words than it was handed. Fixing the analyser itself needs
+    the Python reference and the shared attested-form file named in
+    mutation_fst.h, neither of which is in this checkout.
+    """
+    out, bad = {}, [] if skipped is None else skipped
+
+    def process(batch):
+        if not batch:
+            return
+        try:
+            out.update(_run_bridge(batch))
+        except subprocess.CalledProcessError:
+            if len(batch) == 1:
+                bad.append(batch[0])
+                return
+            mid = len(batch) // 2
+            process(batch[:mid])
+            process(batch[mid:])
+
+    words = list(words)
+    for i in range(0, len(words), chunk):
+        process(words[i:i + chunk])
     return out
 
 
