@@ -1,0 +1,466 @@
+{
+  "summary": {
+    "0 (word-initial)": {
+      "sites": 6802,
+      "identified": 6801,
+      "recall": 99.98529844163482
+    },
+    "1 (one morpheme in front)": {
+      "sites": 2636,
+      "identified": 0,
+      "recall": 0.0
+    },
+    "2+ (two or more)": {
+      "sites": 452,
+      "identified": 0,
+      "recall": 0.0
+    }
+  },
+  "extension": {
+    "0 (word-initial)": {
+      "sites": 6802,
+      "flag_off": 6801,
+      "flag_on": 6801,
+      "recall_off": 99.98529844163482,
+      "recall_on": 99.98529844163482
+    },
+    "1 (one morpheme in front)": {
+      "sites": 2636,
+      "flag_off": 0,
+      "flag_on": 1983,
+      "recall_off": 0.0,
+      "recall_on": 75.22761760242793
+    },
+    "2+ (two or more)": {
+      "sites": 452,
+      "flag_off": 0,
+      "flag_on": 309,
+      "recall_off": 0.0,
+      "recall_on": 68.36283185840708
+    }
+  },
+  "n_sites": 9890,
+  "unparsed": 0,
+  "n_ext_fires": 2689,
+  "n_overfire": 397,
+  "overfire_sample": [
+    {
+      "word": "hArd-Fheise",
+      "prefix": "hArd-",
+      "stem": "Feise",
+      "stem_attested": 0
+    },
+    {
+      "word": "Ríomhchláir",
+      "prefix": "Ríomh",
+      "stem": "cláir",
+      "stem_attested": 1
+    },
+    {
+      "word": "Leas-Chláraitheoir",
+      "prefix": "Leas-",
+      "stem": "Cláraitheoir",
+      "stem_attested": 1
+    },
+    {
+      "word": "Inghlactha",
+      "prefix": "In",
+      "stem": "glactha",
+      "stem_attested": 1
+    },
+    {
+      "word": "Réamhshocrú",
+      "prefix": "Réamh",
+      "stem": "socrú",
+      "stem_attested": 1
+    },
+    {
+      "word": "Neamhghríochtaí",
+      "prefix": "Neamh",
+      "stem": "gríochtaí",
+      "stem_attested": 0
+    },
+    {
+      "word": "Neamhsheolaithe",
+      "prefix": "Neamh",
+      "stem": "seolaithe",
+      "stem_attested": 1
+    },
+    {
+      "word": "Mórphíopaí",
+      "prefix": "Mór",
+      "stem": "píopaí",
+      "stem_attested": 1
+    },
+    {
+      "word": "Gearrthóg-ar",
+      "prefix": "Gearr",
+      "stem": "tóg-ar",
+      "stem_attested": 0
+    },
+    {
+      "word": "Príomh-Chúirte",
+      "prefix": "Príomh-",
+      "stem": "Cúirte",
+      "stem_attested": 1
+    },
+    {
+      "word": "Formheasfar",
+      "prefix": "For",
+      "stem": "measfar",
+      "stem_attested": 1
+    },
+    {
+      "word": "Ilfhachtóir",
+      "prefix": "Il",
+      "stem": "fachtóir",
+      "stem_attested": 1
+    },
+    {
+      "word": "Athchóirithe",
+      "prefix": "Ath",
+      "stem": "cóirithe",
+      "stem_attested": 1
+    },
+    {
+      "word": "Díchoimisiúnú",
+      "prefix": "Dí",
+      "stem": "coimisiúnú",
+      "stem_attested": 1
+    },
+    {
+      "word": "Comhfhreagras",
+      "prefix": "Comh",
+      "stem": "freagras",
+      "stem_attested": 0
+    },
+    {
+      "word": "Athchúrsáilte",
+      "prefix": "Ath",
+      "stem": "cúrsáilte",
+      "stem_attested": 0
+    },
+    {
+      "word": "Deabha-chabhra",
+      "prefix": "Dea",
+      "stem": "ba-chabhra",
+      "stem_attested": 0
+    },
+    {
+      "word": "Meánfhad",
+      "prefix": "Meán",
+      "stem": "fad",
+      "stem_attested": 1
+    },
+    {
+      "word": "Ollchorrlach",
+      "prefix": "Oll",
+      "stem": "corrlach",
+      "stem_attested": 1
+    },
+    {
+      "word": "Féin-fhoilsiú",
+      "prefix": "Féin-",
+      "stem": "foilsiú",
+      "stem_attested": 1
+    },
+    {
+      "word": "Ard-Mhéara",
+      "prefix": "Ard-",
+      "stem": "Méara",
+      "stem_attested": 1
+    },
+    {
+      "word": "Ardchláir",
+      "prefix": "Ard",
+      "stem": "cláir",
+      "stem_attested": 1
+    },
+    {
+      "word": "Ard-chumhacht",
+      "prefix": "Ard-",
+      "stem": "cumhacht",
+      "stem_attested": 1
+    },
+    {
+      "word": "Comhpháirtíochta",
+      "prefix": "Comh",
+      "stem": "páirtíochta",
+      "stem_attested": 1
+    },
+    {
+      "word": "Neamhthrócaireach",
+      "prefix": "Neamh",
+      "stem": "trócaireach",
+      "stem_attested": 1
+    },
+    {
+      "word": "Ath-chraicne",
+      "prefix": "Ath-",
+      "stem": "craicne",
+      "stem_attested": 1
+    },
+    {
+      "word": "Athshondais",
+      "prefix": "Ath",
+      "stem": "sondais",
+      "stem_attested": 0
+    },
+    {
+      "word": "Príomh-Fheidhmeannach",
+      "prefix": "Príomh-",
+      "stem": "Feidhmeannach",
+      "stem_attested": 1
+    },
+    {
+      "word": "Gnáthchónaithe",
+      "prefix": "Gnáth",
+      "stem": "cónaithe",
+      "stem_attested": 1
+    },
+    {
+      "word": "nArdpháirtithe",
+      "prefix": "nArd",
+      "stem": "páirtithe",
+      "stem_attested": 1
+    },
+    {
+      "word": "Nua-Ghaeilge",
+      "prefix": "Nua-",
+      "stem": "Gaeilge",
+      "stem_attested": 1
+    },
+    {
+      "word": "Síor-Chistí",
+      "prefix": "Síor-",
+      "stem": "Cistí",
+      "stem_attested": 1
+    },
+    {
+      "word": "Iarbhunoideachas",
+      "prefix": "Iar",
+      "stem": "bunoideachas",
+      "stem_attested": 1
+    },
+    {
+      "word": "Athdhearbhaigh",
+      "prefix": "Ath",
+      "stem": "dearbhaigh",
+      "stem_attested": 0
+    },
+    {
+      "word": "Meánmhara",
+      "prefix": "Meán",
+      "stem": "mara",
+      "stem_attested": 1
+    },
+    {
+      "word": "Gearrthéarmach",
+      "prefix": "Gearr",
+      "stem": "téarmach",
+      "stem_attested": 0
+    },
+    {
+      "word": "Neamhcheangailte",
+      "prefix": "Neamh",
+      "stem": "ceangailte",
+      "stem_attested": 1
+    },
+    {
+      "word": "Fochéime",
+      "prefix": "Fo",
+      "stem": "céime",
+      "stem_attested": 1
+    },
+    {
+      "word": "Idirbheartaíochta",
+      "prefix": "Idir",
+      "stem": "beartaíochta",
+      "stem_attested": 1
+    },
+    {
+      "word": "Ríomhchomhdaithe",
+      "prefix": "Ríomh",
+      "stem": "comhdaithe",
+      "stem_attested": 1
+    }
+  ],
+  "prefixes": [
+    "aer",
+    "ais",
+    "an",
+    "aon",
+    "ard",
+    "as",
+    "ath",
+    "barr",
+    "bith",
+    "buan",
+    "bun",
+    "comh",
+    "céad",
+    "cúl",
+    "dea",
+    "do",
+    "droch",
+    "dé",
+    "dí",
+    "fo",
+    "for",
+    "frith",
+    "féin",
+    "fíor",
+    "gar",
+    "gearr",
+    "gnáth",
+    "grian",
+    "iar",
+    "idir",
+    "il",
+    "im",
+    "in",
+    "ion",
+    "leas",
+    "leath",
+    "lár",
+    "meán",
+    "mion",
+    "mí",
+    "mór",
+    "neamh",
+    "nua",
+    "oll",
+    "príomh",
+    "ro",
+    "réamh",
+    "ríomh",
+    "ró",
+    "sain",
+    "sean",
+    "so",
+    "sprioc",
+    "sár",
+    "síor",
+    "tras",
+    "tré",
+    "uas",
+    "uile",
+    "ur",
+    "íos"
+  ],
+  "samples": {
+    "0 (word-initial)": {
+      "misses": [
+        "CH-Praghas"
+      ],
+      "hits": [
+        "Bhéarla",
+        "chomhshocraíochtaí",
+        "ghaois",
+        "bhaigíní",
+        "chleachtadh",
+        "Mheiriceánaigh",
+        "chleachta",
+        "phlandú",
+        "dhúshláin",
+        "phot",
+        "fhéadfaí",
+        "choimín",
+        "mhíochaine",
+        "pharaiméadar",
+        "cheile",
+        "bhainistíocht",
+        "bheidh",
+        "cheadúnaisí",
+        "mhótaraithe",
+        "gharáiste",
+        "Choigiltis",
+        "chomhairleoidh",
+        "phráinne",
+        "fhoghlaimíonn",
+        "Phreasagallamh",
+        "shaoróg",
+        "sheola",
+        "mhorgáistí",
+        "sheisiúin",
+        "thugtaí"
+      ],
+      "n_misses": 1,
+      "n_hits": 6801
+    },
+    "1 (one morpheme in front)": {
+      "misses": [
+        "ard-bheachtais",
+        "dúchasacha",
+        "athbhliain",
+        "teilithéacs",
+        "drochshláinte",
+        "ró-bhrúchóirithe",
+        "dóchúlacht",
+        "idirchaidreamh",
+        "ionchoisc",
+        "urghabhtar",
+        "sainmhínitear",
+        "díbh",
+        "athchurtha",
+        "mór-threoirlínte",
+        "athdhéanta",
+        "róchrua",
+        "iardhíolacháin",
+        "d'fhíorú",
+        "neamhchoitianta",
+        "inghnóthaithe",
+        "inmharthanacht",
+        "bith-shábháilteacht",
+        "imfhálaithe",
+        "athbhreithnigh",
+        "inchiallaíos",
+        "athbhreithniú",
+        "forbhreithniú",
+        "fíorsholúbthacht",
+        "dóthaineach",
+        "inchomórtais"
+      ],
+      "hits": [],
+      "n_misses": 2636,
+      "n_hits": 0
+    },
+    "2+ (two or more)": {
+      "misses": [
+        "n-athbhunaítear",
+        "d'athcheapadh",
+        "gcomhpháirtithe",
+        "d'ath-dhíol",
+        "hachomhairc",
+        "gcomhcheangal",
+        "hathfhoirgniú",
+        "hinfheistíocht",
+        "han-mhinic",
+        "huasmhéideanna",
+        "gcomhpháirtíocht",
+        "t-infheisteoir",
+        "dtrasphailnítear",
+        "ngnáthchleachtais",
+        "gcomhthoghtar",
+        "hidirbhearta",
+        "n-athfhruileofar",
+        "n-imtheorannaithe",
+        "héicea-thocsaineolaíochta",
+        "d'ath-mheas",
+        "ngnáth-chur",
+        "d'athchóiriú",
+        "ndobharlaigh",
+        "hachomharc",
+        "dtarchuirtear",
+        "hidirghabhálacha",
+        "t-iarmhéid",
+        "bhfiach-scaireanna",
+        "bhfearchéile",
+        "ndíchuireann"
+      ],
+      "hits": [],
+      "n_misses": 452,
+      "n_hits": 0
+    }
+  }
+}
