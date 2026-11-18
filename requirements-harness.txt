@@ -1,0 +1,14 @@
+# Experiment harness only. Scalpel's core and the layer-1 modules
+# (ga_mutation_split, ga_clitic, ga_lenition_prefix, ga_pipeline) are
+# standard library only and need none of this.
+#
+# Pinned to the versions the Stage 3 and Stage 4 numbers were produced with.
+# Python 3.9.6.
+tokenizers==0.22.2
+sentencepiece==0.2.2
+pandas==2.2.3
+numpy==1.26.4
+
+# Jane's metric, read only, installed from the vendored checkout:
+#   pip install -e external/tknzn4Irish
+# at commit 0f31695.

@@ -28,6 +28,13 @@ LINES = [
     "",
     "   ",
     "Aon-fhocal.",
+    # A leading or trailing space has no neighbouring chunk to carry it, so
+    # the convention families used to drop it. Found by the 12,000-line
+    # round trip, not by hand.
+    " Leading space, nGaeilge.",
+    "Trailing space, hÉireann. ",
+    " both ",
+    "\tleading tab",
 ]
 
 # Readings good enough to exercise the mutation path without the FST.

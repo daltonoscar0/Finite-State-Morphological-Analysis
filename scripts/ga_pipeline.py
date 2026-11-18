@@ -154,17 +154,20 @@ def tokenize(line, family, encode_unit=None, readings_for=None):
     conv = CONVENTIONS[family]
     enc = encode_unit or (lambda u: [u])
     out, first_chunk = [], True
+    units = units_of_line(line, readings_for)
 
-    for unit in units_of_line(line, readings_for):
+    for pos, unit in enumerate(units):
         if unit.isspace():
-            # A single space is already implied by any convention: by the
-            # word-initial marker where there is one, and by the *absence* of
-            # the continuation marker where there is one. Only families with
-            # neither, and whitespace that is not a single space, need it
-            # spelled out.
             # Whatever the representation, what follows starts a new chunk.
             first_chunk = True
-            if unit == " " and (conv["initial"] or conv["cont"]):
+            # A single space is implied by any convention, but only where it
+            # sits *between* two chunks: the word-initial marker on the next
+            # chunk encodes it, or the absence of a continuation marker does.
+            # A leading or trailing space has no neighbour to carry it, so it
+            # has to be spelled out or the round trip drops it.
+            between = 0 < pos < len(units) - 1
+            if (unit == " " and between
+                    and (conv["initial"] or conv["cont"])):
                 continue
             out.append(escape_ws(unit))
             continue
