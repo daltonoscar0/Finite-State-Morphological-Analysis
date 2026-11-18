@@ -111,6 +111,42 @@ annotation, so the gold layout cannot adjudicate a firing on one. Precision
 is quoted on the lowercase subset, where the annotation is reliable, and the
 capitalised firings are reported separately with a hand-checked sample.
 
+**D6. The clitic rule ships on by default; the prefix list does not.** The
+clitic split raises four categories and lowers none (uru_only 77.78 to
+100.00, uru+prefix 66.67 to 73.81, uru+suffix 63.00 to 66.05, all_affixes
+50.17 to 52.95, overall 45.46 to 45.98), so there was no reason to hide it
+behind a flag. `--no-clitics` reproduces the old numbers exactly, which is
+the ablation. The prefix list stays off because MoirfEolas does not annotate
+lenition, so it cannot be credited and can only perturb other categories.
+
+**D7. m' and b' are split even though the gold does not mark them.** The urú
+column records d'/D' (639 words) but leaves m'/b'/B' empty (13 words), so
+splitting those inserts a boundary the metric cannot credit. Measured: the
+scores are identical to d'-only at two decimal places, so it costs nothing,
+and the clitics are real. Worth telling Jane, since it looks like a gap in
+the annotation rather than a decision.
+
+**D8. The analyser abort is worked around, not fixed.** The bridge calls
+`abort()` on `n-APP`, `n-EOS`, `n-IOTA` and `t-AMHÁIN`: analysis accepts a
+hyphenated marker before an all-caps stem, generation uppercases the inserted
+marker and drops the hyphen, and the self-check at mutation_fst.cpp:201
+fails. `demutate_all` now bisects a failing chunk, sets the offenders aside
+and reports them, so one word cannot take a 272,000-word run with it. The
+real fix belongs in `inverse_ok_cp`, and it is **blocked**: mutation_fst.h
+pins semantics to `src/mutations.py` and `tests/attested_mutations.tsv` and
+requires the C++ runner to reproduce the Python pass count exactly, and
+neither file is in this checkout. Flagged for Oscar.
+
+**D9. Training-time pre-tokenization is not adopted.** It fixes the
+missing-marker problem (marker coverage 11-13 of 16 goes to 13-15) and still
+loses to inference-only in 10 of 12 cells. Reported rather than buried; the
+expectation going in was the opposite.
+
+**D10. Fertility under `scalpel_inf` is optimistic and said so.** It counts
+the injected marker as one token, but eight of the sixteen markers are in no
+vocabulary trained on raw text, so a real encoder emits more. The
+`scalpel_train` column is the honest one.
+
 ## Benchmark defect found: MoirfEolas does not annotate capitalised words
 
 The prefix and urú columns are effectively empty for capitalised forms, while
@@ -153,3 +189,56 @@ only. Listed in `for_jane.md`.
   closed list, and is not counted in the extension's denominator.
 - `so-` versus borrowed `soch-` (Greek socio-) is unresolved and is the only
   disagreement with the gold layout left at the default setting.
+- **The analyser abort fix is blocked** on `src/mutations.py` and
+  `tests/attested_mutations.tsv` (decision D8). Worked around for now.
+- No Irish sentence corpus in the checkout, so the Stage 4 round-trip corpus
+  is reconstructed from the word-per-line GA dump. Rerun on Jane's parallel
+  data when it arrives.
+- `suffix_only` falls by 0.01 to 0.11 under the pre-tokenizer in 9 of 12
+  Stage 3 cells. Small and one-directional, so real. Not diagnosed further
+  than "fixing a boundary at the front changes how the back-off splits the
+  rest".
+
+## Test and command inventory
+
+89 tests, all passing:
+
+```
+python3 tools/test_ga_mutation_split.py     # 33, pre-existing
+python3 tools/test_ga_lenition_prefix.py    # 24, Stage 1
+python3 tools/test_ga_clitic.py             # 18, Stage 2
+python3 tools/test_ga_pipeline.py           # 14, Stage 3/4
+```
+
+Everything run in this session, in order:
+
+```
+# Stage 0
+python3 scripts/moirfeolas_score.py --families UnigramLM --sizes 8k \
+    --systems backoff hybrid --out results/irish/baseline_her_protocol.json
+python3 scripts/moirfeolas_score.py --families UnigramLM --sizes 8k \
+    --systems backoff hybrid --all-words \
+    --out results/irish/baseline_all_words.json
+
+# Stage 1
+python3 scripts/irish_lenition_depth.py --json results/irish/lenition_depth.json
+
+# Stage 2
+python3 scripts/moirfeolas_score.py --families UnigramLM --sizes 8k \
+    --systems backoff hybrid --no-clitics          # the ablation
+python3 scripts/moirfeolas_score.py --families UnigramLM --sizes 8k \
+    --systems backoff hybrid --out results/irish/stage2_clitics.json
+
+# Stage 3
+python3 scripts/irish_boundary_survival.py --sizes 8k \
+    --out results/irish/boundary_survival.json
+python3 scripts/moirfeolas_score.py --sizes 8k --systems backoff hybrid
+python3 scripts/irish_train_tokenizers.py
+python3 scripts/irish_tokenizer_generality.py
+
+# Stage 4
+python3 scripts/make_mt_configs.py
+python3 scripts/make_roundtrip_corpus.py
+python3 scripts/tokenize_mt.py --input results/irish/roundtrip_corpus.txt \
+    --config unigram8k-scalpel --output /tmp/rt.tok --round-trip
+```
