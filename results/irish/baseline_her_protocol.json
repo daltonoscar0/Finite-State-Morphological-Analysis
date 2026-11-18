@@ -1,0 +1,74 @@
+{
+  "backoff_UnigramLM_8k": {
+    "label": "backoff UnigramLM 8k",
+    "n_evaluated": 33385,
+    "overall": 43.31860616045125,
+    "categories": {
+      "uru_only": 50.0,
+      "prefix_only": 66.11842105263158,
+      "suffix_only": 40.69936509475113,
+      "uru+prefix": 43.03482587064676,
+      "uru+suffix": 50.829875518672196,
+      "prefix+suffix": 46.80716622063634,
+      "all_affixes": 35.97756410256415
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 760,
+      "suffix_only": 20633,
+      "uru+prefix": 201,
+      "uru+suffix": 3374,
+      "prefix+suffix": 6726,
+      "all_affixes": 1664
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 45.97417394606912,
+      "uru_mapping_%": 3.3232054690467145,
+      "suffix_fully_absorbed_%": 32.85,
+      "suffix_split_absorbed_%": 24.05,
+      "prefix_fully_absorbed_%": 35.69,
+      "prefix_split_absorbed_%": 4.34,
+      "n_words_evaluated": 33385,
+      "n_uru": 5266,
+      "n_prefix": 9351,
+      "n_suffix": 32397
+    }
+  },
+  "hybrid_UnigramLM_8k": {
+    "label": "hybrid UnigramLM 8k",
+    "n_evaluated": 33480,
+    "overall": 45.46022500995637,
+    "categories": {
+      "uru_only": 77.77777777777779,
+      "prefix_only": 66.11842105263158,
+      "suffix_only": 40.69936509475113,
+      "uru+prefix": 66.66666666666666,
+      "uru+suffix": 62.995337995338,
+      "prefix+suffix": 46.80716622063634,
+      "all_affixes": 50.1674546887315
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 760,
+      "suffix_only": 20633,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 6726,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 12.25517627308338,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 33.05,
+      "suffix_split_absorbed_%": 23.93,
+      "prefix_fully_absorbed_%": 33.86,
+      "prefix_split_absorbed_%": 4.34,
+      "n_words_evaluated": 33480,
+      "n_uru": 5361,
+      "n_prefix": 9388,
+      "n_suffix": 32483
+    }
+  }
+}
