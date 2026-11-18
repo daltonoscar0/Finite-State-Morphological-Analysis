@@ -1,0 +1,170 @@
+{
+  "BPE_8k": {
+    "n_split": 5419,
+    "rebuilt": 5419,
+    "stray_marker": 0,
+    "missing_continuation": 0,
+    "markers_in_vocab": [
+      "b",
+      "bh",
+      "d",
+      "g",
+      "h",
+      "m",
+      "n",
+      "t"
+    ],
+    "markers_absent": [
+      "B'",
+      "D'",
+      "b'",
+      "d'",
+      "h-",
+      "m'",
+      "n-",
+      "t-"
+    ],
+    "rebuild_failures": [],
+    "stray_examples": []
+  },
+  "Byte-BPE_8k": {
+    "n_split": 5419,
+    "rebuilt": 5419,
+    "stray_marker": 0,
+    "missing_continuation": 0,
+    "markers_in_vocab": [
+      "b",
+      "bh",
+      "d",
+      "g",
+      "h",
+      "m",
+      "n",
+      "t"
+    ],
+    "markers_absent": [
+      "B'",
+      "D'",
+      "b'",
+      "d'",
+      "h-",
+      "m'",
+      "n-",
+      "t-"
+    ],
+    "rebuild_failures": [],
+    "stray_examples": []
+  },
+  "SentencePieceBPE_8k": {
+    "n_split": 5419,
+    "rebuilt": 5419,
+    "stray_marker": 0,
+    "missing_continuation": 0,
+    "markers_in_vocab": [
+      "b",
+      "bh",
+      "d",
+      "g",
+      "h",
+      "m",
+      "n",
+      "t"
+    ],
+    "markers_absent": [
+      "B'",
+      "D'",
+      "b'",
+      "d'",
+      "h-",
+      "m'",
+      "n-",
+      "t-"
+    ],
+    "rebuild_failures": [],
+    "stray_examples": []
+  },
+  "SentencePieceULM_8k": {
+    "n_split": 5419,
+    "rebuilt": 5419,
+    "stray_marker": 0,
+    "missing_continuation": 0,
+    "markers_in_vocab": [
+      "b",
+      "bh",
+      "d",
+      "g",
+      "h",
+      "m",
+      "n",
+      "t"
+    ],
+    "markers_absent": [
+      "B'",
+      "D'",
+      "b'",
+      "d'",
+      "h-",
+      "m'",
+      "n-",
+      "t-"
+    ],
+    "rebuild_failures": [],
+    "stray_examples": []
+  },
+  "UnigramLM_8k": {
+    "n_split": 5419,
+    "rebuilt": 5419,
+    "stray_marker": 0,
+    "missing_continuation": 0,
+    "markers_in_vocab": [
+      "b",
+      "bh",
+      "d",
+      "g",
+      "h",
+      "m",
+      "n",
+      "t"
+    ],
+    "markers_absent": [
+      "B'",
+      "D'",
+      "b'",
+      "d'",
+      "h-",
+      "m'",
+      "n-",
+      "t-"
+    ],
+    "rebuild_failures": [],
+    "stray_examples": []
+  },
+  "WordPiece_8k": {
+    "n_split": 5419,
+    "rebuilt": 5419,
+    "stray_marker": 0,
+    "missing_continuation": 5419,
+    "markers_in_vocab": [
+      "b",
+      "bh",
+      "d",
+      "g",
+      "h",
+      "m",
+      "n",
+      "t"
+    ],
+    "markers_absent": [
+      "B'",
+      "D'",
+      "b'",
+      "d'",
+      "h-",
+      "m'",
+      "n-",
+      "t-"
+    ],
+    "rebuild_failures": [],
+    "stray_examples": []
+  }
+}
