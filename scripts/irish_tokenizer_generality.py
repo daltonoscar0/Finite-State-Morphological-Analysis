@@ -116,6 +116,12 @@ def main():
     ap.add_argument("--moirfeolas", default=str(MOIRFEOLAS))
     ap.add_argument("--out-csv", default=str(DEFAULT_CSV))
     ap.add_argument("--out-json", default=str(DEFAULT_JSON))
+    ap.add_argument("--allow-skips", action="store_true",
+                    help="Continue when the analyser aborts on an input and "
+                         "those words are set aside. Off by default: as of the "
+                         "22 November fix nothing is skipped, so a skip means a "
+                         "regression and the run should fail rather than report "
+                         "numbers over fewer words than it was handed.")
     args = ap.parse_args()
 
     manifest_path = Path(args.models_dir) / "manifest.json"
@@ -126,7 +132,8 @@ def main():
     affix = load_moirfeolas(args.moirfeolas)
     words = list(affix)
     skipped = []
-    demut = demutate_all(words, skipped=skipped)
+    demut = demutate_all(words, skipped=skipped,
+                         allow_skips=args.allow_skips)
     demut, n_clitic = add_clitic_readings(words, demut)
     splits = mutation_splits(words, demut, (CLITIC_TAG,) + SPLIT_TAGS)
     print(f"{len(words)} words; layer 1 fires on {len(splits)}; "

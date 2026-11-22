@@ -16,6 +16,7 @@ the word rather than in front of it.
 import os
 import sys
 import unittest
+from pathlib import Path
 
 sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
@@ -24,6 +25,7 @@ from ga_mutation_split import (  # noqa: E402
     read_tsv_readings,
     SPLIT_TAGS, SPLIT_TAGS_WITH_LENITION, add_dprime, marker_and_base,
     mutation_splits, pick, rebuild, rebuild_untagged,
+    demutate_all,
 )
 
 
@@ -257,6 +259,48 @@ class TsvProvider(unittest.TestCase):
                             concatenative_only=False)
         self.assertEqual(s["gcarr"], ("Ecl", "g", "carr"))
         self.assertEqual(s["bhean"], ("Len", "h", "bean"))
+
+
+class TestNoSkipsOnTheCorpus(unittest.TestCase):
+    """The analyser must not abort on anything in the GA corpus.
+
+    The bisection in demutate_all is a safety net; after the 22 November fix
+    to inverse_ok it should never fire. This is the regression test for that:
+    if the skip list is ever non-empty again, the four forms (or new ones)
+    have come back.
+    """
+
+    CORPUS = (Path(__file__).resolve().parents[1] / "external" /
+              "tknzn4Irish" / "data" / "GA" / "all_ga_input.txt")
+
+    def test_ga_corpus_has_no_skips(self):
+        if not self.CORPUS.exists():
+            self.skipTest(f"{self.CORPUS} not present")
+        with open(self.CORPUS, encoding="utf-8") as f:
+            vocab = sorted({line.strip() for line in f if line.strip()})
+        skipped = []
+        out = demutate_all(vocab, skipped=skipped)
+        self.assertEqual(skipped, [], f"analyser aborted on {skipped}")
+        self.assertEqual(len(out), len(vocab),
+                         "every input should have come back")
+
+    def test_the_four_known_forms_analyse(self):
+        expected = {"n-APP": ("Ecl", "APP"), "n-EOS": ("Ecl", "EOS"),
+                    "n-IOTA": ("Ecl", "IOTA"),
+                    "t-AMHÁIN": ("TPref", "AMHÁIN")}
+        skipped = []
+        out = demutate_all(sorted(expected), skipped=skipped)
+        self.assertEqual(skipped, [])
+        for word, reading in expected.items():
+            self.assertIn(reading, out[word], word)
+
+    def test_allow_skips_is_required_to_ignore_a_skip(self):
+        # Nothing skips any more, so this checks the signature rather than
+        # the behaviour: the flag exists and defaults to refusing.
+        import inspect
+        sig = inspect.signature(demutate_all)
+        self.assertIn("allow_skips", sig.parameters)
+        self.assertIs(sig.parameters["allow_skips"].default, False)
 
 
 if __name__ == "__main__":

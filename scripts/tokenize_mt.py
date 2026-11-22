@@ -89,7 +89,7 @@ def build_encoder(cfg):
     return encode_unit
 
 
-def build_readings(lines, use_scalpel):
+def build_readings(lines, use_scalpel, allow_skips=False):
     """word -> readings, for every word core in the input. One FST call."""
     if not use_scalpel:
         return lambda w: []
@@ -103,7 +103,7 @@ def build_readings(lines, use_scalpel):
                 cores.add(core)
     words = sorted(cores)
     skipped = []
-    demut = demutate_all(words, skipped=skipped)
+    demut = demutate_all(words, skipped=skipped, allow_skips=allow_skips)
     demut, _ = add_clitic_readings(words, demut)
     if skipped:
         print(f"  analyser aborts on {len(skipped)} form(s), left whole: "
@@ -122,6 +122,11 @@ def main():
     ap.add_argument("--round-trip", action="store_true",
                     help="Tokenize, detokenize, and report every line that "
                          "does not come back identical.")
+    ap.add_argument("--allow-skips", action="store_true",
+                    help="Continue when the analyser aborts on an input and "
+                         "those words are left whole. Off by default: as of "
+                         "the 22 November fix nothing is skipped, so a skip "
+                         "means a regression.")
     ap.add_argument("--list", action="store_true",
                     help="List the configurations and exit.")
     args = ap.parse_args()
@@ -162,7 +167,7 @@ def main():
         return 0
 
     encode_unit = build_encoder(cfg)
-    readings_for = build_readings(lines, cfg["scalpel"])
+    readings_for = build_readings(lines, cfg["scalpel"], args.allow_skips)
 
     t0 = time.monotonic()
     n_tokens, failures = 0, []

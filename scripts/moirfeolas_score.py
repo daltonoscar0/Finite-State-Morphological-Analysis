@@ -278,13 +278,20 @@ def main():
                          "and lowers none.")
     ap.add_argument("--no-clitics", dest="clitics", action="store_false",
                     help="The pre-Stage-2 behaviour, for the ablation.")
+    ap.add_argument("--allow-skips", action="store_true",
+                    help="Continue when the analyser aborts on an input and "
+                         "those words are set aside. Off by default: as of the "
+                         "22 November fix nothing is skipped, so a skip means a "
+                         "regression and the run should fail rather than report "
+                         "numbers over fewer words than it was handed.")
     args = ap.parse_args()
 
     affix = load_moirfeolas(args.moirfeolas)
     words = list(affix.keys())
     print(f"Loaded {len(words)} words from {args.moirfeolas}")
 
-    demut, info = PROVIDERS[args.layer1](words, tsv_path=args.layer1_tsv)
+    demut, info = PROVIDERS[args.layer1](words, tsv_path=args.layer1_tsv,
+                                         allow_skips=args.allow_skips)
     print(f"Layer 1 provider: {args.layer1}"
           + (f" ({args.layer1_tsv})" if args.layer1_tsv else ""))
     if info.get("tags_seen"):

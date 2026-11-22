@@ -107,6 +107,12 @@ def main():
     ap.add_argument("--conditions", nargs="+", default=CONDITIONS)
     ap.add_argument("--limit", type=int, default=None,
                     help="Use only the first N lines. For smoke tests.")
+    ap.add_argument("--allow-skips", action="store_true",
+                    help="Continue when the analyser aborts on an input and "
+                         "those words are set aside. Off by default: as of the "
+                         "22 November fix nothing is skipped, so a skip means a "
+                         "regression and the run should fail rather than report "
+                         "numbers over fewer words than it was handed.")
     args = ap.parse_args()
 
     lines = load_words(args.corpus)
@@ -118,7 +124,8 @@ def main():
     print(f"distinct forms: {len(vocab)}")
 
     skipped = []
-    demut = demutate_all(vocab, skipped=skipped)
+    demut = demutate_all(vocab, skipped=skipped,
+                         allow_skips=args.allow_skips)
     if skipped:
         print(f"analyser aborts on {len(skipped)} form(s), set aside: "
               f"{skipped}")

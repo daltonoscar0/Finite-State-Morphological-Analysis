@@ -167,6 +167,12 @@ def main():
     ap.add_argument("--out-csv", default=str(DEFAULT_CSV))
     ap.add_argument("--out-md", default=str(DEFAULT_MD))
     ap.add_argument("--json", default=None)
+    ap.add_argument("--allow-skips", action="store_true",
+                    help="Continue when the analyser aborts on an input and "
+                         "those words are set aside. Off by default: as of the "
+                         "22 November fix nothing is skipped, so a skip means a "
+                         "regression and the run should fail rather than report "
+                         "numbers over fewer words than it was handed.")
     args = ap.parse_args()
 
     with open(args.moirfeolas, encoding="utf-8") as f:
@@ -174,7 +180,7 @@ def main():
     words = [r["word"] for r in gold]
     print(f"Loaded {len(words)} words from {args.moirfeolas}")
 
-    demut = demutate_all(words)
+    demut = demutate_all(words, allow_skips=args.allow_skips)
     print("Ran Scalpel's mutation FST over the full list.")
 
     # Attestation set for vetting short prefixes. Both sources, because a

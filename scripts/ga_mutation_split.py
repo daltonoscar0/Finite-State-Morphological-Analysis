@@ -12,6 +12,7 @@ surface. Lenition does not: it inserts an h after the radical consonant, so
 isolate it. ``rebuild`` inverts both.
 """
 import subprocess
+import sys
 from pathlib import Path
 
 BRIDGE = Path(__file__).resolve().parents[1] / "ga_demutate"
@@ -44,7 +45,17 @@ def _run_bridge(words):
     return out
 
 
-def demutate_all(words, skipped=None, chunk=20000):
+class AnalyserSkippedWords(RuntimeError):
+    """The bridge aborted on some input and those words were set aside.
+
+    Raised rather than returned so a scoring or tokenizing run cannot quietly
+    report numbers computed over fewer words than it was handed. Pass
+    ``allow_skips=True`` (``--allow-skips`` on the scripts) to continue
+    anyway, which is the only way to get the old silent behaviour.
+    """
+
+
+def demutate_all(words, skipped=None, chunk=20000, allow_skips=False):
     """word -> [(tag, base), ...], in the analyser's own candidate order.
 
     The bridge aborts rather than returning on some inputs: a hyphenated
@@ -56,11 +67,14 @@ def demutate_all(words, skipped=None, chunk=20000):
 
     One aborting word must not take a 272,000-word run with it, so the input
     is processed in chunks and a failing chunk is bisected until the
-    individual offenders are isolated and set aside. Offenders are appended
-    to ``skipped`` if given, so a caller can report them rather than silently
-    scoring fewer words than it was handed. Fixing the analyser itself needs
-    the Python reference and the shared attested-form file named in
-    mutation_fst.h, neither of which is in this checkout.
+    individual offenders are isolated and set aside.
+
+    The bisection is a safety net, not a normal path. As of the 22 November
+    fix the analyser does not abort on any input (412,865 checked, see
+    ~/code/seanchai/scripts/fuzz_parity.py), so a non-empty skip list now
+    means something has regressed. It is therefore reported on stderr and
+    raised, not swallowed: a run that scored fewer words than it was handed
+    must not hand back numbers as if it had not. ``allow_skips`` opts out.
     """
     out, bad = {}, [] if skipped is None else skipped
 
@@ -80,6 +94,16 @@ def demutate_all(words, skipped=None, chunk=20000):
     words = list(words)
     for i in range(0, len(words), chunk):
         process(words[i:i + chunk])
+
+    if bad:
+        shown = ", ".join(repr(w) for w in bad[:20])
+        more = f" (and {len(bad) - 20} more)" if len(bad) > 20 else ""
+        msg = (f"the analyser aborted on {len(bad)} of {len(words)} inputs "
+               f"and they were set aside: {shown}{more}")
+        print(f"ga_mutation_split: {msg}", file=sys.stderr)
+        if not allow_skips:
+            raise AnalyserSkippedWords(
+                msg + ". Pass --allow-skips to continue anyway.")
     return out
 
 
@@ -133,9 +157,9 @@ def read_tsv_readings(path, words=None, known_tags=KNOWN_TAGS):
     return readings, {"dropped_by_tag": dropped, "tags_seen": sorted(seen_tags)}
 
 
-def provider_scalpel(words, **_):
+def provider_scalpel(words, allow_skips=False, **_):
     """Scalpel's mutation FST, through the ga_demutate bridge binary."""
-    return demutate_all(words), {}
+    return demutate_all(words, allow_skips=allow_skips), {}
 
 
 def provider_tsv(words, tsv_path=None, **_):
