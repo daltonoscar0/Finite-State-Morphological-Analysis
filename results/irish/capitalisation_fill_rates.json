@@ -1,0 +1,24 @@
+{
+  "n_capitalised": 6969,
+  "n_lowercase": 28548,
+  "uru": {
+    "capitalised_filled": 26,
+    "capitalised_pct": 0.4,
+    "lowercase_filled": 5335,
+    "lowercase_pct": 18.7
+  },
+  "prefix": {
+    "capitalised_filled": 25,
+    "capitalised_pct": 0.4,
+    "lowercase_filled": 9898,
+    "lowercase_pct": 34.7
+  },
+  "suffix": {
+    "capitalised_filled": 6968,
+    "capitalised_pct": 100.0,
+    "lowercase_filled": 27434,
+    "lowercase_pct": 96.1
+  },
+  "exact_case_variants": 0,
+  "n_pairs": 606
+}

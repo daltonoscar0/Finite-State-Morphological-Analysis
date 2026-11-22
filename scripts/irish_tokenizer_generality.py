@@ -52,7 +52,13 @@ DEFAULT_JSON = ROOT / "results" / "irish" / "tokenizer_generality.json"
 # plain text the same way it does for Jane's models.
 SPECIAL = {"unigram": None, "bpe": None, "wordpiece": "##"}
 
-CONDITIONS = ["plain", "scalpel_inf", "scalpel_train"]
+CONDITIONS = ["plain", "scalpel_inf", "scalpel_train", "scalpel_added"]
+
+# The sixteen strings layer 1 can emit as a marker. Registered as added
+# tokens in the scalpel_added condition so the raw-trained model can spell a
+# boundary it never saw in training, without being retrained.
+MARKERS = ["b", "bh", "d", "g", "h", "m", "n", "t",
+           "B'", "D'", "b'", "d'", "m'", "h-", "n-", "t-"]
 
 # The three absorption rates worth carrying into the table. Her script
 # reports six; these are the "fully absorbed" ones, one per affix type, which
@@ -65,12 +71,33 @@ ABSORPTION_KEYS = {
 }
 
 FIELDS = (["condition", "model", "vocab_size", "n_evaluated", "overall"]
-          + CATEGORIES + ["fertility"] + list(ABSORPTION_KEYS)
-          + ["protocol"])
+          + CATEGORIES
+          + ["fertility_assumed_one_token", "fertility_as_encoded",
+             "markers_out_of_vocab"]
+          + list(ABSORPTION_KEYS) + ["protocol"])
 
 
-def encoder(path, special):
+def encoder(path, special, added=None):
+    """Encode words through a model, optionally with markers added first.
+
+    ``added`` registers strings as single vocabulary entries, which is what
+    the scalpel_added condition is: the raw-trained model, unretrained, given
+    just enough vocabulary to spell the boundaries layer 1 inserts.
+
+    Only markers the model cannot already spell as one piece are added, and
+    that restriction is not cosmetic. An added token in the `tokenizers`
+    library matches anywhere in the string, not just where layer 1 put a
+    boundary, so registering a one-character marker such as 'b' or 't' splits
+    it out of every word that contains it: with all sixteen added, 'bunreacht'
+    came out as nine single-character pieces and fertility went from 2.96 to
+    6.50. Restricted to the genuinely missing multi-character markers,
+    ordinary words tokenize exactly as before.
+    """
     tok = load_tokenizer(path, "standard")
+    if added:
+        missing = [m for m in added if len(tok.encode(m).tokens) > 1]
+        if missing:
+            tok.add_tokens(missing)
 
     def encode(ws):
         lens = remove_specials(get_token_lens(tok, list(ws), "standard"),
@@ -101,6 +128,33 @@ def fertility(token_lens):
     if not token_lens:
         return None
     return sum(n for n, _ in token_lens.values()) / len(token_lens)
+
+
+def marker_pieces(path, special):
+    """{marker: how many pieces this model really encodes it as}.
+
+    The scored stream injects the marker as a single token, which is what the
+    metric sees, but a marker absent from the vocabulary is re-split by a real
+    encoder. No model emits <unk> for one: every marker is spellable from
+    characters the vocabulary already has, so an absent marker costs exactly
+    one extra token rather than losing information.
+    """
+    enc = encoder(path, special)
+    out = enc(MARKERS)
+    return {m: max(1, len(out.get(m, [m]))) for m in MARKERS}
+
+
+def fertility_as_encoded(token_lens, split, pieces):
+    """Fertility with the injected marker charged at its real piece count."""
+    if not token_lens:
+        return None
+    total = 0
+    for w, (n, _) in token_lens.items():
+        extra = 0
+        if w in split:
+            extra = pieces.get(split[w][1], 1) - 1
+        total += n + extra
+    return total / len(token_lens)
 
 
 def absorption(result):
@@ -146,7 +200,7 @@ def main():
 
     rows, out = [], {}
     hdr = (f"{'condition':<15}{'model':<10}{'size':>7}{'prot':>5}"
-           f"{'overall':>9}{'fert':>7}" +
+           f"{'overall':>9}{'fert':>7}{'fertEnc':>7}" +
            "".join(f"{c[:6]:>8}" for c in CATEGORIES))
     print("\n" + hdr)
 
@@ -158,26 +212,46 @@ def main():
         enc_plain = encoder(paths["plain"], special)
         enc_scal = (encoder(paths["scalpel"], special)
                     if "scalpel" in paths else None)
+        enc_added = encoder(paths["plain"], special, added=MARKERS)
+        pieces_plain = marker_pieces(paths["plain"], special)
+        pieces_scal = (marker_pieces(paths["scalpel"], special)
+                       if "scalpel" in paths else {})
+        oov = sum(1 for m in MARKERS if pieces_plain.get(m, 1) > 1)
 
         for cond in CONDITIONS:
             if cond == "plain":
                 tl_full = plain_tl(words, enc_plain)
+                pieces, n_oov = {}, 0
             elif cond == "scalpel_inf":
                 tl_full = layered(words, enc_plain, splits)
+                pieces, n_oov = pieces_plain, oov
+            elif cond == "scalpel_added":
+                # Markers are single vocabulary entries here by construction,
+                # so assumed and as-encoded fertility coincide.
+                tl_full = layered(words, enc_added, splits)
+                pieces, n_oov = {}, 0
             else:
                 if enc_scal is None:
                     continue
                 tl_full = layered(words, enc_scal, splits)
+                pieces = pieces_scal
+                n_oov = sum(1 for m in MARKERS if pieces_scal.get(m, 1) > 1)
 
             for protocol in ("her", "all"):
                 tl = tl_full if protocol == "all" else exclude_single(tl_full)
                 r = score(tl, affix, f"{cond} {model} {size} {protocol}")
                 fert = fertility(tl)
+                fert_enc = (fertility_as_encoded(tl, splits, pieces)
+                            if pieces else fert)
                 row = {
                     "condition": cond, "model": model, "vocab_size": size,
                     "n_evaluated": r["n_evaluated"],
                     "overall": round(r["overall"], 2),
-                    "fertility": round(fert, 3) if fert else None,
+                    "fertility_assumed_one_token":
+                        round(fert, 3) if fert else None,
+                    "fertility_as_encoded":
+                        round(fert_enc, 3) if fert_enc else None,
+                    "markers_out_of_vocab": n_oov,
                     "protocol": protocol,
                 }
                 row.update(absorption(r))
@@ -191,7 +265,9 @@ def main():
                 }
                 if protocol == "her":
                     print(f"{cond:<15}{model:<10}{size:>7}{protocol:>5}"
-                          f"{row['overall']:>9.2f}{row['fertility']:>7.2f}" +
+                          f"{row['overall']:>9.2f}"
+                          f"{row['fertility_assumed_one_token']:>7.2f}"
+                          f"{row['fertility_as_encoded']:>7.2f}" +
                           "".join(
                               f"{(row[c] if row[c] is not None else 0):>8.2f}"
                               for c in CATEGORIES))

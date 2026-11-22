@@ -215,6 +215,78 @@
       "n_suffix": 34402
     }
   },
+  "scalpel_added_bpe_8000_her": {
+    "label": "scalpel_added bpe 8000 her",
+    "n_evaluated": 33950,
+    "overall": 42.73662248404517,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 52.61813537675607,
+      "suffix_only": 36.955692278342156,
+      "uru+prefix": 76.54761904761904,
+      "uru+suffix": 65.53030303030303,
+      "prefix+suffix": 43.42009065652873,
+      "all_affixes": 55.693459416863675
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 783,
+      "suffix_only": 20967,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 6839,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.018653236336504384,
+      "uru_mapping_%": 0.018653236336504384,
+      "suffix_fully_absorbed_%": 59.7,
+      "suffix_split_absorbed_%": 4.85,
+      "prefix_fully_absorbed_%": 39.25,
+      "prefix_split_absorbed_%": 7.76,
+      "n_words_evaluated": 33950,
+      "n_uru": 5361,
+      "n_prefix": 9524,
+      "n_suffix": 32930
+    }
+  },
+  "scalpel_added_bpe_8000_all": {
+    "label": "scalpel_added bpe 8000 all",
+    "n_evaluated": 35517,
+    "overall": 40.85109478090305,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 46.924829157175395,
+      "suffix_only": 35.00564716512311,
+      "uru+prefix": 76.54761904761904,
+      "uru+suffix": 65.53030303030303,
+      "prefix+suffix": 41.57216855662887,
+      "all_affixes": 55.693459416863675
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 878,
+      "suffix_only": 22135,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 7143,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.018653236336504384,
+      "uru_mapping_%": 0.018653236336504384,
+      "suffix_fully_absorbed_%": 61.43,
+      "suffix_split_absorbed_%": 4.65,
+      "prefix_fully_absorbed_%": 41.69,
+      "prefix_split_absorbed_%": 7.45,
+      "n_words_evaluated": 35517,
+      "n_uru": 5361,
+      "n_prefix": 9923,
+      "n_suffix": 34402
+    }
+  },
   "plain_bpe_16000_her": {
     "label": "plain bpe 16000 her",
     "n_evaluated": 31688,
@@ -425,6 +497,78 @@
       "suffix_split_absorbed_%": 3.13,
       "prefix_fully_absorbed_%": 53.12,
       "prefix_split_absorbed_%": 5.49,
+      "n_words_evaluated": 35517,
+      "n_uru": 5361,
+      "n_prefix": 9923,
+      "n_suffix": 34402
+    }
+  },
+  "scalpel_added_bpe_16000_her": {
+    "label": "scalpel_added bpe 16000 her",
+    "n_evaluated": 32075,
+    "overall": 38.53390491036652,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 49.519230769230774,
+      "suffix_only": 32.72890484739677,
+      "uru+prefix": 70.23809523809523,
+      "uru+suffix": 61.982808857808855,
+      "prefix+suffix": 38.11431212448005,
+      "all_affixes": 49.82269503546124
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 728,
+      "suffix_only": 19495,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 6491,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.018653236336504384,
+      "uru_mapping_%": 0.018653236336504384,
+      "suffix_fully_absorbed_%": 66.42,
+      "suffix_split_absorbed_%": 3.52,
+      "prefix_fully_absorbed_%": 47.31,
+      "prefix_split_absorbed_%": 6.12,
+      "n_words_evaluated": 32075,
+      "n_uru": 5361,
+      "n_prefix": 9121,
+      "n_suffix": 31110
+    }
+  },
+  "scalpel_added_bpe_16000_all": {
+    "label": "scalpel_added bpe 16000 all",
+    "n_evaluated": 35517,
+    "overall": 34.799532618183015,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 41.05922551252847,
+      "suffix_only": 28.825389654393497,
+      "uru+prefix": 70.23809523809523,
+      "uru+suffix": 61.982808857808855,
+      "prefix+suffix": 34.635307293854126,
+      "all_affixes": 49.82269503546124
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 878,
+      "suffix_only": 22135,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 7143,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.018653236336504384,
+      "uru_mapping_%": 0.018653236336504384,
+      "suffix_fully_absorbed_%": 69.64,
+      "suffix_split_absorbed_%": 3.18,
+      "prefix_fully_absorbed_%": 51.57,
+      "prefix_split_absorbed_%": 5.62,
       "n_words_evaluated": 35517,
       "n_uru": 5361,
       "n_prefix": 9923,
@@ -647,6 +791,78 @@
       "n_suffix": 34402
     }
   },
+  "scalpel_added_bpe_32000_her": {
+    "label": "scalpel_added bpe 32000 her",
+    "n_evaluated": 28684,
+    "overall": 35.587203086505895,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 45.23809523809524,
+      "suffix_only": 29.499022917036772,
+      "uru+prefix": 66.42857142857143,
+      "uru+suffix": 58.82395802972894,
+      "prefix+suffix": 34.18991046831955,
+      "all_affixes": 45.58446678494024
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 630,
+      "suffix_only": 16887,
+      "uru+prefix": 210,
+      "uru+suffix": 3431,
+      "prefix+suffix": 5808,
+      "all_affixes": 1691
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.0,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 71.59,
+      "suffix_split_absorbed_%": 2.73,
+      "prefix_fully_absorbed_%": 53.99,
+      "prefix_split_absorbed_%": 4.44,
+      "n_words_evaluated": 28684,
+      "n_uru": 5359,
+      "n_prefix": 8339,
+      "n_suffix": 27817
+    }
+  },
+  "scalpel_added_bpe_32000_all": {
+    "label": "scalpel_added bpe 32000 all",
+    "n_evaluated": 35517,
+    "overall": 28.74069694324789,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 32.46013667425968,
+      "suffix_only": 22.505082448610796,
+      "uru+prefix": 66.42857142857143,
+      "uru+suffix": 58.80681818181818,
+      "prefix+suffix": 27.799944001119975,
+      "all_affixes": 45.55752561071746
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 878,
+      "suffix_only": 22135,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 7143,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.03730647267300877,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 77.03,
+      "suffix_split_absorbed_%": 2.21,
+      "prefix_fully_absorbed_%": 61.33,
+      "prefix_split_absorbed_%": 3.73,
+      "n_words_evaluated": 35517,
+      "n_uru": 5361,
+      "n_prefix": 9923,
+      "n_suffix": 34402
+    }
+  },
   "plain_bpe_64000_her": {
     "label": "plain bpe 64000 her",
     "n_evaluated": 21722,
@@ -857,6 +1073,78 @@
       "suffix_split_absorbed_%": 1.36,
       "prefix_fully_absorbed_%": 74.49,
       "prefix_split_absorbed_%": 2.19,
+      "n_words_evaluated": 35517,
+      "n_uru": 5361,
+      "n_prefix": 9923,
+      "n_suffix": 34402
+    }
+  },
+  "scalpel_added_bpe_64000_her": {
+    "label": "scalpel_added bpe 64000 her",
+    "n_evaluated": 23675,
+    "overall": 33.55086237240359,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 41.456310679611654,
+      "suffix_only": 26.67635140301246,
+      "uru+prefix": 63.33333333333333,
+      "uru+suffix": 56.45043731778425,
+      "prefix+suffix": 30.45204319288588,
+      "all_affixes": 41.76029962546851
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 515,
+      "suffix_only": 13079,
+      "uru+prefix": 210,
+      "uru+suffix": 3430,
+      "prefix+suffix": 4723,
+      "all_affixes": 1691
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.0,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 76.15,
+      "suffix_split_absorbed_%": 2.15,
+      "prefix_fully_absorbed_%": 60.54,
+      "prefix_split_absorbed_%": 3.39,
+      "n_words_evaluated": 23675,
+      "n_uru": 5358,
+      "n_prefix": 7139,
+      "n_suffix": 22923
+    }
+  },
+  "scalpel_added_bpe_64000_all": {
+    "label": "scalpel_added bpe 64000 all",
+    "n_evaluated": 35517,
+    "overall": 22.364407654550078,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 24.316628701594535,
+      "suffix_only": 15.762367291619606,
+      "uru+prefix": 63.33333333333333,
+      "uru+suffix": 56.41754079254079,
+      "prefix+suffix": 20.13509729805404,
+      "all_affixes": 41.73561859732107
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 878,
+      "suffix_only": 22135,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 7143,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.05595970900951316,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 84.11,
+      "suffix_split_absorbed_%": 1.43,
+      "prefix_fully_absorbed_%": 71.61,
+      "prefix_split_absorbed_%": 2.44,
       "n_words_evaluated": 35517,
       "n_uru": 5361,
       "n_prefix": 9923,
@@ -1079,6 +1367,78 @@
       "n_suffix": 34402
     }
   },
+  "scalpel_added_unigram_8000_her": {
+    "label": "scalpel_added unigram 8000 her",
+    "n_evaluated": 32915,
+    "overall": 45.86890475467131,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 55.86701434159062,
+      "suffix_only": 41.47340716094751,
+      "uru+prefix": 73.80952380952381,
+      "uru+suffix": 65.55215617715618,
+      "prefix+suffix": 44.526315789473685,
+      "all_affixes": 54.66903073286075
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 767,
+      "suffix_only": 20137,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 6650,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.018653236336504384,
+      "uru_mapping_%": 0.018653236336504384,
+      "suffix_fully_absorbed_%": 42.39,
+      "suffix_split_absorbed_%": 14.8,
+      "prefix_fully_absorbed_%": 28.52,
+      "prefix_split_absorbed_%": 11.76,
+      "n_words_evaluated": 32915,
+      "n_uru": 5361,
+      "n_prefix": 9319,
+      "n_suffix": 31911
+    }
+  },
+  "scalpel_added_unigram_8000_all": {
+    "label": "scalpel_added unigram 8000 all",
+    "n_evaluated": 35517,
+    "overall": 42.50851704817429,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 48.80410022779043,
+      "suffix_only": 37.7298396205105,
+      "uru+prefix": 73.80952380952381,
+      "uru+suffix": 65.55215617715618,
+      "prefix+suffix": 41.453170936581266,
+      "all_affixes": 54.66903073286075
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 878,
+      "suffix_only": 22135,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 7143,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.018653236336504384,
+      "uru_mapping_%": 0.018653236336504384,
+      "suffix_fully_absorbed_%": 46.56,
+      "suffix_split_absorbed_%": 13.73,
+      "prefix_fully_absorbed_%": 32.87,
+      "prefix_split_absorbed_%": 11.05,
+      "n_words_evaluated": 35517,
+      "n_uru": 5361,
+      "n_prefix": 9923,
+      "n_suffix": 34402
+    }
+  },
   "plain_unigram_16000_her": {
     "label": "plain unigram 16000 her",
     "n_evaluated": 29909,
@@ -1289,6 +1649,78 @@
       "suffix_split_absorbed_%": 13.28,
       "prefix_fully_absorbed_%": 48.86,
       "prefix_split_absorbed_%": 3.51,
+      "n_words_evaluated": 35517,
+      "n_uru": 5361,
+      "n_prefix": 9923,
+      "n_suffix": 34402
+    }
+  },
+  "scalpel_added_unigram_16000_her": {
+    "label": "scalpel_added unigram 16000 her",
+    "n_evaluated": 30352,
+    "overall": 41.9456158847306,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 52.73775216138329,
+      "suffix_only": 37.525489115458804,
+      "uru+prefix": 69.16666666666667,
+      "uru+suffix": 61.60740308947828,
+      "prefix+suffix": 39.52543474727775,
+      "all_affixes": 49.546887312845115
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 694,
+      "suffix_only": 18145,
+      "uru+prefix": 210,
+      "uru+suffix": 3431,
+      "prefix+suffix": 6153,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.0,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 47.69,
+      "suffix_split_absorbed_%": 15.61,
+      "prefix_fully_absorbed_%": 35.56,
+      "prefix_split_absorbed_%": 11.61,
+      "n_words_evaluated": 30352,
+      "n_uru": 5360,
+      "n_prefix": 8749,
+      "n_suffix": 29421
+    }
+  },
+  "scalpel_added_unigram_16000_all": {
+    "label": "scalpel_added unigram 16000 all",
+    "n_evaluated": 35517,
+    "overall": 35.84574522998405,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 41.68564920273349,
+      "suffix_only": 30.761237858594985,
+      "uru+prefix": 69.16666666666667,
+      "uru+suffix": 61.58945221445221,
+      "prefix+suffix": 34.04731905361893,
+      "all_affixes": 49.546887312845115
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 878,
+      "suffix_only": 22135,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 7143,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.018653236336504384,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 55.26,
+      "suffix_split_absorbed_%": 13.35,
+      "prefix_fully_absorbed_%": 43.18,
+      "prefix_split_absorbed_%": 10.24,
       "n_words_evaluated": 35517,
       "n_uru": 5361,
       "n_prefix": 9923,
@@ -1511,6 +1943,78 @@
       "n_suffix": 34402
     }
   },
+  "scalpel_added_unigram_32000_her": {
+    "label": "scalpel_added unigram 32000 her",
+    "n_evaluated": 26907,
+    "overall": 38.22673158162077,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 49.096880131362894,
+      "suffix_only": 33.41409833947148,
+      "uru+prefix": 65.71428571428571,
+      "uru+suffix": 58.83124453512095,
+      "prefix+suffix": 34.28231417063346,
+      "all_affixes": 44.894539720087174
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 609,
+      "suffix_only": 15477,
+      "uru+prefix": 210,
+      "uru+suffix": 3431,
+      "prefix+suffix": 5462,
+      "all_affixes": 1691
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.0,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 52.35,
+      "suffix_split_absorbed_%": 16.67,
+      "prefix_fully_absorbed_%": 42.11,
+      "prefix_split_absorbed_%": 12.48,
+      "n_words_evaluated": 26907,
+      "n_uru": 5359,
+      "n_prefix": 7972,
+      "n_suffix": 26061
+    }
+  },
+  "scalpel_added_unigram_32000_all": {
+    "label": "scalpel_added unigram 32000 all",
+    "n_evaluated": 35517,
+    "overall": 28.959840827397304,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 34.054669703872435,
+      "suffix_only": 23.363451547323244,
+      "uru+prefix": 65.71428571428571,
+      "uru+suffix": 58.81410256410257,
+      "prefix+suffix": 26.21447571048579,
+      "all_affixes": 44.86800630417696
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 878,
+      "suffix_only": 22135,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 7143,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.03730647267300877,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 63.91,
+      "suffix_split_absorbed_%": 12.63,
+      "prefix_fully_absorbed_%": 53.49,
+      "prefix_split_absorbed_%": 10.03,
+      "n_words_evaluated": 35517,
+      "n_uru": 5361,
+      "n_prefix": 9923,
+      "n_suffix": 34402
+    }
+  },
   "plain_unigram_64000_her": {
     "label": "plain unigram 64000 her",
     "n_evaluated": 21847,
@@ -1721,6 +2225,78 @@
       "suffix_split_absorbed_%": 11.74,
       "prefix_fully_absorbed_%": 69.51,
       "prefix_split_absorbed_%": 3.37,
+      "n_words_evaluated": 35517,
+      "n_uru": 5361,
+      "n_prefix": 9923,
+      "n_suffix": 34402
+    }
+  },
+  "scalpel_added_unigram_64000_her": {
+    "label": "scalpel_added unigram 64000 her",
+    "n_evaluated": 23572,
+    "overall": 35.81226313705485,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 42.03883495145631,
+      "suffix_only": 30.610762880293535,
+      "uru+prefix": 62.73809523809524,
+      "uru+suffix": 57.286505392013986,
+      "prefix+suffix": 29.901429809358753,
+      "all_affixes": 42.35166568105699
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 515,
+      "suffix_only": 13082,
+      "uru+prefix": 210,
+      "uru+suffix": 3431,
+      "prefix+suffix": 4616,
+      "all_affixes": 1691
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.0,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 55.22,
+      "suffix_split_absorbed_%": 17.59,
+      "prefix_fully_absorbed_%": 47.9,
+      "prefix_split_absorbed_%": 13.74,
+      "n_words_evaluated": 23572,
+      "n_uru": 5359,
+      "n_prefix": 7032,
+      "n_suffix": 22820
+    }
+  },
+  "scalpel_added_unigram_64000_all": {
+    "label": "scalpel_added unigram 64000 all",
+    "n_evaluated": 35517,
+    "overall": 23.767960882581775,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 24.658314350797266,
+      "suffix_only": 18.09125818838943,
+      "uru+prefix": 62.73809523809524,
+      "uru+suffix": 57.26981351981352,
+      "prefix+suffix": 19.323113537729245,
+      "all_affixes": 42.3266351457845
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 878,
+      "suffix_only": 22135,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 7143,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.03730647267300877,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 70.3,
+      "suffix_split_absorbed_%": 11.67,
+      "prefix_fully_absorbed_%": 63.08,
+      "prefix_split_absorbed_%": 9.73,
       "n_words_evaluated": 35517,
       "n_uru": 5361,
       "n_prefix": 9923,
@@ -1943,14 +2519,86 @@
       "n_suffix": 34402
     }
   },
+  "scalpel_added_wordpiece_8000_her": {
+    "label": "scalpel_added wordpiece 8000 her",
+    "n_evaluated": 34339,
+    "overall": 42.87205024413449,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 53.59848484848485,
+      "suffix_only": 37.019524817689955,
+      "uru+prefix": 75.95238095238095,
+      "uru+suffix": 66.83420745920746,
+      "prefix+suffix": 42.746356947049485,
+      "all_affixes": 58.26438140267931
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 792,
+      "suffix_only": 21255,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 6931,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.05595970900951316,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 46.09,
+      "suffix_split_absorbed_%": 17.47,
+      "prefix_fully_absorbed_%": 40.39,
+      "prefix_split_absorbed_%": 8.18,
+      "n_words_evaluated": 34339,
+      "n_uru": 5361,
+      "n_prefix": 9625,
+      "n_suffix": 33310
+    }
+  },
+  "scalpel_added_wordpiece_8000_all": {
+    "label": "scalpel_added wordpiece 8000 all",
+    "n_evaluated": 35517,
+    "overall": 41.45010370620644,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 48.348519362186785,
+      "suffix_only": 35.54777501694149,
+      "uru+prefix": 75.95238095238095,
+      "uru+suffix": 66.83420745920746,
+      "prefix+suffix": 41.47767044659107,
+      "all_affixes": 58.26438140267931
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 878,
+      "suffix_only": 22135,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 7143,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.05595970900951316,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 47.79,
+      "suffix_split_absorbed_%": 16.91,
+      "prefix_fully_absorbed_%": 42.18,
+      "prefix_split_absorbed_%": 7.93,
+      "n_words_evaluated": 35517,
+      "n_uru": 5361,
+      "n_prefix": 9923,
+      "n_suffix": 34402
+    }
+  },
   "plain_wordpiece_16000_her": {
     "label": "plain wordpiece 16000 her",
     "n_evaluated": 32393,
-    "overall": 33.535280256022496,
+    "overall": 33.538367342738766,
     "categories": {
       "uru_only": 65.21739130434783,
       "prefix_only": 47.04697986577181,
-      "suffix_only": 34.66729990501425,
+      "suffix_only": 34.67229915512673,
       "uru+prefix": 14.705882352941178,
       "uru+suffix": 25.101435705368292,
       "prefix+suffix": 37.21351025331725,
@@ -1969,8 +2617,8 @@
     "absorption": {
       "uru_absorbed_%": 84.73967684021544,
       "uru_mapping_%": 30.081787352882504,
-      "suffix_fully_absorbed_%": 49.17,
-      "suffix_split_absorbed_%": 16.79,
+      "suffix_fully_absorbed_%": 49.15,
+      "suffix_split_absorbed_%": 16.81,
       "prefix_fully_absorbed_%": 56.98,
       "prefix_split_absorbed_%": 3.32,
       "n_words_evaluated": 32393,
@@ -1982,11 +2630,11 @@
   "plain_wordpiece_16000_all": {
     "label": "plain wordpiece 16000 all",
     "n_evaluated": 35517,
-    "overall": 30.585588122120022,
+    "overall": 30.588403675235433,
     "categories": {
       "uru_only": 55.55555555555556,
       "prefix_only": 39.920273348519366,
-      "suffix_only": 31.32821323695505,
+      "suffix_only": 31.332730969053536,
       "uru+prefix": 13.095238095238097,
       "uru+suffix": 23.43385780885781,
       "prefix+suffix": 34.55130897382052,
@@ -2005,8 +2653,8 @@
     "absorption": {
       "uru_absorbed_%": 85.73027420257414,
       "uru_mapping_%": 28.129080395448607,
-      "suffix_fully_absorbed_%": 53.54,
-      "suffix_split_absorbed_%": 15.35,
+      "suffix_fully_absorbed_%": 53.53,
+      "suffix_split_absorbed_%": 15.36,
       "prefix_fully_absorbed_%": 60.27,
       "prefix_split_absorbed_%": 3.06,
       "n_words_evaluated": 35517,
@@ -2018,11 +2666,11 @@
   "scalpel_inf_wordpiece_16000_her": {
     "label": "scalpel_inf wordpiece 16000 her",
     "n_evaluated": 32744,
-    "overall": 39.607510790781205,
+    "overall": 39.610564785406176,
     "categories": {
       "uru_only": 100.0,
       "prefix_only": 47.04697986577181,
-      "suffix_only": 34.64460661801459,
+      "suffix_only": 34.64960511846446,
       "uru+prefix": 69.76190476190476,
       "uru+suffix": 63.29399766899767,
       "prefix+suffix": 37.21351025331725,
@@ -2041,8 +2689,8 @@
     "absorption": {
       "uru_absorbed_%": 0.05595970900951316,
       "uru_mapping_%": 0.0,
-      "suffix_fully_absorbed_%": 50.65,
-      "suffix_split_absorbed_%": 16.44,
+      "suffix_fully_absorbed_%": 50.64,
+      "suffix_split_absorbed_%": 16.45,
       "prefix_fully_absorbed_%": 55.21,
       "prefix_split_absorbed_%": 3.29,
       "n_words_evaluated": 32744,
@@ -2054,11 +2702,11 @@
   "scalpel_inf_wordpiece_16000_all": {
     "label": "scalpel_inf wordpiece 16000 all",
     "n_evaluated": 35517,
-    "overall": 36.51514298317257,
+    "overall": 36.51795853628798,
     "categories": {
       "uru_only": 100.0,
       "prefix_only": 39.920273348519366,
-      "suffix_only": 31.312401174610343,
+      "suffix_only": 31.316918906708835,
       "uru+prefix": 69.76190476190476,
       "uru+suffix": 63.29399766899767,
       "prefix+suffix": 34.55130897382052,
@@ -2077,8 +2725,8 @@
     "absorption": {
       "uru_absorbed_%": 0.05595970900951316,
       "uru_mapping_%": 0.0,
-      "suffix_fully_absorbed_%": 54.44,
-      "suffix_split_absorbed_%": 15.18,
+      "suffix_fully_absorbed_%": 54.42,
+      "suffix_split_absorbed_%": 15.19,
       "prefix_fully_absorbed_%": 58.12,
       "prefix_split_absorbed_%": 3.07,
       "n_words_evaluated": 35517,
@@ -2113,8 +2761,8 @@
     "absorption": {
       "uru_absorbed_%": 0.05595970900951316,
       "uru_mapping_%": 0.0,
-      "suffix_fully_absorbed_%": 50.24,
-      "suffix_split_absorbed_%": 16.24,
+      "suffix_fully_absorbed_%": 50.23,
+      "suffix_split_absorbed_%": 16.25,
       "prefix_fully_absorbed_%": 58.41,
       "prefix_split_absorbed_%": 2.86,
       "n_words_evaluated": 32422,
@@ -2150,7 +2798,7 @@
       "uru_absorbed_%": 0.05595970900951316,
       "uru_mapping_%": 0.0,
       "suffix_fully_absorbed_%": 54.49,
-      "suffix_split_absorbed_%": 14.85,
+      "suffix_split_absorbed_%": 14.86,
       "prefix_fully_absorbed_%": 61.5,
       "prefix_split_absorbed_%": 2.65,
       "n_words_evaluated": 35517,
@@ -2159,14 +2807,86 @@
       "n_suffix": 34402
     }
   },
+  "scalpel_added_wordpiece_16000_her": {
+    "label": "scalpel_added wordpiece 16000 her",
+    "n_evaluated": 32744,
+    "overall": 39.610564785406176,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 47.04697986577181,
+      "suffix_only": 34.64960511846446,
+      "uru+prefix": 69.76190476190476,
+      "uru+suffix": 63.29399766899767,
+      "prefix+suffix": 37.21351025331725,
+      "all_affixes": 51.64499605988995
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 745,
+      "suffix_only": 20006,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 6632,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.05595970900951316,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 50.64,
+      "suffix_split_absorbed_%": 16.45,
+      "prefix_fully_absorbed_%": 55.21,
+      "prefix_split_absorbed_%": 3.29,
+      "n_words_evaluated": 32744,
+      "n_uru": 5361,
+      "n_prefix": 9279,
+      "n_suffix": 31762
+    }
+  },
+  "scalpel_added_wordpiece_16000_all": {
+    "label": "scalpel_added wordpiece 16000 all",
+    "n_evaluated": 35517,
+    "overall": 36.51795853628798,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 39.920273348519366,
+      "suffix_only": 31.316918906708835,
+      "uru+prefix": 69.76190476190476,
+      "uru+suffix": 63.29399766899767,
+      "prefix+suffix": 34.55130897382052,
+      "all_affixes": 51.64499605988995
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 878,
+      "suffix_only": 22135,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 7143,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.05595970900951316,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 54.42,
+      "suffix_split_absorbed_%": 15.19,
+      "prefix_fully_absorbed_%": 58.12,
+      "prefix_split_absorbed_%": 3.07,
+      "n_words_evaluated": 35517,
+      "n_uru": 5361,
+      "n_prefix": 9923,
+      "n_suffix": 34402
+    }
+  },
   "plain_wordpiece_32000_her": {
     "label": "plain wordpiece 32000 her",
-    "n_evaluated": 28758,
-    "overall": 30.527447434916567,
+    "n_evaluated": 28757,
+    "overall": 30.528509000706983,
     "categories": {
       "uru_only": 55.00000000000001,
       "prefix_only": 38.95612708018154,
-      "suffix_only": 33.22073350743727,
+      "suffix_only": 33.22261965593596,
       "uru+prefix": 6.329113924050633,
       "uru+suffix": 21.969430780042167,
       "prefix+suffix": 30.685228409469822,
@@ -2175,7 +2895,7 @@
     "category_counts": {
       "uru_only": 20,
       "prefix_only": 661,
-      "suffix_only": 17614,
+      "suffix_only": 17613,
       "uru+prefix": 158,
       "uru+suffix": 2846,
       "prefix+suffix": 5998,
@@ -2189,10 +2909,10 @@
       "suffix_split_absorbed_%": 16.41,
       "prefix_fully_absorbed_%": 68.69,
       "prefix_split_absorbed_%": 1.98,
-      "n_words_evaluated": 28758,
+      "n_words_evaluated": 28757,
       "n_uru": 4485,
       "n_prefix": 8278,
-      "n_suffix": 27919
+      "n_suffix": 27918
     }
   },
   "plain_wordpiece_32000_all": {
@@ -2233,12 +2953,12 @@
   },
   "scalpel_inf_wordpiece_32000_her": {
     "label": "scalpel_inf wordpiece 32000 her",
-    "n_evaluated": 29640,
-    "overall": 36.95765856950091,
+    "n_evaluated": 29639,
+    "overall": 36.95890549613708,
     "categories": {
       "uru_only": 100.0,
       "prefix_only": 38.95612708018154,
-      "suffix_only": 33.1659289524458,
+      "suffix_only": 33.16781113444186,
       "uru+prefix": 63.33333333333333,
       "uru+suffix": 60.66015738851647,
       "prefix+suffix": 30.685228409469822,
@@ -2247,7 +2967,7 @@
     "category_counts": {
       "uru_only": 27,
       "prefix_only": 661,
-      "suffix_only": 17622,
+      "suffix_only": 17621,
       "uru+prefix": 210,
       "uru+suffix": 3431,
       "prefix+suffix": 5998,
@@ -2261,10 +2981,10 @@
       "suffix_split_absorbed_%": 15.69,
       "prefix_fully_absorbed_%": 68.06,
       "prefix_split_absorbed_%": 1.95,
-      "n_words_evaluated": 29640,
+      "n_words_evaluated": 29639,
       "n_uru": 5359,
       "n_prefix": 8560,
-      "n_suffix": 28742
+      "n_suffix": 28741
     }
   },
   "scalpel_inf_wordpiece_32000_all": {
@@ -2375,14 +3095,86 @@
       "n_suffix": 34402
     }
   },
+  "scalpel_added_wordpiece_32000_her": {
+    "label": "scalpel_added wordpiece 32000 her",
+    "n_evaluated": 29639,
+    "overall": 36.95890549613708,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 38.95612708018154,
+      "suffix_only": 33.16781113444186,
+      "uru+prefix": 63.33333333333333,
+      "uru+suffix": 60.66015738851647,
+      "prefix+suffix": 30.685228409469822,
+      "all_affixes": 45.56475458308732
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 661,
+      "suffix_only": 17621,
+      "uru+prefix": 210,
+      "uru+suffix": 3431,
+      "prefix+suffix": 5998,
+      "all_affixes": 1691
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.01866019779809666,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 54.16,
+      "suffix_split_absorbed_%": 15.69,
+      "prefix_fully_absorbed_%": 68.06,
+      "prefix_split_absorbed_%": 1.95,
+      "n_words_evaluated": 29639,
+      "n_uru": 5359,
+      "n_prefix": 8560,
+      "n_suffix": 28741
+    }
+  },
+  "scalpel_added_wordpiece_32000_all": {
+    "label": "scalpel_added wordpiece 32000 all",
+    "n_evaluated": 35517,
+    "overall": 30.842272714474955,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 29.328018223234626,
+      "suffix_only": 26.4038852496047,
+      "uru+prefix": 63.33333333333333,
+      "uru+suffix": 60.64248251748252,
+      "prefix+suffix": 25.766484670306593,
+      "all_affixes": 45.53782505910205
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 878,
+      "suffix_only": 22135,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 7143,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.05595970900951316,
+      "uru_mapping_%": 0.0,
+      "suffix_fully_absorbed_%": 61.7,
+      "suffix_split_absorbed_%": 13.11,
+      "prefix_fully_absorbed_%": 72.45,
+      "prefix_split_absorbed_%": 1.68,
+      "n_words_evaluated": 35517,
+      "n_uru": 5361,
+      "n_prefix": 9923,
+      "n_suffix": 34402
+    }
+  },
   "plain_wordpiece_64000_her": {
     "label": "plain wordpiece 64000 her",
-    "n_evaluated": 23059,
-    "overall": 28.029908784711555,
+    "n_evaluated": 23057,
+    "overall": 28.028003064868095,
     "categories": {
       "uru_only": 31.25,
       "prefix_only": 31.55430711610487,
-      "suffix_only": 31.853337152678318,
+      "suffix_only": 31.850737716659506,
       "uru+prefix": 4.330708661417323,
       "uru+suffix": 20.1627284886313,
       "prefix+suffix": 25.34673366834171,
@@ -2391,7 +3183,7 @@
     "category_counts": {
       "uru_only": 16,
       "prefix_only": 534,
-      "suffix_only": 13964,
+      "suffix_only": 13962,
       "uru+prefix": 127,
       "uru+suffix": 2243,
       "prefix+suffix": 4975,
@@ -2402,23 +3194,23 @@
       "uru_absorbed_%": 93.86503067484662,
       "uru_mapping_%": 15.895147796988288,
       "suffix_fully_absorbed_%": 53.3,
-      "suffix_split_absorbed_%": 16.25,
+      "suffix_split_absorbed_%": 16.26,
       "prefix_fully_absorbed_%": 76.7,
       "prefix_split_absorbed_%": 1.29,
-      "n_words_evaluated": 23059,
+      "n_words_evaluated": 23057,
       "n_uru": 3586,
       "n_prefix": 6836,
-      "n_suffix": 22382
+      "n_suffix": 22380
     }
   },
   "plain_wordpiece_64000_all": {
     "label": "plain wordpiece 64000 all",
     "n_evaluated": 35517,
-    "overall": 18.19809293202308,
+    "overall": 18.19527737890767,
     "categories": {
       "uru_only": 18.51851851851852,
       "prefix_only": 19.191343963553532,
-      "suffix_only": 20.094872374068217,
+      "suffix_only": 20.090354641969732,
       "uru+prefix": 2.619047619047619,
       "uru+suffix": 13.177447552447552,
       "prefix+suffix": 17.65364692706146,
@@ -2449,12 +3241,12 @@
   },
   "scalpel_inf_wordpiece_64000_her": {
     "label": "scalpel_inf wordpiece 64000 her",
-    "n_evaluated": 24849,
-    "overall": 35.01750573463692,
+    "n_evaluated": 24847,
+    "overall": 35.01629975449723,
     "categories": {
       "uru_only": 100.0,
       "prefix_only": 31.55430711610487,
-      "suffix_only": 31.744385638678303,
+      "suffix_only": 31.741773962804004,
       "uru+prefix": 59.04761904761905,
       "uru+suffix": 57.95918367346938,
       "prefix+suffix": 25.34673366834171,
@@ -2463,7 +3255,7 @@
     "category_counts": {
       "uru_only": 27,
       "prefix_only": 534,
-      "suffix_only": 13982,
+      "suffix_only": 13980,
       "uru+prefix": 210,
       "uru+suffix": 3430,
       "prefix+suffix": 4975,
@@ -2473,24 +3265,24 @@
     "absorption": {
       "uru_absorbed_%": 0.3546099290780142,
       "uru_mapping_%": 0.2986188876446435,
-      "suffix_fully_absorbed_%": 58.04,
+      "suffix_fully_absorbed_%": 58.05,
       "suffix_split_absorbed_%": 14.83,
       "prefix_fully_absorbed_%": 76.86,
       "prefix_split_absorbed_%": 1.27,
-      "n_words_evaluated": 24849,
+      "n_words_evaluated": 24847,
       "n_uru": 5358,
       "n_prefix": 7410,
-      "n_suffix": 24078
+      "n_suffix": 24076
     }
   },
   "scalpel_inf_wordpiece_64000_all": {
     "label": "scalpel_inf wordpiece 64000 all",
     "n_evaluated": 35517,
-    "overall": 24.49953543373575,
+    "overall": 24.496719880620343,
     "categories": {
       "uru_only": 100.0,
       "prefix_only": 19.191343963553532,
-      "suffix_only": 20.051953919132597,
+      "suffix_only": 20.04743618703411,
       "uru+prefix": 59.04761904761905,
       "uru+suffix": 57.925407925407924,
       "prefix+suffix": 17.65364692706146,
@@ -2521,21 +3313,21 @@
   },
   "scalpel_train_wordpiece_64000_her": {
     "label": "scalpel_train wordpiece 64000 her",
-    "n_evaluated": 24116,
-    "overall": 34.73351025598443,
+    "n_evaluated": 24115,
+    "overall": 34.734950584006654,
     "categories": {
       "uru_only": 100.0,
       "prefix_only": 28.303747534516766,
-      "suffix_only": 32.05985000371278,
+      "suffix_only": 32.05480469330165,
       "uru+prefix": 57.38095238095238,
       "uru+suffix": 55.96938775510204,
-      "prefix+suffix": 24.691680602006688,
+      "prefix+suffix": 24.712583612040135,
       "all_affixes": 39.434259806820705
     },
     "category_counts": {
       "uru_only": 27,
       "prefix_only": 507,
-      "suffix_only": 13467,
+      "suffix_only": 13466,
       "uru+prefix": 210,
       "uru+suffix": 3430,
       "prefix+suffix": 4784,
@@ -2549,10 +3341,10 @@
       "suffix_split_absorbed_%": 14.59,
       "prefix_fully_absorbed_%": 79.67,
       "prefix_split_absorbed_%": 1.15,
-      "n_words_evaluated": 24116,
+      "n_words_evaluated": 24115,
       "n_uru": 5358,
       "n_prefix": 7192,
-      "n_suffix": 23372
+      "n_suffix": 23371
     }
   },
   "scalpel_train_wordpiece_64000_all": {
@@ -2562,10 +3354,10 @@
     "categories": {
       "uru_only": 100.0,
       "prefix_only": 16.343963553530752,
-      "suffix_only": 19.50530833521572,
+      "suffix_only": 19.500790603117235,
       "uru+prefix": 57.38095238095238,
       "uru+suffix": 55.93677156177156,
-      "prefix+suffix": 16.537169256614867,
+      "prefix+suffix": 16.551168976620467,
       "all_affixes": 39.41095350669847
     },
     "category_counts": {
@@ -2585,6 +3377,78 @@
       "suffix_split_absorbed_%": 9.91,
       "prefix_fully_absorbed_%": 85.27,
       "prefix_split_absorbed_%": 0.84,
+      "n_words_evaluated": 35517,
+      "n_uru": 5361,
+      "n_prefix": 9923,
+      "n_suffix": 34402
+    }
+  },
+  "scalpel_added_wordpiece_64000_her": {
+    "label": "scalpel_added wordpiece 64000 her",
+    "n_evaluated": 24847,
+    "overall": 35.01629975449723,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 31.55430711610487,
+      "suffix_only": 31.741773962804004,
+      "uru+prefix": 59.04761904761905,
+      "uru+suffix": 57.95918367346938,
+      "prefix+suffix": 25.34673366834171,
+      "all_affixes": 41.070372560615326
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 534,
+      "suffix_only": 13980,
+      "uru+prefix": 210,
+      "uru+suffix": 3430,
+      "prefix+suffix": 4975,
+      "all_affixes": 1691
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.3546099290780142,
+      "uru_mapping_%": 0.2986188876446435,
+      "suffix_fully_absorbed_%": 58.05,
+      "suffix_split_absorbed_%": 14.83,
+      "prefix_fully_absorbed_%": 76.86,
+      "prefix_split_absorbed_%": 1.27,
+      "n_words_evaluated": 24847,
+      "n_uru": 5358,
+      "n_prefix": 7410,
+      "n_suffix": 24076
+    }
+  },
+  "scalpel_added_wordpiece_64000_all": {
+    "label": "scalpel_added wordpiece 64000 all",
+    "n_evaluated": 35517,
+    "overall": 24.496719880620343,
+    "categories": {
+      "uru_only": 100.0,
+      "prefix_only": 19.191343963553532,
+      "suffix_only": 20.04743618703411,
+      "uru+prefix": 59.04761904761905,
+      "uru+suffix": 57.925407925407924,
+      "prefix+suffix": 17.65364692706146,
+      "all_affixes": 41.04609929078045
+    },
+    "category_counts": {
+      "uru_only": 27,
+      "prefix_only": 878,
+      "suffix_only": 22135,
+      "uru+prefix": 210,
+      "uru+suffix": 3432,
+      "prefix+suffix": 7143,
+      "all_affixes": 1692
+    },
+    "n_empty_token_words": 0,
+    "absorption": {
+      "uru_absorbed_%": 0.41037119940309646,
+      "uru_mapping_%": 0.29845178138407014,
+      "suffix_fully_absorbed_%": 70.63,
+      "suffix_split_absorbed_%": 10.38,
+      "prefix_fully_absorbed_%": 82.72,
+      "prefix_split_absorbed_%": 0.95,
       "n_words_evaluated": 35517,
       "n_uru": 5361,
       "n_prefix": 9923,
