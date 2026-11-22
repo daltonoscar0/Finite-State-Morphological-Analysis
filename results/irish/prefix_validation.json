@@ -1,0 +1,93 @@
+{
+  "in_sample": {
+    "words": 27806,
+    "firings": 2286,
+    "on_deep_site": 2282,
+    "off_layout": 4,
+    "agreement_pct": 74.82,
+    "on_layout_pct": 99.83,
+    "guard": 2,
+    "n_prefixes": 61
+  },
+  "cross_validation": {
+    "folds": [
+      {
+        "fold": 0,
+        "guard": 2,
+        "dropped": [],
+        "held_words": 5562,
+        "held_deep_sites": 630,
+        "firings": 466,
+        "on_deep_site": 466,
+        "off_layout": 0,
+        "agreement_pct": 73.97,
+        "on_layout_pct": 100.0
+      },
+      {
+        "fold": 1,
+        "guard": 2,
+        "dropped": [],
+        "held_words": 5561,
+        "held_deep_sites": 620,
+        "firings": 454,
+        "on_deep_site": 452,
+        "off_layout": 2,
+        "agreement_pct": 72.9,
+        "on_layout_pct": 99.56
+      },
+      {
+        "fold": 2,
+        "guard": 2,
+        "dropped": [],
+        "held_words": 5561,
+        "held_deep_sites": 595,
+        "firings": 438,
+        "on_deep_site": 437,
+        "off_layout": 1,
+        "agreement_pct": 73.45,
+        "on_layout_pct": 99.77
+      },
+      {
+        "fold": 3,
+        "guard": 2,
+        "dropped": [],
+        "held_words": 5561,
+        "held_deep_sites": 595,
+        "firings": 456,
+        "on_deep_site": 456,
+        "off_layout": 0,
+        "agreement_pct": 76.64,
+        "on_layout_pct": 100.0
+      },
+      {
+        "fold": 4,
+        "guard": 2,
+        "dropped": [],
+        "held_words": 5561,
+        "held_deep_sites": 610,
+        "firings": 472,
+        "on_deep_site": 471,
+        "off_layout": 1,
+        "agreement_pct": 77.21,
+        "on_layout_pct": 99.79
+      }
+    ],
+    "seed": 20261122,
+    "agreement_mean": 74.83,
+    "agreement_min": 72.9,
+    "agreement_max": 77.21,
+    "on_layout_mean": 99.82,
+    "on_layout_min": 99.56,
+    "on_layout_max": 100.0,
+    "off_layout_total": 4
+  },
+  "out_of_benchmark": {
+    "ga_forms_outside_moirfeolas": 100942,
+    "firings": 4403,
+    "sampled": 300,
+    "handcheck_csv": "/Users/oscardalton/code/morphology/results/irish/prefix_extension_handcheck.csv",
+    "seed": 20261122
+  },
+  "review_csv": "/Users/oscardalton/code/morphology/results/irish/prefix_list_review.csv",
+  "prefixes_never_firing": []
+}

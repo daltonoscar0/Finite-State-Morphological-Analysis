@@ -1,0 +1,29 @@
+model,vocab_size,word,suffix,direction,status_plain,status_scalpel,tokens_plain,tokens_scalpel
+unigram,8000,b'fhéidir,r,entered_scored_set,(not scored: single token),tokenized incorrectly,b'fhéidir,b' fhéidir
+unigram,8000,nAchtanna,anna,entered_scored_set,(not scored: single token),tokenized incorrectly,nAchtanna,n Achtanna
+wordpiece,8000,b'fhéidir,r,entered_scored_set,(not scored: single token),tokenized incorrectly,b'fhéidir,b' fh éidir
+wordpiece,8000,nAchtanna,anna,entered_scored_set,(not scored: single token),tokenized incorrectly,nAchtanna,n Achtanna
+wordpiece,8000,b'iomchuí,í,worse,tokenized exactly,tokenized incorrectly,b ' iom chu í,b' iomchuí
+wordpiece,8000,d'fad,fad,better,tokenized in parts,tokenized exactly,d' fa d,d' fad
+wordpiece,8000,m'intinn,inn,worse,tokenized exactly,tokenized incorrectly,m ' int inn,m' intinn
+wordpiece,8000,m'íocaíocht,aíocht,worse,tokenized exactly,tokenized incorrectly,m ' íoc aíocht,m' íocaíocht
+wordpiece,8000,nAirí,í,better,tokenized incorrectly,tokenized exactly,nA irí,n Air í
+wordpiece,8000,nAonad,ad,better,tokenized incorrectly,tokenized exactly,nA onad,n Aon ad
+wordpiece,8000,nEastát,t,worse,tokenized exactly,tokenized incorrectly,n E ast á t,n Eas tát
+wordpiece,8000,nIonstraimí,í,worse,tokenized exactly,tokenized incorrectly,n I ons tra im í,n Ion straimí
+wordpiece,8000,nOllscoileanna,eanna,better,tokenized incorrectly,tokenized exactly,n O llscoile anna,n Ollscoil eanna
+unigram,32000,b'fhéidir,r,entered_scored_set,(not scored: single token),tokenized incorrectly,b'fhéidir,b' fhéidir
+unigram,32000,nAchtanna,anna,entered_scored_set,(not scored: single token),tokenized incorrectly,nAchtanna,n Achtanna
+unigram,32000,nAirí,í,entered_scored_set,(not scored: single token),tokenized incorrectly,nAirí,n Airí
+unigram,32000,nIocht,t,entered_scored_set,(not scored: single token),tokenized incorrectly,nIocht,n I ocht
+unigram,32000,tIonad,ad,entered_scored_set,(not scored: single token),tokenized incorrectly,tIonad,t Ionad
+unigram,64000,B'fhearr,r,entered_scored_set,(not scored: single token),tokenized incorrectly,B'fhearr,B' fhearr
+unigram,64000,b'ann,ann,entered_scored_set,(not scored: single token),tokenized in parts,b'ann,b' an n
+unigram,64000,b'fhéidir,r,entered_scored_set,(not scored: single token),tokenized incorrectly,b'fhéidir,b' fhéidir
+unigram,64000,m'iarratas,tas,entered_scored_set,(not scored: single token),tokenized incorrectly,m'iarratas,m' iarratas
+unigram,64000,nAchtanna,anna,entered_scored_set,(not scored: single token),tokenized incorrectly,nAchtanna,n Achtanna
+unigram,64000,nAirí,í,entered_scored_set,(not scored: single token),tokenized incorrectly,nAirí,n Airí
+unigram,64000,nArm-Phinsean,sean,entered_scored_set,(not scored: single token),tokenized incorrectly,nArm-Phinsean,n Arm-Phinsean
+unigram,64000,nIocht,t,entered_scored_set,(not scored: single token),tokenized incorrectly,nIocht,n I ocht
+unigram,64000,nOileán,eán,entered_scored_set,(not scored: single token),tokenized incorrectly,nOileán,n Oileán
+unigram,64000,tIonad,ad,entered_scored_set,(not scored: single token),tokenized incorrectly,tIonad,t Ionad
