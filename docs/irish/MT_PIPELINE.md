@@ -56,15 +56,26 @@ separated by a single space.
 | `jane-<family><size>-plain` | Jane's shipped model, no Scalpel |
 | `jane-<family><size>-scalpel` | Jane's shipped model, Scalpel at inference |
 
+The fourth scoring condition in `tokenizer_generality.md`, markers as added
+tokens, is not a config here: it was measured and is never better than
+inference-only, so there was no reason to ship it as an option.
+
 `<model>` is `unigram`, `bpe` or `wordpiece`; `<size>` is `8k`, `16k`, `32k`,
 `64k`. Jane's families are `unigramlm`, `bpe`, `byte-bpe`,
 `sentencepiecebpe`, `sentencepieceulm`, `wordpiece`, with `43k` instead of
 `64k` for `sentencepieceulm`.
 
-**Recommended default: `unigram8k-scalpel`.** It is the configuration the
-reproduced baseline rows use, and inference-only beat
-training-time pre-tokenization in 10 of 12 cells (see
-`tokenizer_generality.md`).
+**On the metric, inference-only is the best of the three** we can measure:
+it beats training-time pre-tokenization in 10 of 12 cells, and beats
+registering the markers as added tokens in every cell where that changes
+anything (by 0.45 to 0.86). `unigram8k-scalpel` is also the configuration the
+reproduced baseline rows use. See `tokenizer_generality.md`.
+
+**No default is set here for the MT run.** CríochScore is a
+morpheme-boundary metric, not a translation metric, and the eight markers
+missing from Jane's vocabularies are a real representational gap even though
+they cost only one extra token each and never an `[UNK]`. That trade is for
+Jane and Oscar to settle.
 
 ## Losslessness
 
@@ -83,6 +94,7 @@ training-time pre-tokenization in 10 of 12 cells (see
 | jane-sentencepieceulm8k-scalpel | 12,000 | 0 | 11,847 |
 | jane-sentencepiecebpe8k-scalpel | 12,000 | 0 | 12,330 |
 | jane-byte-bpe8k-scalpel | 12,000 | 0 | 10,276 |
+| unigram8k-scalpeltrained | 12,000 | 0 | 6,561 |
 
 The separate detokenize invocation also reproduces the input file byte for
 byte (`cmp` clean), not just line by line in memory.
@@ -115,6 +127,12 @@ an invented one, but the *line breaks* and the whitespace are mine, not the
 source's. Twelve adversarial lines are appended by hand for whitespace the
 word-per-line corpus cannot supply (tabs, double spaces, leading and trailing
 space, empty and whitespace-only lines).
+
+The UD Irish-IDT treebank that `attested_mutations.tsv` was mined from would
+have given real sentence text through its `# text =` lines, but it is **not on
+this machine**: a search of `~` (excluding Library, node_modules, .venv and
+site-packages) for `*UD_Irish*`, `*ga_idt*` and `*.conllu` returns nothing. So
+the reconstructed corpus stands.
 
 **Rerun the round trip on Jane's data when it lands.** Her line breaks and
 whitespace are the real test, and `--round-trip` is one flag. Note that the
@@ -165,30 +183,33 @@ Every run writes `<output>.meta.json`:
 
 ## Throughput, and how long a full run takes
 
-**9,200 to 12,400 lines per second**, single process, on this machine.
-Scalpel costs about 10%: `unigram8k-plain` ran at 10,740 lines/s and
-`unigram8k-scalpel` at 9,691 lines/s on the same input. Detokenization is
-about 46,000 lines/s.
+**4,600 to 12,400 lines per second**, single process, on this machine, across
+two measurement rounds. The spread is mostly machine load, not configuration:
+the same `unigram8k-scalpel` config measured 9,691 lines/s at load average
+3.9 and 6,554 lines/s at load average 8.6. Scalpel itself costs about 10%
+(`unigram8k-plain` 10,740 against `unigram8k-scalpel` 9,691 in the same
+round). Detokenization is about 46,000 lines/s.
 
-Measured with a load average of 3.9 to 5.1, so treat these as a working
-figure rather than a clean benchmark; the numbers swing with what else is
-running. At 10,000 lines/s:
+Treat all of these as working figures rather than a clean benchmark. At a
+conservative 5,000 lines/s:
 
-| corpus size | wall clock |
-| --- | --- |
-| 100,000 lines | ~10 seconds |
-| 1 million lines | ~1.7 minutes |
-| 10 million lines | ~17 minutes |
+| corpus size | wall clock at 5,000 l/s | at 10,000 l/s |
+| --- | --- | --- |
+| 100,000 lines | ~20 seconds | ~10 seconds |
+| 1 million lines | ~3.3 minutes | ~1.7 minutes |
+| 10 million lines | ~33 minutes | ~17 minutes |
 
 So any plausible size of parallel corpus is a single-digit-minutes job, and
 the FST pass over the vocabulary is amortised: layer 1 is run once over the
 distinct word cores in the input, not per line.
 
-One thing to watch on real data: `scripts/ga_mutation_split.py` sets aside
-inputs that make the analyser abort (`n-APP`, `n-EOS`, `n-IOTA`, `t-AMHÁIN`
-in `data/GA`) and leaves those words whole rather than failing the run. The
-count is printed to stderr. If Jane's data contains many, that is worth
-knowing before the paper.
+**The analyser no longer aborts on anything** (fixed 22 November, decision D8
+in `NOTES.md`). `scripts/ga_mutation_split.py` keeps its bisection as a safety
+net, but a set-aside word is now reported on stderr and makes the run exit
+non-zero unless `--allow-skips` is passed, so a run cannot quietly tokenize
+fewer words than it was handed. On the full GA corpus the skip list is empty:
+272,349 distinct forms, all 272,349 analysed. If Jane's data ever produces a
+skip, the run will say so and stop rather than carry on.
 
 ## Dependencies
 

@@ -126,16 +126,25 @@ scores are identical to d'-only at two decimal places, so it costs nothing,
 and the clitics are real. Worth telling Jane, since it looks like a gap in
 the annotation rather than a decision.
 
-**D8. The analyser abort is worked around, not fixed.** The bridge calls
-`abort()` on `n-APP`, `n-EOS`, `n-IOTA` and `t-AMHÁIN`: analysis accepts a
-hyphenated marker before an all-caps stem, generation uppercases the inserted
-marker and drops the hyphen, and the self-check at mutation_fst.cpp:201
-fails. `demutate_all` now bisects a failing chunk, sets the offenders aside
-and reports them, so one word cannot take a 272,000-word run with it. The
-real fix belongs in `inverse_ok_cp`, and it is **blocked**: mutation_fst.h
-pins semantics to `src/mutations.py` and `tests/attested_mutations.tsv` and
-requires the C++ runner to reproduce the Python pass count exactly, and
-neither file is in this checkout. Flagged for Oscar.
+**D8. The analyser abort is FIXED (22 November).** Was: worked around,
+blocked on the parity files. Those turned out to be in `~/code/seanchai`
+(remote `daltonoscar0/Morpheme-Aware-Language-Modeling-for-Irish`), which is
+where the relative paths in `mutation_fst.h` were rooted all along.
+
+The defect: analysis accepted a vowel-prefixing marker with a hyphen in front
+of an all-caps stem (`n-APP`), but generation uppercases the inserted marker
+along with the stem and drops the hyphen, giving `NAPP`, so the self-check
+could not get from one to the other and raised. The case matrix found ten such
+cells, not the four seen in the corpus. `inverse_ok` now tests membership of
+the set of orthographic realisations generation is allowed to have, instead of
+comparing against a single string; `mutate()` is untouched and `(tag, base)`
+is unchanged. Fixed in both implementations, because the Python reference had
+the identical bug.
+
+Commits: seanchai `0b4f225` and `20bb275`; Scalpel `23a51f2`, `096307e` and
+`2d4eda2`. `demutate_all` keeps its bisection as a safety net but now reports
+and raises instead of swallowing, and the skip list is empty on all 272,349
+distinct GA forms.
 
 **D9. Training-time pre-tokenization is not adopted.** It fixes the
 missing-marker problem (marker coverage 11-13 of 16 goes to 13-15) and still
@@ -242,3 +251,229 @@ python3 scripts/make_roundtrip_corpus.py
 python3 scripts/tokenize_mt.py --input results/irish/roundtrip_corpus.txt \
     --config unigram8k-scalpel --output /tmp/rt.tok --round-trip
 ```
+
+# Fix run, 22 Nov
+
+The parity files turned up in `~/code/seanchai` (remote
+`daltonoscar0/Morpheme-Aware-Language-Modeling-for-Irish`), which is where the
+relative paths in `mutation_fst.h` were rooted all along. That unblocked D8.
+
+Branches for this run: `fix/hyphen-caps-inverse` in seanchai (from `main`
+@ 8036b57) and in Scalpel (from `irish-mutations` @ fac4da4). morphology stays
+on `irish-next-steps`.
+
+## Layer 0: preflight
+
+Everything matched the expected starting values:
+
+| thing | value |
+| --- | --- |
+| Python attested | 17200 / 17201 |
+| C++ `mutation_tests` | 12 tests, 0 failed, attested 17200/17201 |
+| morphology tests | 89 passing (33 + 24 + 18 + 14) |
+| Unigram 8k | 43.32 |
+| Unigram 8k + Scalpel, `--no-clitics` | 45.46 |
+| Unigram 8k + Scalpel, default | 45.98 |
+| sha256 of the emailed `lenition_candidates.csv` | `fca730ba9b50c4fc25955b48f72885b68ba29337cfd90d019aac6d346f8c5c26` |
+
+**F1. seanchai was dirty and I asked rather than guessing.** Four uncommitted
+deletions I did not make: `build/ga_mutations.foma` and three
+`__pycache__/*.pyc`, all committed in 26c288b and since removed from the
+working tree, none of them source, all regenerable. Asked, told to proceed and
+leave them. Every commit in that repo this run stages explicit paths, never
+`-a`, and the four deletions are still exactly as found.
+
+**F2. The one failing attested row is a data artifact, not a defect.**
+`fíor-` / lemma `fíor-chorr-Óglach` / NOUN / Len / dev. The surface is a
+truncated compound fragment with no séimhiú in it at all, so `demutate('fíor-')`
+correctly returns nothing while the row claims tag Len. Unsatisfiable by
+construction, and unrelated to the abort. Not touched, per the brief.
+
+## Layer 1: the core fix
+
+**F3. The matrix was worth building: ten cells abort, not four.** Mapping
+marker x marker case x hyphen x stem case x stem onset gives 174 cells
+(`~/code/seanchai/docs/mutation_case_matrix.md`). Ten abort, and they are all
+one shape: a vowel-prefixing marker (`n`, `t`, `h`), a hyphen, and an ALL-CAPS
+stem. Marker case is irrelevant. The four corpus forms were a sample of a
+class. Python and C++ agreed on all 174 cells before the fix, including which
+ten aborted, which is independent evidence the two were genuinely in parity.
+
+**F4. Mechanism: generation enumerates its legal realisations, `inverse_ok`
+checks membership.** The alternative was to have each reading carry the
+surface realisation of its marker, which would have widened the `(tag, base)`
+pair every caller destructures; the brief forbids changing that shape.
+Membership keeps `(tag, base)`, keeps the tag inventory, leaves `mutate()`
+emitting strict Caighdeán, and confines the change to one new function plus a
+rewritten `inverse_ok`. `demutate` is not touched.
+
+The realisation set is deliberately no wider than analysis already was: the
+bare marker as generation spells it, its uppercase form only when the stem is
+ALL-CAPS, and a following hyphen only for `n`/`t`/`h` before a vowel. That
+matters because `inverse_ok` is also the pass criterion for the attested file,
+so loosening it further would have quietly moved that count.
+
+**F5. Analysis was not broadened, and that was checked rather than assumed.**
+Re-running the matrix after the fix: 0 aborts both sides, 0 disagreements, and
+comparing the `(tag, base)` sets across all 174 cells before and after gives
+**0 cells changed**. attested stayed at 17200/17201 with the same single
+failure.
+
+**F6. A sibling inconsistency found and left alone.** `n-APP`, `N-APP`,
+`t-APP`, `T-APP` and `h-APP` all get a reading but `H-APP` does not: the
+hyphen-variant branch tests `w[0] == pre` against a lowercase `pre`, so an
+uppercase `H` fails it, while `N` and `T` survive via the separate ALL-CAPS
+track. Making `H-` behave like `N-` would create a reading for a string that
+previously had none, which the brief rules out except by explicit decision.
+Recorded in the design note and left; nothing in the corpus produces it.
+
+**F7. New cases went in a second file.** `tests/orthographic_variants.tsv`,
+40 rows, same five columns, with the split column carrying the expectation
+(`edge` must analyse and invert, `negative` must get no reading) rather than a
+treebank split. The attested file is untouched because its row count is
+asserted. Both runners load both files and report them separately, and
+`mutation_fst.h` now names both files and both counts.
+
+Commits: seanchai `0b4f225`, Scalpel `23a51f2` and `096307e`.
+
+**Layer 1 exit check: passed.**
+
+| check | result |
+| --- | --- |
+| Python and C++ same counts on both files | attested 17200/17201 both; variants 30/30 positive, 10/10 negative both |
+| attested still >= 17200/17201, same failure | yes, `fíor-` |
+| the four forms analyse and round-trip, both | yes |
+| no abort anywhere in the matrix | 0 of 174, both |
+| C++ test count | 12 -> 14 |
+| seanchai Python test count | 13 -> 15 |
+
+## Layer 2: no abort is possible on an input
+
+**F8. `demutate` drops and reports; only the test runners assert.** An input
+path must not die on one word. `demutate_strict` keeps the hard check and is
+what both parity runners call, and `demutate_candidates` exposes the
+unverified set so a drop can be told from a non-reading.
+
+**F9. The fuzz harness found two more divergences, neither reachable from the
+two test files.** `~/code/seanchai/scripts/fuzz_parity.py`, 412,865 inputs:
+every distinct GA form (272,349), every MoirfEolas word (35,517), every
+attested surface (4,970), 100,000 synthetic strings over the matrix axes, and
+degenerate whitespace. The real corpora were clean from the start; the
+synthetic set was not.
+
+- A one-letter ALL-CAPS stem behind a hyphenated marker (`N-A`) was proposed
+  by the ALL-CAPS analysis track but had no matching realisation, because the
+  uppercase marker was gated on the base being longer than one character.
+  20 such drops.
+- The `bhf` branch tested `c1 == 'h'` case-sensitively in C++ while the Python
+  reference tests `w[:2].lower() == "bh"`, so the two disagreed on a
+  mixed-case `bHfill`. 17 mismatches. `mutation_fst.h` makes the Python side
+  the authority, so the C++ followed it; that does widen C++ analysis slightly,
+  which the brief allows for a sibling inconsistency and which is recorded
+  here.
+
+Both are now rows in `orthographic_variants.tsv` (35/35 positive, 10/10
+negative) and the run is clean.
+
+**F10. The morphology bisection is loud now.** `demutate_all` reports a
+set-aside word on stderr and raises `AnalyserSkippedWords` unless
+`--allow-skips` is passed, on all five entry points. Skip list is empty on all
+272,349 distinct GA forms, with three tests covering it.
+
+**Layer 2 exit check: passed.** Fuzz clean, parity exact, skip list empty,
+92 morphology tests pass (was 89).
+
+## Layer 3: nothing moved
+
+All three baselines reproduce to two decimals. The scalpel-condition models
+were retrained because the pre-tokenized corpus had silently excluded the four
+aborting forms; they now split, changing 5 of 4,682,103 corpus lines.
+**Largest absolute change in any of the 72 cells: 0.0000.** None of the four
+forms is in MoirfEolas, so they could never affect the scored set, only the
+vocabulary, and 5 lines in 4.7 million did not. Round trip still exact on all
+12,000 lines for all eleven configs.
+
+## Layer 4: the measurement problems
+
+**F11. The depth-0 figure was circular and is no longer called recall.** The
+sites are candidates this project's own script derives from MoirfEolas's
+prefix and urú columns using the same validity rule as the FST, so both sides
+look for a valid séimhiú at position 0 by the same test. Renamed to
+"agreement with layout-derived candidate sites" throughout, with the real
+finding (0 of 3,088 non-initial) stated as the headline. 31 of the 6,802
+depth-0 candidates are flagged fossilised or English in the candidates file
+and so are not lenition at all.
+
+**F12. The prefix extension was tuned and scored on the same data, and the
+cross-validation says it survives.** Five folds, both data-driven choices
+remade per training fold: agreement 74.83% mean (72.90 to 77.21) against
+74.82% in-sample; on-layout 99.82% mean (99.56 to 100.00) against 99.83%.
+Guard 2 on every fold, no prefix dropped on any fold. The in-sample figure is
+still labelled in-sample because the list did not change.
+
+**F13. The suffix_only dip is mostly a denominator artefact, not lost
+boundaries.** For Unigram at 32k and 64k, zero shared words change status; the
+movement comes entirely from words entering the scored set because
+`--exclude-single-token` is applied per system. Entrants score 0.000 to 0.050
+mean suffix credit against 0.307 to 0.415 for words already there, and the
+arithmetic reproduces the observed dips. WordPiece 8k is the only cell with a
+genuine status change, net -1 of 21,253. The harness's existing
+`--matched-set` would remove the artefact; described, not applied.
+
+**F14. Added tokens are not the MT answer, and the naive version is
+destructive.** Registering all sixteen markers took `bunreacht` to nine
+single-character pieces and fertility from 2.96 to 6.50, because an added
+token in the `tokenizers` library matches anywhere in the string. Restricted
+to the genuinely missing multi-character markers it is never better than
+inference-only and is worse by 0.45 to 0.86 where it changes anything. No MT
+default was chosen, per the brief.
+
+**F15. Fertility understatement is bounded at 0.019 tokens per word.** And no
+model emits `[UNK]` for a missing marker: every one is spellable from
+characters already in the vocabulary, so WordPiece gives `b` + `##'` and a
+missing marker costs exactly one extra token.
+
+**F16. The capitalisation finding is reworded as a question.** Fill rates by
+case are in `results/irish/capitalisation_fill_rates.json`. MoirfEolas holds
+**no case variants at all**, so an identical-form pairing finds nothing; the
+evidence sheet instead pairs a capitalised word having an empty prefix column
+with a lowercase word carrying that same prefix annotated, filtered to Jane's
+own prefixes whose remainder is itself attested. 606 such pairs, 100 written
+over 100 distinct prefixes.
+
+**F17. The UD treebank is not on this machine.** Searched `~` (excluding
+Library, node_modules, .venv, site-packages) for `*UD_Irish*`, `*ga_idt*` and
+`*.conllu`: nothing. `scripts/gen_tests.py` expects it at
+`seanchai/data/UD_Irish-IDT`, which does not exist. So the `# text =` lines
+could not be used and the reconstructed 12,000-line corpus stands, with the
+caveat recorded in `MT_PIPELINE.md`.
+
+## Layer 5: branch hygiene
+
+**F18. The Irish work DOES depend on `matched-vocab`, so no rebase was done.**
+Three files exist on `matched-vocab` and not on `main`, and the Irish work
+imports two of them throughout:
+
+| file | introduced by | needed for |
+| --- | --- | --- |
+| `scripts/ga_mutation_split.py` | `8b2e173` | imported by every Irish script |
+| `scripts/moirfeolas_score.py` | `1cd790c` | imported for scoring and FAMILIES |
+| `tools/test_ga_mutation_split.py` | `8b2e173` | the 36-test suite |
+
+`moirfeolas_score.py` was then touched by `56cfc6a`, `cca61c5` (which adds
+`add_dprime` and `DPRIME_TAG`, both imported), `09275c1` and `d77b606` (which
+adds the `PROVIDERS` interface, also imported). So the minimum transplant
+would be `1cd790c`, `56cfc6a`, `cca61c5`, `8b2e173` and `d77b606` plus their
+own dependencies, which is most of the Irish half of that branch.
+
+**Recommendation: merge `matched-vocab` into `main` first, then
+`irish-next-steps`.** `irish-next-steps` is untouched and no
+`irish-next-steps-main` was created.
+
+**F19. `scripts/moirfeolas_lenition_share.py` is tracked**, added by `168eac6`
+("Reshape the lenition export into the file Jane asked for", 18 November).
+
+**F20. No AI attribution anywhere.** 21 commits across the three repos
+(morphology 16, Scalpel 3, seanchai 2), all authored `Oscar Dalton
+<daltonoscar0@gmail.com>`, zero matches for claude/anthropic/co-authored-by/
+generated-with/copilot/chatgpt in any subject, body or trailer.
