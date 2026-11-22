@@ -566,7 +566,7 @@
   "unigram16k-plain": {
     "family": "UnigramLM",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/plain_unigram_16000.json",
-    "model_sha256": "2de8e189513e660da9d981ad168870de15c718aaa7c851417923afa09c31bd9d",
+    "model_sha256": "4bd796aaa816b98320482ccd7e4abcc0f7cf7bcd29ba4648a93f0986eff1e089",
     "model_type": "standard",
     "scalpel": false,
     "source": "scripts/irish_train_tokenizers.py",
@@ -577,7 +577,7 @@
   "unigram16k-scalpel": {
     "family": "UnigramLM",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/plain_unigram_16000.json",
-    "model_sha256": "2de8e189513e660da9d981ad168870de15c718aaa7c851417923afa09c31bd9d",
+    "model_sha256": "4bd796aaa816b98320482ccd7e4abcc0f7cf7bcd29ba4648a93f0986eff1e089",
     "model_type": "standard",
     "scalpel": true,
     "source": "scripts/irish_train_tokenizers.py",
@@ -599,7 +599,7 @@
   "unigram32k-plain": {
     "family": "UnigramLM",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/plain_unigram_32000.json",
-    "model_sha256": "748d92d7e70a690760c52183f48d842321271147294bc8a8f7f72bf3a46ad872",
+    "model_sha256": "dc8a58d51a3dba46d8c837fb38adfef677937a25f7b6c51e41be80d9438ff23a",
     "model_type": "standard",
     "scalpel": false,
     "source": "scripts/irish_train_tokenizers.py",
@@ -610,7 +610,7 @@
   "unigram32k-scalpel": {
     "family": "UnigramLM",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/plain_unigram_32000.json",
-    "model_sha256": "748d92d7e70a690760c52183f48d842321271147294bc8a8f7f72bf3a46ad872",
+    "model_sha256": "dc8a58d51a3dba46d8c837fb38adfef677937a25f7b6c51e41be80d9438ff23a",
     "model_type": "standard",
     "scalpel": true,
     "source": "scripts/irish_train_tokenizers.py",
@@ -632,7 +632,7 @@
   "unigram64k-plain": {
     "family": "UnigramLM",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/plain_unigram_64000.json",
-    "model_sha256": "cda4a8d5f0ed9b9f9659974bbf35962c7a033c9a5a1a1f4021641c23f4831f61",
+    "model_sha256": "1a0ebf6985da48ce2c91c0d1fe56097c90b012f2693f96e2badf679edf12d42b",
     "model_type": "standard",
     "scalpel": false,
     "source": "scripts/irish_train_tokenizers.py",
@@ -643,7 +643,7 @@
   "unigram64k-scalpel": {
     "family": "UnigramLM",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/plain_unigram_64000.json",
-    "model_sha256": "cda4a8d5f0ed9b9f9659974bbf35962c7a033c9a5a1a1f4021641c23f4831f61",
+    "model_sha256": "1a0ebf6985da48ce2c91c0d1fe56097c90b012f2693f96e2badf679edf12d42b",
     "model_type": "standard",
     "scalpel": true,
     "source": "scripts/irish_train_tokenizers.py",
@@ -665,7 +665,7 @@
   "unigram8k-plain": {
     "family": "UnigramLM",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/plain_unigram_8000.json",
-    "model_sha256": "81b6754978fa3a6547ffa700e3444debd8d52ec169d523c453599a0ecd495e5a",
+    "model_sha256": "c78bca772f80d7548bfaa83b8cc6b0dbbe8a1c0a14f10e80b1052a8578f60c3c",
     "model_type": "standard",
     "scalpel": false,
     "source": "scripts/irish_train_tokenizers.py",
@@ -676,7 +676,7 @@
   "unigram8k-scalpel": {
     "family": "UnigramLM",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/plain_unigram_8000.json",
-    "model_sha256": "81b6754978fa3a6547ffa700e3444debd8d52ec169d523c453599a0ecd495e5a",
+    "model_sha256": "c78bca772f80d7548bfaa83b8cc6b0dbbe8a1c0a14f10e80b1052a8578f60c3c",
     "model_type": "standard",
     "scalpel": true,
     "source": "scripts/irish_train_tokenizers.py",
@@ -687,7 +687,7 @@
   "unigram8k-scalpeltrained": {
     "family": "UnigramLM",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/scalpel_unigram_8000.json",
-    "model_sha256": "6dd43d4ee5684adaeeacab824f2a81663b9477302d985a26cc9e96f6505258b7",
+    "model_sha256": "40f1309715bcc1f24f46a889d54eebc2dc7c80d6653ac001e67674f7cc3e6132",
     "model_type": "standard",
     "scalpel": true,
     "source": "scripts/irish_train_tokenizers.py",
@@ -698,7 +698,7 @@
   "wordpiece16k-plain": {
     "family": "WordPiece",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/plain_wordpiece_16000.json",
-    "model_sha256": "c6f2a7068f3f62e3c32559706398275961961dc1f529274e6b38d89776a0193f",
+    "model_sha256": "a32fb2fec70e8574f03c782f70b4386a9491a99c22545151806414edb1856db4",
     "model_type": "standard",
     "scalpel": false,
     "source": "scripts/irish_train_tokenizers.py",
@@ -709,7 +709,7 @@
   "wordpiece16k-scalpel": {
     "family": "WordPiece",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/plain_wordpiece_16000.json",
-    "model_sha256": "c6f2a7068f3f62e3c32559706398275961961dc1f529274e6b38d89776a0193f",
+    "model_sha256": "a32fb2fec70e8574f03c782f70b4386a9491a99c22545151806414edb1856db4",
     "model_type": "standard",
     "scalpel": true,
     "source": "scripts/irish_train_tokenizers.py",
@@ -731,7 +731,7 @@
   "wordpiece32k-plain": {
     "family": "WordPiece",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/plain_wordpiece_32000.json",
-    "model_sha256": "c5b76d79b9e73065f7e530d9be2ac58e80e00b2df1dff78608370ba6be9cfe08",
+    "model_sha256": "1ac3e11c7a232825de240dab193f26da9c423c442ee1bcea926e401b1b19fda8",
     "model_type": "standard",
     "scalpel": false,
     "source": "scripts/irish_train_tokenizers.py",
@@ -742,7 +742,7 @@
   "wordpiece32k-scalpel": {
     "family": "WordPiece",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/plain_wordpiece_32000.json",
-    "model_sha256": "c5b76d79b9e73065f7e530d9be2ac58e80e00b2df1dff78608370ba6be9cfe08",
+    "model_sha256": "1ac3e11c7a232825de240dab193f26da9c423c442ee1bcea926e401b1b19fda8",
     "model_type": "standard",
     "scalpel": true,
     "source": "scripts/irish_train_tokenizers.py",
@@ -764,7 +764,7 @@
   "wordpiece64k-plain": {
     "family": "WordPiece",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/plain_wordpiece_64000.json",
-    "model_sha256": "e6b04b9307677ff803369d769d3f36230c0bf6018aed390172a7e7417e4ca42b",
+    "model_sha256": "69b3020ac65dedaddc1406aa42565f2516e151cb2702a17be336a2b9004f8a05",
     "model_type": "standard",
     "scalpel": false,
     "source": "scripts/irish_train_tokenizers.py",
@@ -775,7 +775,7 @@
   "wordpiece64k-scalpel": {
     "family": "WordPiece",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/plain_wordpiece_64000.json",
-    "model_sha256": "e6b04b9307677ff803369d769d3f36230c0bf6018aed390172a7e7417e4ca42b",
+    "model_sha256": "69b3020ac65dedaddc1406aa42565f2516e151cb2702a17be336a2b9004f8a05",
     "model_type": "standard",
     "scalpel": true,
     "source": "scripts/irish_train_tokenizers.py",
@@ -797,7 +797,7 @@
   "wordpiece8k-plain": {
     "family": "WordPiece",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/plain_wordpiece_8000.json",
-    "model_sha256": "1cc584762a9ff18b7011867a9e217379473271175e437c915296b53710c62abf",
+    "model_sha256": "143628a9b7a63db91ba41b232caf38c231f6311d628cf4c429a382ab7ecd0121",
     "model_type": "standard",
     "scalpel": false,
     "source": "scripts/irish_train_tokenizers.py",
@@ -808,7 +808,7 @@
   "wordpiece8k-scalpel": {
     "family": "WordPiece",
     "model_path": "/Users/oscardalton/data/tok/results/irish/stage3/models/plain_wordpiece_8000.json",
-    "model_sha256": "1cc584762a9ff18b7011867a9e217379473271175e437c915296b53710c62abf",
+    "model_sha256": "143628a9b7a63db91ba41b232caf38c231f6311d628cf4c429a382ab7ecd0121",
     "model_type": "standard",
     "scalpel": true,
     "source": "scripts/irish_train_tokenizers.py",
