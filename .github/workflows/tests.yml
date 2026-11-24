@@ -1,0 +1,43 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      # The Makefile expects the Scalpel tokenizer at ../Scalpel, so both
+      # repositories are checked out side by side under the workspace rather
+      # than this one at the workspace root.
+      - name: Check out the analyzer
+        uses: actions/checkout@v4
+        with:
+          path: Finite-State-Morphological-Analysis
+
+      - name: Check out Scalpel
+        uses: actions/checkout@v4
+        with:
+          repository: daltonoscar0/Scalpel
+          path: Scalpel
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Compiler version
+        run: g++ --version
+
+      # Builds the analyzer and the four test binaries, then runs each of them.
+      # Fails on the first non-zero exit status.
+      - name: Build and run the C++ tests
+        working-directory: Finite-State-Morphological-Analysis
+        run: make test
+
+      # Standard library only, so it needs no virtualenv and downloads nothing.
+      # Covers the gold conversions, including the MorphoLex parser.
+      - name: Run the tool tests
+        working-directory: Finite-State-Morphological-Analysis
+        run: make test-tools

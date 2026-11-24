@@ -1,6 +1,34 @@
 # Morphology
 
+[![tests](https://github.com/daltonoscar0/Finite-State-Morphological-Analysis/actions/workflows/tests.yml/badge.svg)](https://github.com/daltonoscar0/Finite-State-Morphological-Analysis/actions/workflows/tests.yml)
+
 A finite-state morphological analyzer for English. Given raw text or individual words, it segments, looks up stems, and produces linguistic analyses like `cats → cat +N +PL` or `walked → walk +V +PAST`.
+
+## Agreement with MorphoLex
+
+Scored against MorphoLex, an independent gold standard, on 12,828 forms. These
+are the latest numbers in [docs/BASELINES.md](docs/BASELINES.md) — the round
+after the prefix guard, measured with the fixed MorphoLex reader.
+
+| Lexicon setting | P | R | F1 | exact |
+|---|--:|--:|---:|------:|
+| built-in (1,825 lexemes) | 0.950 | 0.111 | 0.199 | 0.103 |
+| `en_100k` | 0.969 | 0.257 | 0.406 | 0.232 |
+| `en_100k`, derived first | 0.976 | 0.380 | 0.547 | 0.335 |
+| `en_all`, derived first | 0.976 | **0.385** | **0.552** | 0.337 |
+
+The shape of that result matters more than the F1: precision is high and recall
+is low. The analyzer splits what it knows and declines the rest, so it is wrong
+rarely and silent often. Recall is bounded by lexicon coverage, which is why the
+figure moves from 0.111 to 0.385 as the lexicon grows.
+
+On MorphyNet, which is in-distribution rather than independent, the same
+`en_all` setting reaches F1 0.838 on inflection (186,947 forms) and 0.554 on
+derivation (194,771 forms).
+
+`docs/BASELINES.md` also compares these against BPE, WordPiece and Unigram at
+three vocabulary sizes, and records what the prefix guard cost on the
+derivational gold.
 
 ## Features
 
@@ -123,10 +151,28 @@ go	V	REG	PAST=went	WEIGHT=1.0
 ## Tests
 
 ```bash
+make test          # builds and runs all four binaries, stops on the first failure
+```
+
+Or individually:
+
+```bash
 ./test_analyzer    # 70+ integration tests across all morphological phenomena
 ./test_infra       # FSA/FST and symbol table unit tests
 ./test_lex         # lexicon loading and rule application tests
+./test_seg         # surface segmentation, including text mode
 ```
+
+The tool tests are kept separate so that `make && make test` needs only a
+compiler. They are standard library only and download nothing:
+
+```bash
+make test-tools    # gold conversions, including the MorphoLex parser
+```
+
+Both targets run in CI. The baseline training and scoring scripts do **not**:
+they need a virtualenv and gold-standard data stored outside the repository
+(see the reproduction steps in [docs/BASELINES.md](docs/BASELINES.md)).
 
 ## Project structure
 
@@ -190,3 +236,7 @@ building a lexicon of several hundred thousand entries from Wiktionary, the
            --lexicon ~/data/morph/lexicons/en_100k.tsv --segment-jsonl
 python3 tools/eval_lexicon.py --all                # coverage and boundary F1
 ```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
