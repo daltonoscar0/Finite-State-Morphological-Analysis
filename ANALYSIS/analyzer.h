@@ -15,6 +15,7 @@
 #include <tuple>
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <string>
 
 #include "../RULES/derivation_rule.h"
